@@ -1,0 +1,54 @@
+.modular-container {
+  padding: 0;
+  margin: 0;
+  background-color: rgb(240, 240, 240);
+  border: 1px dashed grey;
+  position: relative;
+}
+
+.keyboard-key {
+  display: inline-block;
+  padding: 0;
+}
+
+.keyboard-key-pressed, .keyboard-key:active {
+  background: #e5e5e5;
+  -webkit-box-shadow: inset 0px 0px 5px #c1c1c1;
+  -moz-box-shadow: inset 0px 0px 5px #c1c1c1;
+  box-shadow: inset 0px 0px 5px #c1c1c1;
+  outline: none;
+}
+
+.component-muted {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.component-bypassed {}
+
+.bypass-indicator {
+  height: 5px;
+  width: 5px;
+  background-color: #ff0000;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  pointer-events: none;
+  display: none;
+}
+
+.monitor-value {
+  position: absolute;
+  left: 5px;
+  opacity: 0.5;
+}
+
+.monitor-out-of-bounds {
+  border: 1px solid red !important;
+}
+
+.component {
+  border: 1px solid grey;
+  position: relative;
+}
