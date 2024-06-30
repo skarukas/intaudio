@@ -11,19 +11,33 @@ export class Bang extends VisualComponent<BangDisplay> {
   static defaultHeight = 48;
   static defaultWidth = 48;
   protected midiLearn: MidiLearn
+  protected lastMidiValue: number = 0
   
   constructor() {
     super()
     this.display = new this._.BangDisplay(this)
     this.output = this._defineControlOutput('output')
     this._preventIOOverwrites()
+
+    // Trigger on nonzero MIDI inputs.
     this.midiLearn = new MidiLearn({
       contextMenuSelector: this.uniqueDomSelector,
       learnMode: MidiLearn.Mode.FIRST_BYTE,
-      onMidiMessage: event => event.data[2] && this.trigger()
+      onMidiMessage: this.handleMidiInput.bind(this)
     })
   }
-
+  protected handleMidiInput(event: MIDIMessageEvent) {
+    const midiValue = event.data[2]
+    if (midiValue) {
+      if (!this.lastMidiValue) {
+        this.trigger()
+        this.display.showPressed()
+      }
+    } else {
+      this.display.showUnpressed()
+    }
+    this.lastMidiValue = midiValue
+  }
   connect(destination) {
     let { component } = this.getDestinationInfo(destination)
     if (destination instanceof ControlInput) {

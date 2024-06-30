@@ -5,14 +5,29 @@ import { VisualComponent } from "./base/VisualComponent.js";
 export class Bang extends VisualComponent {
     constructor() {
         super();
+        this.lastMidiValue = 0;
         this.display = new this._.BangDisplay(this);
         this.output = this._defineControlOutput('output');
         this._preventIOOverwrites();
+        // Trigger on nonzero MIDI inputs.
         this.midiLearn = new MidiLearn({
             contextMenuSelector: this.uniqueDomSelector,
             learnMode: MidiLearn.Mode.FIRST_BYTE,
-            onMidiMessage: event => event.data[2] && this.trigger()
+            onMidiMessage: this.handleMidiInput.bind(this)
         });
+    }
+    handleMidiInput(event) {
+        const midiValue = event.data[2];
+        if (midiValue) {
+            if (!this.lastMidiValue) {
+                this.trigger();
+                this.display.showPressed();
+            }
+        }
+        else {
+            this.display.showUnpressed();
+        }
+        this.lastMidiValue = midiValue;
     }
     connect(destination) {
         let { component } = this.getDestinationInfo(destination);

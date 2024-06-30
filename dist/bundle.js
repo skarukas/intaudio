@@ -351,6 +351,8 @@ var constants = Object.freeze({
     MONITOR_VALUE_CLASS: "monitor-value",
     MONITOR_OUT_OF_BOUNDS_CLASS: "monitor-out-of-bounds",
     UNINITIALIZED_CLASS: "component-uninitialized",
+    BANG_CLASS: "bang",
+    BANG_PRESSED_CLASS: "bang-pressed",
     MIDI_LEARN_CLASS: "midi-learn",
     EVENT_MOUSEDOWN: "mousedown",
     EVENT_MOUSEUP: "mouseup",
@@ -3414,14 +3416,29 @@ _a$1 = VisualComponent, _VisualComponent_instances = new WeakSet(), _VisualCompo
 class Bang extends VisualComponent {
     constructor() {
         super();
+        this.lastMidiValue = 0;
         this.display = new this._.BangDisplay(this);
         this.output = this._defineControlOutput('output');
         this._preventIOOverwrites();
+        // Trigger on nonzero MIDI inputs.
         this.midiLearn = new MidiLearn({
             contextMenuSelector: this.uniqueDomSelector,
             learnMode: MidiLearn.Mode.FIRST_BYTE,
-            onMidiMessage: event => event.data[2] && this.trigger()
+            onMidiMessage: this.handleMidiInput.bind(this)
         });
+    }
+    handleMidiInput(event) {
+        const midiValue = event.data[2];
+        if (midiValue) {
+            if (!this.lastMidiValue) {
+                this.trigger();
+                this.display.showPressed();
+            }
+        }
+        else {
+            this.display.showUnpressed();
+        }
+        this.lastMidiValue = midiValue;
     }
     connect(destination) {
         let { component } = this.getDestinationInfo(destination);
@@ -12010,17 +12027,30 @@ class HybridOutput extends AudioRateOutput {
 
 class BangDisplay extends BaseDisplay {
     _display($root, width, height) {
-        let $button = $(document.createElement('button'))
+        this.$button = $(document.createElement('button'))
             .on('click', () => {
             this.component.trigger();
         }).css({
             width: width,
             height: height,
         })
-            .attr('type', 'button');
-        $root.append($button);
+            .attr('type', 'button')
+            .addClass(constants.BANG_CLASS)
+            .appendTo($root);
+    }
+    showPressed(duration) {
+        var _a;
+        (_a = this.$button) === null || _a === void 0 ? void 0 : _a.addClass(constants.BANG_PRESSED_CLASS);
+        if (duration) {
+            setTimeout(this.showUnpressed.bind(this), duration);
+        }
+    }
+    showUnpressed() {
+        var _a;
+        (_a = this.$button) === null || _a === void 0 ? void 0 : _a.removeClass(constants.BANG_PRESSED_CLASS);
     }
 }
+BangDisplay.PRESS_DURATION_MS = 100;
 
 class KeyboardDisplay extends BaseDisplay {
     constructor() {

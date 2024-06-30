@@ -8,6 +8,8 @@ export default Object.freeze({
     MONITOR_VALUE_CLASS: "monitor-value",
     MONITOR_OUT_OF_BOUNDS_CLASS: "monitor-out-of-bounds",
     UNINITIALIZED_CLASS: "component-uninitialized",
+    BANG_CLASS: "bang",
+    BANG_PRESSED_CLASS: "bang-pressed",
     MIDI_LEARN_CLASS: "midi-learn",
     EVENT_MOUSEDOWN: "mousedown",
     EVENT_MOUSEUP: "mouseup",
