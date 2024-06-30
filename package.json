@@ -1,0 +1,30 @@
+{
+  "name": "interactive-audio",
+  "version": "1.0.0",
+  "description": "Declarative Javascript framework for interactive audio. Arbitrary audio-rate operations, event-based state management, UI components.",
+  "main": "demo.js",
+  "type": "module",
+  "scripts": {
+    "test": "npm run build && node test.js",
+    "lint": "npx eslint --fix src/",
+    "compile": "tsc",
+    "build": "npm run lint; npm run compile && rollup -c",
+    "watch": "nodemon -e ts --watch src/ --exec \"npm run build\""
+  },
+  "author": "Stephen Karukas <stephen.karukas@gmail.com>",
+  "license": "ISC",
+  "dependencies": {
+    "function-descriptor": "^1.1.1",
+    "jquery-contextmenu": "^3.0.0-beta.2",
+    "rollup-plugin-node-externals": "^7.1.2",
+    "stache-config": "^1.0.3"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^26.0.1",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@types/jquery": "^3.5.30",
+    "jquery": "^3.7.1",
+    "rollup": "^4.18.0",
+    "typescript": "^5.5.2"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "rootDir": "src",
+    "allowJs": true,
+    "outDir": "js/",
+    "module": "NodeNext",
+    "allowSyntheticDefaultImports": true,
+    "target": "ES6",
+    "moduleResolution": "NodeNext"
+  },
+  "include": [
+    "src/"
+  ],
+  "typeAcquisition": {
+    "enable": true
+  }
+}

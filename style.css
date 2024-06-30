@@ -1,6 +1,14 @@
 .modular-container {
   padding: 0;
   margin: 0;
+  position: absolute;
+  border: 1px solid grey;
+  border-radius: 2px;
+}
+
+.ia-root {
+  padding: 0;
+  margin: 0;
   background-color: rgb(240, 240, 240);
   border: 1px dashed grey;
   position: relative;
@@ -24,7 +32,24 @@
   pointer-events: none;
 }
 
+.midi-learn {
+  border: 2px solid;
+  animation-name: midi-learn-color;
+  animation-duration: 2s;
+  animation-iteration-count: infinite;
+}
+
+@keyframes midi-learn-color {
+  0% {border-color: rgb(0, 195, 255);}
+  50% {border-color: rgb(136, 0, 255);}
+  100% {border-color: rgb(0, 195, 255);}
+}
+
 .component-bypassed {}
+
+.component-uninitialized {
+  opacity: 0.5;
+}
 
 .bypass-indicator {
   height: 5px;
@@ -46,9 +71,4 @@
 
 .monitor-out-of-bounds {
   border: 1px solid red !important;
-}
-
-.component {
-  border: 1px solid grey;
-  position: relative;
 }
