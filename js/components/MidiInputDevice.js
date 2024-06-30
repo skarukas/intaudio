@@ -1,7 +1,8 @@
 import { SelectDisplay } from "../ui/SelectDisplay.js";
 import { mapLikeToObject } from "../shared/util.js";
-import { MidiLearnableComponent } from "./base/MidiLearnableComponent.js";
+import { MidiLearn } from "../shared/MidiLearn.js";
 import { MidiAccessListener, MidiMessageListener } from "../shared/MidiListener.js";
+import { VisualComponent } from "./base/VisualComponent.js";
 export var DefaultDeviceBehavior;
 (function (DefaultDeviceBehavior) {
     DefaultDeviceBehavior["NONE"] = "none";
@@ -13,18 +14,30 @@ const ALL_INPUT_ID = 'all';
 const SELECT_NO_DEVICE = { id: NO_INPUT_ID, name: "<no midi input>" };
 const SELECT_ALL_DEVICES = { id: ALL_INPUT_ID, name: "* (all midi inputs)" };
 const DEFAULT_SELECTIONS = [SELECT_NO_DEVICE, SELECT_ALL_DEVICES];
-export class MidiInputDevice extends MidiLearnableComponent {
+export class MidiInputDevice extends VisualComponent {
     constructor(defaultDeviceBehavior = DefaultDeviceBehavior.ALL) {
         super();
         this.defaultDeviceBehavior = defaultDeviceBehavior;
+        // Used by display.
         this.selectOptions = DEFAULT_SELECTIONS;
+        // Internals.
+        this.deviceMap = {};
         this.display = new SelectDisplay(this);
         this.selectedDeviceInput = this._defineControlInput('selectedDeviceInput');
         this.midiOut = this._defineControlOutput('midiOut');
         this.availableDevices = this._defineControlOutput('availableDevices');
         this.activeDevices = this._defineControlOutput('selectedDevicesOutput');
+        // Update the menu and outputs when access changes.
         this.accessListener = new MidiAccessListener(this.onMidiAccessChange.bind(this));
+        // Send filtered MIDI messages out.
         this.messageListener = new MidiMessageListener(this.sendMidiMessage.bind(this));
+        // Context menu triggers MIDI learn mode: select the MIDI input based 
+        // on which input device is currently being used.
+        this.midiLearn = new MidiLearn({
+            learnMode: MidiLearn.Mode.INPUT,
+            contextMenuSelector: "#" + this.domId,
+            onMidiLearnConnection: input => this.selectDevice(input.id)
+        });
     }
     static buildSelectOptions(inputMap) {
         var _a;
@@ -122,8 +135,5 @@ export class MidiInputDevice extends MidiLearnableComponent {
     }
     setOption(id) {
         this.selectDevice(id);
-    }
-    onMidiLearnConnection(input) {
-        this.selectDevice(input.id);
     }
 }

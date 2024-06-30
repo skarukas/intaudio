@@ -309,7 +309,7 @@ const tests = {
 
 ia.run(() => {
   //return tests.midiInput()
-  for (let test in tests) {
+  for (let test in {'midiInput': tests.midiInput}) {
     const $testRoot = $(document.createElement('div'))
     tests[test]($testRoot)
     if ($testRoot.children().length) {

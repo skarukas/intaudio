@@ -11305,21 +11305,28 @@ var jquery_contextMenu = {exports: {}};
 
 var jquery_contextMenuExports = jquery_contextMenu.exports;
 
-// TODO: refactor to composition instead of inheritance.
-// Add MIDILearnType:
-// - Input: Consider only the input
-// - Status: Consider the input as well as the statuc (e.g. only modwheel).
-class MidiLearnableComponent extends VisualComponent {
-    constructor() {
-        super();
+var MidiLearnMode;
+(function (MidiLearnMode) {
+    /** Accept all messages matching the input device from the MIDI learn message. */
+    MidiLearnMode["INPUT"] = "input";
+    /** Accept all messages matching the input device and status from the MIDI learn message. */
+    MidiLearnMode["COMMAND"] = "command";
+})(MidiLearnMode || (MidiLearnMode = {}));
+const NULL_OP = (...args) => void 0;
+class MidiLearn {
+    constructor({ learnMode = MidiLearnMode.COMMAND, contextMenuSelector = undefined, onMidiLearnConnection = NULL_OP, onMidiMessage = NULL_OP } = {}) {
         this.isInMidiLearnMode = false;
-        this.addMidiLearnContextMenu("#" + this.domId);
+        this.learnMode = learnMode;
+        this.onMidiLearnConnection = onMidiLearnConnection;
+        this.onMidiMessage = onMidiMessage;
+        contextMenuSelector && this.addMidiLearnContextMenu(contextMenuSelector);
+        this.contextMenuSelector = contextMenuSelector;
         this.midiMessageListener = new MidiMessageListener(this.midiMessageHandler.bind(this));
     }
-    addMidiLearnContextMenu(selector) {
+    addMidiLearnContextMenu(contextMenuSelector) {
         const contextMenu = new jquery_contextMenuExports.ContextMenu();
         contextMenu.create({
-            selector: selector,
+            selector: contextMenuSelector,
             items: {
                 enter: {
                     name: "Midi Learn",
@@ -11335,27 +11342,32 @@ class MidiLearnableComponent extends VisualComponent {
     }
     enterMidiLearnMode() {
         this.isInMidiLearnMode = true;
-        this.$container.addClass(constants.MIDI_LEARN_CLASS);
+        $(this.contextMenuSelector).addClass(constants.MIDI_LEARN_CLASS);
     }
     exitMidiLearnMode() {
         this.isInMidiLearnMode = false;
-        this.$container.removeClass(constants.MIDI_LEARN_CLASS);
+        $(this.contextMenuSelector).removeClass(constants.MIDI_LEARN_CLASS);
+    }
+    matchesLearnedFilter(input, event) {
+        var _a;
+        const inputMatches = ((_a = this.learnedMidiInput) === null || _a === void 0 ? void 0 : _a.id) == input.id;
+        return inputMatches && (this.learnMode == MidiLearnMode.INPUT
+            || this.learnedMidiEvent.data[0] == event.data[0]);
     }
     midiMessageHandler(input, event) {
-        var _a;
         if (this.isInMidiLearnMode) {
             this.learnedMidiInput = input;
+            this.learnedMidiEvent = event;
             this.onMidiLearnConnection(input, event.data);
-            this.onMidiEvent(event);
+            this.onMidiMessage(event);
             this.exitMidiLearnMode();
         }
-        else if (((_a = this.learnedMidiInput) === null || _a === void 0 ? void 0 : _a.id) == input.id) {
-            this.onMidiEvent(event);
+        else if (this.matchesLearnedFilter(input, event)) {
+            this.onMidiMessage(event);
         }
     }
-    onMidiLearnConnection(input, data) { }
-    onMidiEvent(event) { }
 }
+MidiLearn.Mode = MidiLearnMode;
 
 var DefaultDeviceBehavior;
 (function (DefaultDeviceBehavior) {
@@ -11368,18 +11380,30 @@ const ALL_INPUT_ID = 'all';
 const SELECT_NO_DEVICE = { id: NO_INPUT_ID, name: "<no midi input>" };
 const SELECT_ALL_DEVICES = { id: ALL_INPUT_ID, name: "* (all midi inputs)" };
 const DEFAULT_SELECTIONS = [SELECT_NO_DEVICE, SELECT_ALL_DEVICES];
-class MidiInputDevice extends MidiLearnableComponent {
+class MidiInputDevice extends VisualComponent {
     constructor(defaultDeviceBehavior = DefaultDeviceBehavior.ALL) {
         super();
         this.defaultDeviceBehavior = defaultDeviceBehavior;
+        // Used by display.
         this.selectOptions = DEFAULT_SELECTIONS;
+        // Internals.
+        this.deviceMap = {};
         this.display = new SelectDisplay(this);
         this.selectedDeviceInput = this._defineControlInput('selectedDeviceInput');
         this.midiOut = this._defineControlOutput('midiOut');
         this.availableDevices = this._defineControlOutput('availableDevices');
         this.activeDevices = this._defineControlOutput('selectedDevicesOutput');
+        // Update the menu and outputs when access changes.
         this.accessListener = new MidiAccessListener(this.onMidiAccessChange.bind(this));
+        // Send filtered MIDI messages out.
         this.messageListener = new MidiMessageListener(this.sendMidiMessage.bind(this));
+        // Context menu triggers MIDI learn mode: select the MIDI input based 
+        // on which input device is currently being used.
+        this.midiLearn = new MidiLearn({
+            learnMode: MidiLearn.Mode.INPUT,
+            contextMenuSelector: "#" + this.domId,
+            onMidiLearnConnection: input => this.selectDevice(input.id)
+        });
     }
     static buildSelectOptions(inputMap) {
         var _a;
@@ -11477,9 +11501,6 @@ class MidiInputDevice extends MidiLearnableComponent {
     }
     setOption(id) {
         this.selectDevice(id);
-    }
-    onMidiLearnConnection(input) {
-        this.selectDevice(input.id);
     }
 }
 
@@ -12262,6 +12283,7 @@ var internals = /*#__PURE__*/Object.freeze({
   KnobDisplay: KnobDisplay,
   MidiAccessListener: MidiAccessListener,
   MidiInputDevice: MidiInputDevice,
+  MidiLearn: MidiLearn,
   MidiMessageListener: MidiMessageListener,
   MuteEvent: MuteEvent,
   RangeInputComponent: RangeInputComponent,

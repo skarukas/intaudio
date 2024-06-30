@@ -1,5 +1,5 @@
-import { MidiMessageListener } from "../../shared/MidiListener.js";
-import constants from "../../shared/constants.js";
+import { MidiMessageListener } from "./MidiListener.js";
+import constants from "./constants.js";
 import { ContextMenu } from 'jquery-contextmenu';
 var MidiLearnMode;
 (function (MidiLearnMode) {
@@ -16,7 +16,7 @@ export class MidiLearn {
         this.onMidiLearnConnection = onMidiLearnConnection;
         this.onMidiMessage = onMidiMessage;
         contextMenuSelector && this.addMidiLearnContextMenu(contextMenuSelector);
-        this.$contextMenuSelector = $(contextMenuSelector);
+        this.contextMenuSelector = contextMenuSelector;
         this.midiMessageListener = new MidiMessageListener(this.midiMessageHandler.bind(this));
     }
     addMidiLearnContextMenu(contextMenuSelector) {
@@ -38,11 +38,11 @@ export class MidiLearn {
     }
     enterMidiLearnMode() {
         this.isInMidiLearnMode = true;
-        this.$contextMenuSelector.addClass(constants.MIDI_LEARN_CLASS);
+        $(this.contextMenuSelector).addClass(constants.MIDI_LEARN_CLASS);
     }
     exitMidiLearnMode() {
         this.isInMidiLearnMode = false;
-        this.$contextMenuSelector.removeClass(constants.MIDI_LEARN_CLASS);
+        $(this.contextMenuSelector).removeClass(constants.MIDI_LEARN_CLASS);
     }
     matchesLearnedFilter(input, event) {
         var _a;

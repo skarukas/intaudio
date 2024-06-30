@@ -35,7 +35,7 @@
 .midi-learn {
   border: 2px solid;
   animation-name: midi-learn-color;
-  animation-duration: 2s;
+  animation-duration: 1.5s;
   animation-iteration-count: infinite;
 }
 

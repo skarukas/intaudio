@@ -2,7 +2,10 @@ import { ToStringAndUUID } from "./base/ToStringAndUUID.js"
 
 
 class MidiListener extends ToStringAndUUID {
-  constructor(public listener: Function, protected listenerMap: { [id: string]: Function }) {
+  constructor(
+    public listener: Function,
+    protected listenerMap: { [id: string]: Function }
+  ) {
     super()
     MidiState.connect()
     listenerMap[this._uuid] = listener

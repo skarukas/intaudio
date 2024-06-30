@@ -39,6 +39,7 @@ export * from './shared/base/BaseConnectable.js';
 export * from './shared/base/ToStringAndUUID.js';
 export * from './shared/config.js';
 export * from './shared/MidiListener.js';
+export * from './shared/MidiLearn.js';
 export * from './shared/events.js';
 export * from './shared/types.js';
 export * from './ui/BangDisplay.js';
