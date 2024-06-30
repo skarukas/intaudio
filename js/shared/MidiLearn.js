@@ -6,11 +6,13 @@ var MidiLearnMode;
     /** Accept all messages matching the input device from the MIDI learn message. */
     MidiLearnMode["INPUT"] = "input";
     /** Accept all messages matching the input device and status from the MIDI learn message. */
-    MidiLearnMode["COMMAND"] = "command";
+    MidiLearnMode["STATUS"] = "status";
+    /** Accept all messages matching the input device, status, and the first message byte (ex: pitch) from the MIDI learn message. */
+    MidiLearnMode["FIRST_BYTE"] = "first-byte";
 })(MidiLearnMode || (MidiLearnMode = {}));
 const NULL_OP = (...args) => void 0;
 export class MidiLearn {
-    constructor({ learnMode = MidiLearnMode.COMMAND, contextMenuSelector = undefined, onMidiLearnConnection = NULL_OP, onMidiMessage = NULL_OP } = {}) {
+    constructor({ learnMode = MidiLearnMode.STATUS, contextMenuSelector = undefined, onMidiLearnConnection = NULL_OP, onMidiMessage = NULL_OP } = {}) {
         this.isInMidiLearnMode = false;
         this.learnMode = learnMode;
         this.onMidiLearnConnection = onMidiLearnConnection;
@@ -47,8 +49,11 @@ export class MidiLearn {
     matchesLearnedFilter(input, event) {
         var _a;
         const inputMatches = ((_a = this.learnedMidiInput) === null || _a === void 0 ? void 0 : _a.id) == input.id;
-        return inputMatches && (this.learnMode == MidiLearnMode.INPUT
+        const statusMatch = inputMatches && (this.learnMode == MidiLearnMode.INPUT
             || this.learnedMidiEvent.data[0] == event.data[0]);
+        const firstByteMatch = statusMatch && (this.learnMode != MidiLearnMode.FIRST_BYTE
+            || this.learnedMidiEvent.data[1] == event.data[1]);
+        return firstByteMatch;
     }
     midiMessageHandler(input, event) {
         if (this.isInMidiLearnMode) {

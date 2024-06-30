@@ -39,15 +39,15 @@ export class SliderDisplay extends RangeInputDisplay {
     $root.append(this.$range)
   }
   updateValue(value: number) {
-    this.$range?.attr('value', value)
+    this.$range?.prop('value', value)
   }
   updateMinValue(value: number) {
-    this.$range?.attr('min', value)
+    this.$range?.prop('min', value)
   }
   updateMaxValue(value: number) {
-    this.$range?.attr('max', value)
+    this.$range?.prop('max', value)
   }
   updateStep(value: number) {
-    this.$range?.attr('step', value)
+    this.$range?.prop('step', value)
   }
 }

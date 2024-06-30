@@ -1,5 +1,6 @@
 import { ScrollingAudioMonitor } from "../components/ScrollingAudioMonitor.js";
 import constants from "../shared/constants.js"
+import { scaleRange } from "../shared/util.js";
 import { BaseDisplay } from "./BaseDisplay.js"
 declare var $: JQueryStatic;
 
@@ -52,8 +53,7 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay<ScrollingAudioMoni
     let hasOutOfBoundsValues = false
     const toX = (i: number): number => i * entryWidth
     const toY = (v: number): number => {
-      let zeroOneScaled = (v - minValue) / (maxValue - minValue)
-      let coordValue = (1 - zeroOneScaled) * maxY
+      const coordValue = scaleRange(v, [minValue, maxValue], [maxY, 0])
       hasOutOfBoundsValues = hasOutOfBoundsValues
         || v && ((coordValue > maxY) || (coordValue < 0))
       return coordValue

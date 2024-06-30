@@ -8,7 +8,9 @@ enum MidiLearnMode {
   /** Accept all messages matching the input device from the MIDI learn message. */ 
   INPUT = "input",
   /** Accept all messages matching the input device and status from the MIDI learn message. */
-  COMMAND = "command",
+  STATUS = "status",
+  /** Accept all messages matching the input device, status, and the first message byte (ex: pitch) from the MIDI learn message. */
+  FIRST_BYTE = "first-byte",
 }
 
 const NULL_OP = (...args: any) => void 0
@@ -26,7 +28,7 @@ export class MidiLearn {
   protected onMidiMessage: ((event: MIDIMessageEvent) => void)
 
   constructor({
-    learnMode=MidiLearnMode.COMMAND,
+    learnMode=MidiLearnMode.STATUS,
     contextMenuSelector=undefined,
     onMidiLearnConnection=NULL_OP,
     onMidiMessage=NULL_OP
@@ -68,10 +70,15 @@ export class MidiLearn {
   }
   private matchesLearnedFilter(input: MIDIInput, event: MIDIMessageEvent) {
     const inputMatches = this.learnedMidiInput?.id == input.id
-    return inputMatches && (
+    const statusMatch = inputMatches && (
       this.learnMode == MidiLearnMode.INPUT
       || this.learnedMidiEvent.data[0] == event.data[0]
     )
+    const firstByteMatch = statusMatch && (
+      this.learnMode != MidiLearnMode.FIRST_BYTE
+      || this.learnedMidiEvent.data[1] == event.data[1]
+    )
+    return firstByteMatch
   }
   private midiMessageHandler(input: MIDIInput, event: MIDIMessageEvent) {
     if (this.isInMidiLearnMode) {

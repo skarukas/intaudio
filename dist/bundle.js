@@ -405,12 +405,25 @@ function mapLikeToObject(map) {
     map.forEach((v, k) => obj[k] = v);
     return obj;
 }
+/**
+ * Scale a value to a new range.
+ *
+ * @param v The value to scale, where `inMin <= v <= inMax`.
+ * @param inputRange An array `[inMin, inMax]` specifying the range the input comes from.
+ * @param outputRange An array `[outMin, outMax]` specifying the desired range  of the output.
+ * @returns A scaled value `x: outMin <= x <= outMax`.
+ */
+function scaleRange(v, [inMin, inMax], [outMin, outMax]) {
+    const zeroOneScaled = (v - inMin) / (inMax - inMin);
+    return zeroOneScaled * (outMax - outMin) + outMin;
+}
 
 var util = /*#__PURE__*/Object.freeze({
   __proto__: null,
   createConstantSource: createConstantSource,
   isComponent: isComponent,
-  mapLikeToObject: mapLikeToObject
+  mapLikeToObject: mapLikeToObject,
+  scaleRange: scaleRange
 });
 
 class BaseConnectable extends ToStringAndUUID {
@@ -11310,11 +11323,13 @@ var MidiLearnMode;
     /** Accept all messages matching the input device from the MIDI learn message. */
     MidiLearnMode["INPUT"] = "input";
     /** Accept all messages matching the input device and status from the MIDI learn message. */
-    MidiLearnMode["COMMAND"] = "command";
+    MidiLearnMode["STATUS"] = "status";
+    /** Accept all messages matching the input device, status, and the first message byte (ex: pitch) from the MIDI learn message. */
+    MidiLearnMode["FIRST_BYTE"] = "first-byte";
 })(MidiLearnMode || (MidiLearnMode = {}));
 const NULL_OP = (...args) => void 0;
 class MidiLearn {
-    constructor({ learnMode = MidiLearnMode.COMMAND, contextMenuSelector = undefined, onMidiLearnConnection = NULL_OP, onMidiMessage = NULL_OP } = {}) {
+    constructor({ learnMode = MidiLearnMode.STATUS, contextMenuSelector = undefined, onMidiLearnConnection = NULL_OP, onMidiMessage = NULL_OP } = {}) {
         this.isInMidiLearnMode = false;
         this.learnMode = learnMode;
         this.onMidiLearnConnection = onMidiLearnConnection;
@@ -11351,8 +11366,11 @@ class MidiLearn {
     matchesLearnedFilter(input, event) {
         var _a;
         const inputMatches = ((_a = this.learnedMidiInput) === null || _a === void 0 ? void 0 : _a.id) == input.id;
-        return inputMatches && (this.learnMode == MidiLearnMode.INPUT
+        const statusMatch = inputMatches && (this.learnMode == MidiLearnMode.INPUT
             || this.learnedMidiEvent.data[0] == event.data[0]);
+        const firstByteMatch = statusMatch && (this.learnMode != MidiLearnMode.FIRST_BYTE
+            || this.learnedMidiEvent.data[1] == event.data[1]);
+        return firstByteMatch;
     }
     midiMessageHandler(input, event) {
         if (this.isInMidiLearnMode) {
@@ -11536,11 +11554,25 @@ class RangeInputComponent extends VisualComponent {
         this._setDefaultInput(this.input);
         // Output
         this.output = this._defineControlOutput('output');
+        // Update slider on messages from Midi-learned control.
+        this.midiLearn = new MidiLearn({
+            learnMode: MidiLearn.Mode.FIRST_BYTE,
+            contextMenuSelector: this.uniqueDomSelector,
+            onMidiMessage: this.handleMidiUpdate.bind(this)
+        });
+    }
+    handleMidiUpdate(event) {
+        const uInt8Value = event.data[2]; // Velocity / value.
+        const scaledValue = scaleRange(uInt8Value, [0, 127], [this.minValue.value, this.maxValue.value]);
+        this.updateValue(scaledValue);
+    }
+    updateValue(newValue) {
+        this.display.updateValue(newValue);
+        this.output.setValue(newValue);
     }
     inputDidUpdate(input, newValue) {
         if (input == this.input) {
-            this.display.updateValue(newValue);
-            this.output.setValue(newValue);
+            this.updateValue(newValue);
         }
         else if (input == this.minValue) {
             this.display.updateMinValue(newValue);
@@ -12064,19 +12096,19 @@ class SliderDisplay extends RangeInputDisplay {
     }
     updateValue(value) {
         var _a;
-        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.attr('value', value);
+        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.prop('value', value);
     }
     updateMinValue(value) {
         var _a;
-        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.attr('min', value);
+        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.prop('min', value);
     }
     updateMaxValue(value) {
         var _a;
-        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.attr('max', value);
+        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.prop('max', value);
     }
     updateStep(value) {
         var _a;
-        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.attr('step', value);
+        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.prop('step', value);
     }
 }
 _SliderDisplay_instances = new WeakSet(), _SliderDisplay_getInputAttrs = function _SliderDisplay_getInputAttrs() {
@@ -12143,8 +12175,7 @@ _ScrollingAudioMonitorDisplay_instances = new WeakSet(), _ScrollingAudioMonitorD
     let hasOutOfBoundsValues = false;
     const toX = (i) => i * entryWidth;
     const toY = (v) => {
-        let zeroOneScaled = (v - minValue) / (maxValue - minValue);
-        let coordValue = (1 - zeroOneScaled) * maxY;
+        const coordValue = scaleRange(v, [minValue, maxValue], [maxY, 0]);
         hasOutOfBoundsValues = hasOutOfBoundsValues
             || v && ((coordValue > maxY) || (coordValue < 0));
         return coordValue;

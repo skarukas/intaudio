@@ -5,6 +5,7 @@ var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (
 };
 var _ScrollingAudioMonitorDisplay_instances, _ScrollingAudioMonitorDisplay_valueToDisplayableText, _ScrollingAudioMonitorDisplay_displayWaveform;
 import constants from "../shared/constants.js";
+import { scaleRange } from "../shared/util.js";
 import { BaseDisplay } from "./BaseDisplay.js";
 export class ScrollingAudioMonitorDisplay extends BaseDisplay {
     constructor() {
@@ -54,8 +55,7 @@ _ScrollingAudioMonitorDisplay_instances = new WeakSet(), _ScrollingAudioMonitorD
     let hasOutOfBoundsValues = false;
     const toX = (i) => i * entryWidth;
     const toY = (v) => {
-        let zeroOneScaled = (v - minValue) / (maxValue - minValue);
-        let coordValue = (1 - zeroOneScaled) * maxY;
+        const coordValue = scaleRange(v, [minValue, maxValue], [maxY, 0]);
         hasOutOfBoundsValues = hasOutOfBoundsValues
             || v && ((coordValue > maxY) || (coordValue < 0));
         return coordValue;

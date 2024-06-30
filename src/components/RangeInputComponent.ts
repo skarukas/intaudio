@@ -1,7 +1,9 @@
 
 import { ControlInput } from "../io/input/ControlInput.js"
 import { ControlOutput } from "../io/output/ControlOutput.js"
+import { MidiLearn } from "../shared/MidiLearn.js"
 import { RangeType } from "../shared/types.js"
+import { scaleRange } from "../shared/util.js"
 import { RangeInputDisplay } from "../ui/RangeInputDisplay.js"
 import { VisualComponent } from "./base/VisualComponent.js"
 
@@ -11,6 +13,8 @@ export class RangeInputComponent extends VisualComponent<RangeInputDisplay> {
   readonly step: ControlInput<number>
   readonly input: ControlInput<number>
   readonly output: ControlOutput<number>
+
+  protected midiLearn: MidiLearn
 
   static Type = RangeType
   constructor(
@@ -36,11 +40,31 @@ export class RangeInputComponent extends VisualComponent<RangeInputDisplay> {
 
     // Output
     this.output = this._defineControlOutput('output')
+
+
+    // Update slider on messages from Midi-learned control.
+    this.midiLearn = new MidiLearn({
+      learnMode: MidiLearn.Mode.FIRST_BYTE,
+      contextMenuSelector: this.uniqueDomSelector,
+      onMidiMessage: this.handleMidiUpdate.bind(this)
+    })
+  }
+  protected handleMidiUpdate(event: MIDIMessageEvent) {
+    const uInt8Value = event.data[2]  // Velocity / value.
+    const scaledValue = scaleRange(
+      uInt8Value, 
+      [0, 127],
+      [this.minValue.value, this.maxValue.value]
+    )
+    this.updateValue(scaledValue)
+  }
+  protected updateValue(newValue: number) {
+    this.display.updateValue(newValue)
+    this.output.setValue(newValue)
   }
   inputDidUpdate(input: ControlInput<number>, newValue: number) {
     if (input == this.input) {
-      this.display.updateValue(newValue)
-      this.output.setValue(newValue)
+      this.updateValue(newValue)
     } else if (input == this.minValue) {
       this.display.updateMinValue(newValue)
     } else if (input == this.maxValue) {

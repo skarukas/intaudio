@@ -34,19 +34,19 @@ export class SliderDisplay extends RangeInputDisplay {
     }
     updateValue(value) {
         var _a;
-        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.attr('value', value);
+        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.prop('value', value);
     }
     updateMinValue(value) {
         var _a;
-        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.attr('min', value);
+        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.prop('min', value);
     }
     updateMaxValue(value) {
         var _a;
-        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.attr('max', value);
+        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.prop('max', value);
     }
     updateStep(value) {
         var _a;
-        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.attr('step', value);
+        (_a = this.$range) === null || _a === void 0 ? void 0 : _a.prop('step', value);
     }
 }
 _SliderDisplay_instances = new WeakSet(), _SliderDisplay_getInputAttrs = function _SliderDisplay_getInputAttrs() {

@@ -260,7 +260,10 @@ const tests = {
     let slider = new ia.RangeInputComponent()
     slider.addToDom($root)
     let inputs = []
-    slider.connect(v => inputs.push(v))
+    slider.connect(v => {
+      console.log("slider value: " + v)
+      inputs.push(v)
+    })
     slider.setValues({
       maxValue: 100,
       minValue: 0,
@@ -309,7 +312,7 @@ const tests = {
 
 ia.run(() => {
   //return tests.midiInput()
-  for (let test in {'midiInput': tests.midiInput}) {
+  for (let test in {'midiInput': tests.midiInput, 'sliderControl': tests.sliderControl}) {
     const $testRoot = $(document.createElement('div'))
     tests[test]($testRoot)
     if ($testRoot.children().length) {
