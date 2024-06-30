@@ -109,8 +109,9 @@ const tests = {
       whiteNoiseSource.output.audioNode.disconnect(ia.out)
     }, 2000)
   },
-  createBang() {
+  createBang($root) {
     let bang = new ia.Bang()
+    bang.addToDom($root)
     let bangs = 0
     bang.connect(_ => {
       console.log("bang!")
@@ -312,7 +313,7 @@ const tests = {
 
 ia.run(() => {
   //return tests.midiInput()
-  for (let test in {'midiInput': tests.midiInput, 'sliderControl': tests.sliderControl}) {
+  for (let test in {'midiInput': tests.midiInput, 'sliderControl': tests.sliderControl, 'createBang': tests.createBang}) {
     const $testRoot = $(document.createElement('div'))
     tests[test]($testRoot)
     if ($testRoot.children().length) {

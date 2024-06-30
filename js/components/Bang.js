@@ -1,4 +1,5 @@
 import { ControlInput } from "../io/input/ControlInput.js";
+import { MidiLearn } from "../shared/MidiLearn.js";
 import constants from "../shared/constants.js";
 import { VisualComponent } from "./base/VisualComponent.js";
 export class Bang extends VisualComponent {
@@ -7,6 +8,11 @@ export class Bang extends VisualComponent {
         this.display = new this._.BangDisplay(this);
         this.output = this._defineControlOutput('output');
         this._preventIOOverwrites();
+        this.midiLearn = new MidiLearn({
+            contextMenuSelector: this.uniqueDomSelector,
+            learnMode: MidiLearn.Mode.FIRST_BYTE,
+            onMidiMessage: event => event.data[2] && this.trigger()
+        });
     }
     connect(destination) {
         let { component } = this.getDestinationInfo(destination);
