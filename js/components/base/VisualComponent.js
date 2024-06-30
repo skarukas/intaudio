@@ -12,7 +12,7 @@ export class VisualComponent extends BaseComponent {
     constructor() {
         super();
         _VisualComponent_instances.add(this);
-        this.domId = this._uuid;
+        this.uniqueDomSelector = "#" + this._uuid;
     }
     static adjustSize($root) {
         const maxHeight = $root.children().get().reduce((acc, curr) => {
@@ -48,7 +48,7 @@ export class VisualComponent extends BaseComponent {
             .attr('title', `${this._className} (#${this._uuid})`)
             .addClass('component')
             .addClass(constants.UNINITIALIZED_CLASS)
-            .prop('id', this.domId);
+            .prop('id', this._uuid);
         this.$bypassIndicator = __classPrivateFieldGet(_a, _a, "m", _VisualComponent_addBypassIndicator).call(_a, this.$container);
         this.$container.css({ width, height, top, left });
         // Main component

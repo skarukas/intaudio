@@ -21,11 +21,14 @@ export abstract class VisualComponent<T extends BaseDisplay = any> extends BaseC
   $container: JQuery<HTMLDivElement>
   display: NonNullable<T>
   $bypassIndicator: JQuery
-  domId: string
+  /**
+   * The unique DOM selector that only applies to this element.
+   */
+  uniqueDomSelector: string
 
   constructor() {
     super()
-    this.domId = this._uuid
+    this.uniqueDomSelector = "#" + this._uuid
   }
 
   static #addBypassIndicator($container: JQuery<HTMLDivElement>) {
@@ -78,7 +81,7 @@ export abstract class VisualComponent<T extends BaseDisplay = any> extends BaseC
       .attr('title', `${this._className} (#${this._uuid})`)
       .addClass('component')
       .addClass(constants.UNINITIALIZED_CLASS)
-      .prop('id', this.domId)
+      .prop('id', this._uuid)
     this.$bypassIndicator = VisualComponent.#addBypassIndicator(this.$container)
     this.$container.css({ width, height, top, left })
 

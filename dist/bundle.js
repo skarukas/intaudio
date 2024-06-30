@@ -927,7 +927,7 @@ class VisualComponent extends BaseComponent {
     constructor() {
         super();
         _VisualComponent_instances.add(this);
-        this.domId = this._uuid;
+        this.uniqueDomSelector = "#" + this._uuid;
     }
     static adjustSize($root) {
         const maxHeight = $root.children().get().reduce((acc, curr) => {
@@ -963,7 +963,7 @@ class VisualComponent extends BaseComponent {
             .attr('title', `${this._className} (#${this._uuid})`)
             .addClass('component')
             .addClass(constants.UNINITIALIZED_CLASS)
-            .prop('id', this.domId);
+            .prop('id', this._uuid);
         this.$bypassIndicator = __classPrivateFieldGet$8(_a$1, _a$1, "m", _VisualComponent_addBypassIndicator).call(_a$1, this.$container);
         this.$container.css({ width, height, top, left });
         // Main component
@@ -11401,7 +11401,7 @@ class MidiInputDevice extends VisualComponent {
         // on which input device is currently being used.
         this.midiLearn = new MidiLearn({
             learnMode: MidiLearn.Mode.INPUT,
-            contextMenuSelector: "#" + this.domId,
+            contextMenuSelector: this.uniqueDomSelector,
             onMidiLearnConnection: input => this.selectDevice(input.id)
         });
     }

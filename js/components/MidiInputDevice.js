@@ -35,7 +35,7 @@ export class MidiInputDevice extends VisualComponent {
         // on which input device is currently being used.
         this.midiLearn = new MidiLearn({
             learnMode: MidiLearn.Mode.INPUT,
-            contextMenuSelector: "#" + this.domId,
+            contextMenuSelector: this.uniqueDomSelector,
             onMidiLearnConnection: input => this.selectDevice(input.id)
         });
     }
