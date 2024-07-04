@@ -25,23 +25,23 @@ export class ADSR extends BaseComponent {
   ) {
     super()
     // Inputs
-    this.attackEvent = this._defineControlInput('attackEvent')
-    this.releaseEvent = this._defineControlInput('releaseEvent')
-    this.attackDurationMs = this._defineControlInput('attackDurationMs', attackDurationMs)
-    this.decayDurationMs = this._defineControlInput('decayDurationMs', decayDurationMs)
-    this.sustainAmplitude = this._defineControlInput('sustainAmplitude', sustainAmplitude)
-    this.releaseDurationMs = this._defineControlInput('releaseDurationMs', releaseDurationMs)
+    this.attackEvent = this.defineControlInput('attackEvent')
+    this.releaseEvent = this.defineControlInput('releaseEvent')
+    this.attackDurationMs = this.defineControlInput('attackDurationMs', attackDurationMs)
+    this.decayDurationMs = this.defineControlInput('decayDurationMs', decayDurationMs)
+    this.sustainAmplitude = this.defineControlInput('sustainAmplitude', sustainAmplitude)
+    this.releaseDurationMs = this.defineControlInput('releaseDurationMs', releaseDurationMs)
 
     this._paramModulator = createConstantSource(this.audioContext)
-    this.audioOutput = this._defineAudioOutput('audioOutput', this._paramModulator)
+    this.audioOutput = this.defineAudioOutput('audioOutput', this._paramModulator)
 
     this.state = { noteStart: 0, attackFinish: 0, decayFinish: 0 }
-    this._preventIOOverwrites()
+    this.preventIOOverwrites()
   }
   inputDidUpdate(input, newValue) {
     const state = this.state
     if (input == this.attackEvent) {
-      state.noteStart = this._now()
+      state.noteStart = this.now()
       this._paramModulator.offset.cancelScheduledValues(state.noteStart)
       state.attackFinish = state.noteStart + this.attackDurationMs.value / 1000
       state.decayFinish = state.attackFinish + this.decayDurationMs.value / 1000
@@ -60,7 +60,7 @@ export class ADSR extends BaseComponent {
         state.decayFinish
       )
     } else if (input == this.releaseEvent) {
-      const releaseStart = this._now()
+      const releaseStart = this.now()
       let releaseFinish: number;
       if (releaseStart > state.attackFinish && releaseStart < state.decayFinish) {
         // Special case: the amplitude is in the middle of increasing. If we 

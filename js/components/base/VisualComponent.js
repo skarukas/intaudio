@@ -6,6 +6,7 @@ var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (
 var _VisualComponent_instances, _a, _VisualComponent_addBypassIndicator, _VisualComponent_assertDisplayIsUsable;
 import constants from "../../shared/constants.js";
 import * as init from "../../shared/init.js";
+import { afterRender } from "../../shared/util.js";
 import { BaseDisplay } from "../../ui/BaseDisplay.js";
 import { BaseComponent } from "./BaseComponent.js";
 export class VisualComponent extends BaseComponent {
@@ -30,7 +31,21 @@ export class VisualComponent extends BaseComponent {
             width: `${maxWidth}px`
         });
     }
-    addToDom(iaRootElement, { left = 0, top = 0, width = undefined, height = undefined } = {}) {
+    static rotate($container, rotateDeg) {
+        $container.css({
+            "transform-origin": "top left",
+            transform: `rotate(${rotateDeg}deg)`
+        });
+        const parentRect = $container.parent().get(0).getBoundingClientRect();
+        const top = +$container.css("top").replace("px", "");
+        const left = +$container.css("left").replace("px", "");
+        const rect = $container.get(0).getBoundingClientRect();
+        $container.css({
+            top: top - rect.top + parentRect.top,
+            left: left - rect.left + parentRect.left
+        });
+    }
+    addToDom(iaRootElement, { left = 0, top = 0, width = undefined, height = undefined, rotateDeg = 0 } = {}) {
         __classPrivateFieldGet(this, _VisualComponent_instances, "m", _VisualComponent_assertDisplayIsUsable).call(this);
         const cls = this.constructor;
         width !== null && width !== void 0 ? width : (width = cls.defaultWidth);
@@ -58,7 +73,10 @@ export class VisualComponent extends BaseComponent {
         this.$root.append(this.$container);
         //this.$container.append($component)
         this.display._display(this.$container, width, height);
-        _a.adjustSize(this.$root);
+        afterRender(() => {
+            _a.adjustSize(this.$root);
+            _a.rotate(this.$container, rotateDeg);
+        });
         return $component;
     }
     refreshDom() {

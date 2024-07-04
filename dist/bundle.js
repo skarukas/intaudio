@@ -353,10 +353,13 @@ var constants = Object.freeze({
     UNINITIALIZED_CLASS: "component-uninitialized",
     BANG_CLASS: "bang",
     BANG_PRESSED_CLASS: "bang-pressed",
-    MIDI_LEARN_CLASS: "midi-learn",
+    MIDI_LEARN_LISTENING_CLASS: "midi-learn-listening",
+    MIDI_LEARN_ASSIGNED_CLASS: "midi-learn-assigned",
     EVENT_MOUSEDOWN: "mousedown",
     EVENT_MOUSEUP: "mouseup",
     TRIGGER: Symbol("trigger"),
+    MIN_PLAYBACK_RATE: 0.0625,
+    MAX_PLAYBACK_RATE: 16.0,
     // Special placeholder for when an input both has no defaultValue and it has 
     // never been set.
     // TODO: need special value?
@@ -393,6 +396,27 @@ class AudioRateInput extends AbstractInput {
     }
 }
 
+var WaveType;
+(function (WaveType) {
+    WaveType["SINE"] = "sine";
+    WaveType["SQUARE"] = "square";
+    WaveType["SAWTOOTH"] = "sawtooth";
+    WaveType["TRIANGLE"] = "triangle";
+    WaveType["CUSTOM"] = "custom";
+    // TODO: add more
+})(WaveType || (WaveType = {}));
+var RangeType;
+(function (RangeType) {
+    RangeType["SLIDER"] = "slider";
+    RangeType["KNOB"] = "knob";
+})(RangeType || (RangeType = {}));
+var TimeMeasure;
+(function (TimeMeasure) {
+    TimeMeasure["CYCLES"] = "cycles";
+    TimeMeasure["SECONDS"] = "seconds";
+    TimeMeasure["SAMPLES"] = "samples";
+})(TimeMeasure || (TimeMeasure = {}));
+
 function createConstantSource(audioContext) {
     let src = audioContext.createConstantSource();
     src.offset.setValueAtTime(0, audioContext.currentTime);
@@ -400,7 +424,7 @@ function createConstantSource(audioContext) {
     return src;
 }
 function isComponent(x) {
-    return !!x.isComponent;
+    return !!(x === null || x === void 0 ? void 0 : x.isComponent);
 }
 function mapLikeToObject(map) {
     const obj = {};
@@ -419,10 +443,42 @@ function scaleRange(v, [inMin, inMax], [outMin, outMax]) {
     const zeroOneScaled = (v - inMin) / (inMax - inMin);
     return zeroOneScaled * (outMax - outMin) + outMin;
 }
+function afterRender(fn) {
+    setTimeout(fn, 100);
+}
+function defineTimeRamp(audioContext, timeMeasure, node = undefined, mapFn = v => v, durationSec = 1e8) {
+    if (timeMeasure == TimeMeasure.CYCLES) ;
+    else if (timeMeasure == TimeMeasure.SECONDS) ;
+    else if (timeMeasure == TimeMeasure.SAMPLES) {
+        audioContext.sampleRate;
+    }
+    let timeRamp = node !== null && node !== void 0 ? node : createConstantSource(audioContext);
+    let currTime = audioContext.currentTime;
+    const endTime = currTime + durationSec;
+    timeRamp.offset.cancelScheduledValues(currTime);
+    timeRamp.offset.setValueAtTime(mapFn(0), currTime);
+    timeRamp.offset.linearRampToValueAtTime(mapFn(durationSec), endTime);
+    return timeRamp;
+}
+// TODO: figure out how to avoid circular dependency??
+/*
+export function createComponent(webAudioNode: WebAudioConnectable): AudioComponent;
+export function createComponent(fn: Function): FunctionComponent;
+export function createComponent(x: any): Component {
+  if (x instanceof AudioNode || x instanceof AudioParam) {
+    return new AudioComponent(x)
+  } else if (x instanceof Function) {
+    return new FunctionComponent(x)
+  }
+  return undefined
+}
+ */
 
 var util = /*#__PURE__*/Object.freeze({
   __proto__: null,
+  afterRender: afterRender,
   createConstantSource: createConstantSource,
+  defineTimeRamp: defineTimeRamp,
   isComponent: isComponent,
   mapLikeToObject: mapLikeToObject,
   scaleRange: scaleRange
@@ -496,7 +552,7 @@ var __classPrivateFieldSet$1 = (undefined && undefined.__classPrivateFieldSet) |
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
     return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
 };
-var __classPrivateFieldGet$b = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+var __classPrivateFieldGet$a = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
@@ -512,7 +568,7 @@ class BaseEvent extends ToStringAndUUID {
         __classPrivateFieldSet$1(this, _BaseEvent_defaultIgnored, true, "f");
     }
     defaultIsIgnored() {
-        return __classPrivateFieldGet$b(this, _BaseEvent_defaultIgnored, "f");
+        return __classPrivateFieldGet$a(this, _BaseEvent_defaultIgnored, "f");
     }
 }
 _BaseEvent_defaultIgnored = new WeakMap();
@@ -554,27 +610,20 @@ var events = /*#__PURE__*/Object.freeze({
   MuteEvent: MuteEvent
 });
 
-var __classPrivateFieldGet$a = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
-    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-};
-var _BaseComponent_instances, _BaseComponent_freezeProperty, _BaseComponent_defineInputOrOutput, _BaseComponent_allInputsAreDefined;
 class BaseComponent extends BaseConnectable {
     constructor() {
         super();
-        _BaseComponent_instances.add(this);
         this.isComponent = true;
         this.outputs = {};
         this.inputs = {};
         // Reserved default inputs.
-        this.isBypassed = this._defineControlInput('isBypassed', false);
-        this.isMuted = this._defineControlInput('isMuted', false);
-        this.triggerInput = this._defineControlInput('triggerInput');
+        this.isBypassed = this.defineControlInput('isBypassed', false);
+        this.isMuted = this.defineControlInput('isMuted', false);
+        this.triggerInput = this.defineControlInput('triggerInput');
         // Special inputs that are not automatically set as default I/O.
         this._reservedInputs = [this.isBypassed, this.isMuted, this.triggerInput];
         this._reservedOutputs = [];
-        this._preventIOOverwrites();
+        this.preventIOOverwrites();
     }
     toString() {
         function _getNames(obj, except) {
@@ -588,48 +637,64 @@ class BaseComponent extends BaseConnectable {
         let out = _getNames(this.outputs, this._reservedOutputs);
         return `${this._className}(${inp} => ${out})`;
     }
-    _now() {
+    now() {
         return this.audioContext.currentTime;
     }
-    _validateIsSingleton() {
+    validateIsSingleton() {
         const Class = this.constructor;
         if (Class.instanceExists) {
             throw new Error(`Only one instance of ${this.constructor} can exist.`);
         }
         Class.instanceExists = true;
     }
-    _preventIOOverwrites() {
-        Object.keys(this.inputs).map(__classPrivateFieldGet$a(this, _BaseComponent_instances, "m", _BaseComponent_freezeProperty).bind(this));
-        Object.keys(this.outputs).map(__classPrivateFieldGet$a(this, _BaseComponent_instances, "m", _BaseComponent_freezeProperty).bind(this));
+    preventIOOverwrites() {
+        Object.keys(this.inputs).map(this.freezeProperty.bind(this));
+        Object.keys(this.outputs).map(this.freezeProperty.bind(this));
     }
-    _defineControlInput(name, defaultValue = constants.UNSET_VALUE, isRequired = false) {
+    freezeProperty(propName) {
+        Object.defineProperty(this, propName, {
+            writable: false,
+            configurable: false
+        });
+    }
+    defineInputOrOutput(propName, inputOrOutput, inputsOrOutputsArray) {
+        inputsOrOutputsArray[propName] = inputOrOutput;
+        return inputOrOutput;
+    }
+    defineOutputAlias(name, output) {
+        return this.defineInputOrOutput(name, output, this.outputs);
+    }
+    defineInputAlias(name, input) {
+        return this.defineInputOrOutput(name, input, this.inputs);
+    }
+    defineControlInput(name, defaultValue = constants.UNSET_VALUE, isRequired = false) {
         let input = new this._.ControlInput(name, this, defaultValue, isRequired);
-        return __classPrivateFieldGet$a(this, _BaseComponent_instances, "m", _BaseComponent_defineInputOrOutput).call(this, name, input, this.inputs);
+        return this.defineInputOrOutput(name, input, this.inputs);
     }
-    _defineAudioInput(name, destinationNode) {
+    defineAudioInput(name, destinationNode) {
         let input = new this._.AudioRateInput(name, this, destinationNode);
-        return __classPrivateFieldGet$a(this, _BaseComponent_instances, "m", _BaseComponent_defineInputOrOutput).call(this, name, input, this.inputs);
+        return this.defineInputOrOutput(name, input, this.inputs);
     }
-    _defineHybridInput(name, destinationNode, defaultValue = constants.UNSET_VALUE, isRequired = false) {
+    defineHybridInput(name, destinationNode, defaultValue = constants.UNSET_VALUE, isRequired = false) {
         let input = new this._.HybridInput(name, this, destinationNode, defaultValue, isRequired);
-        return __classPrivateFieldGet$a(this, _BaseComponent_instances, "m", _BaseComponent_defineInputOrOutput).call(this, name, input, this.inputs);
+        return this.defineInputOrOutput(name, input, this.inputs);
     }
-    _defineControlOutput(name) {
+    defineControlOutput(name) {
         let output = new this._.ControlOutput(name);
-        return __classPrivateFieldGet$a(this, _BaseComponent_instances, "m", _BaseComponent_defineInputOrOutput).call(this, name, output, this.outputs);
+        return this.defineInputOrOutput(name, output, this.outputs);
     }
-    _defineAudioOutput(name, audioNode) {
+    defineAudioOutput(name, audioNode) {
         let output = new this._.AudioRateOutput(name, audioNode);
-        return __classPrivateFieldGet$a(this, _BaseComponent_instances, "m", _BaseComponent_defineInputOrOutput).call(this, name, output, this.outputs);
+        return this.defineInputOrOutput(name, output, this.outputs);
     }
-    _defineHybridOutput(name, audioNode) {
+    defineHybridOutput(name, audioNode) {
         let output = new this._.HybridOutput(name, audioNode);
-        return __classPrivateFieldGet$a(this, _BaseComponent_instances, "m", _BaseComponent_defineInputOrOutput).call(this, name, output, this.outputs);
+        return this.defineInputOrOutput(name, output, this.outputs);
     }
-    _setDefaultInput(input) {
+    setDefaultInput(input) {
         this._defaultInput = input;
     }
-    _setDefaultOutput(output) {
+    setDefaultOutput(output) {
         this._defaultOutput = output;
     }
     getDefaultInput() {
@@ -654,6 +719,19 @@ class BaseComponent extends BaseConnectable {
             return ownOutputs[0];
         }
     }
+    allInputsAreDefined() {
+        let violations = [];
+        for (let inputName in this.inputs) {
+            let input = this.inputs[inputName];
+            if (input.isRequired && input.value == constants.UNSET_VALUE) {
+                violations.push(inputName);
+            }
+        }
+        return !violations.length;
+        /* if (violations.length) {
+          throw new Error(`Unable to run ${this}. The following inputs are marked as required but do not have inputs set: [${violations}]`)
+        } */
+    }
     propagateUpdatedInput(inputStream, newValue) {
         if (inputStream == this.isBypassed) {
             this.onBypassEvent(newValue);
@@ -665,7 +743,7 @@ class BaseComponent extends BaseConnectable {
             // Always execute function, even if it's unsafe.
             this.inputDidUpdate(undefined, undefined);
         }
-        else if (__classPrivateFieldGet$a(this, _BaseComponent_instances, "m", _BaseComponent_allInputsAreDefined).call(this)) {
+        else if (this.allInputsAreDefined()) {
             this.inputDidUpdate(inputStream, newValue);
         }
         else {
@@ -702,6 +780,23 @@ class BaseComponent extends BaseConnectable {
         output.connect(input);
         return component;
     }
+    withInputs(argDict) {
+        var _a;
+        for (const name in argDict) {
+            const thisInput = (_a = this.inputs[name]) !== null && _a !== void 0 ? _a : this.inputs["$" + name];
+            if (!thisInput) {
+                throw new Error(`No input found named '${name}'. Valid inputs: [${Object.keys(this.inputs)}]`);
+            }
+            const argValue = argDict[name];
+            if (argValue instanceof Object && 'connect' in argValue) {
+                argValue.connect(thisInput);
+            }
+            else {
+                thisInput.setValue(argValue);
+            }
+        }
+        return this;
+    }
     setValues(valueObj) {
         return this.getDefaultInput().setValue(valueObj);
     }
@@ -713,48 +808,27 @@ class BaseComponent extends BaseConnectable {
         return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs));
     }
 }
-_BaseComponent_instances = new WeakSet(), _BaseComponent_freezeProperty = function _BaseComponent_freezeProperty(propName) {
-    Object.defineProperty(this, propName, {
-        writable: false,
-        configurable: false
-    });
-}, _BaseComponent_defineInputOrOutput = function _BaseComponent_defineInputOrOutput(propName, inputOrOutput, inputsOrOutputsArray) {
-    inputsOrOutputsArray[propName] = inputOrOutput;
-    return inputOrOutput;
-}, _BaseComponent_allInputsAreDefined = function _BaseComponent_allInputsAreDefined() {
-    let violations = [];
-    for (let inputName in this.inputs) {
-        let input = this.inputs[inputName];
-        if (input.isRequired && input.value == constants.UNSET_VALUE) {
-            violations.push(inputName);
-        }
-    }
-    return !violations.length;
-    /* if (violations.length) {
-      throw new Error(`Unable to run ${this}. The following inputs are marked as required but do not have inputs set: [${violations}]`)
-    } */
-};
 BaseComponent.instanceExists = false;
 
 class ADSR extends BaseComponent {
     constructor(attackDurationMs, decayDurationMs, sustainAmplitude, releaseDurationMs) {
         super();
         // Inputs
-        this.attackEvent = this._defineControlInput('attackEvent');
-        this.releaseEvent = this._defineControlInput('releaseEvent');
-        this.attackDurationMs = this._defineControlInput('attackDurationMs', attackDurationMs);
-        this.decayDurationMs = this._defineControlInput('decayDurationMs', decayDurationMs);
-        this.sustainAmplitude = this._defineControlInput('sustainAmplitude', sustainAmplitude);
-        this.releaseDurationMs = this._defineControlInput('releaseDurationMs', releaseDurationMs);
+        this.attackEvent = this.defineControlInput('attackEvent');
+        this.releaseEvent = this.defineControlInput('releaseEvent');
+        this.attackDurationMs = this.defineControlInput('attackDurationMs', attackDurationMs);
+        this.decayDurationMs = this.defineControlInput('decayDurationMs', decayDurationMs);
+        this.sustainAmplitude = this.defineControlInput('sustainAmplitude', sustainAmplitude);
+        this.releaseDurationMs = this.defineControlInput('releaseDurationMs', releaseDurationMs);
         this._paramModulator = createConstantSource(this.audioContext);
-        this.audioOutput = this._defineAudioOutput('audioOutput', this._paramModulator);
+        this.audioOutput = this.defineAudioOutput('audioOutput', this._paramModulator);
         this.state = { noteStart: 0, attackFinish: 0, decayFinish: 0 };
-        this._preventIOOverwrites();
+        this.preventIOOverwrites();
     }
     inputDidUpdate(input, newValue) {
         const state = this.state;
         if (input == this.attackEvent) {
-            state.noteStart = this._now();
+            state.noteStart = this.now();
             this._paramModulator.offset.cancelScheduledValues(state.noteStart);
             state.attackFinish = state.noteStart + this.attackDurationMs.value / 1000;
             state.decayFinish = state.attackFinish + this.decayDurationMs.value / 1000;
@@ -765,7 +839,7 @@ class ADSR extends BaseComponent {
             this._paramModulator.offset.setValueAtTime(this.sustainAmplitude.value, state.decayFinish);
         }
         else if (input == this.releaseEvent) {
-            const releaseStart = this._now();
+            const releaseStart = this.now();
             let releaseFinish;
             if (releaseStart > state.attackFinish && releaseStart < state.decayFinish) {
                 // Special case: the amplitude is in the middle of increasing. If we 
@@ -788,14 +862,14 @@ class ADSR extends BaseComponent {
 class AudioComponent extends BaseComponent {
     constructor(inputNode) {
         super();
-        this.input = this._defineAudioInput('input', inputNode);
+        this.input = this.defineAudioInput('input', inputNode);
         if (inputNode instanceof AudioNode) {
-            this.output = this._defineAudioOutput('output', inputNode);
+            this.output = this.defineAudioOutput('output', inputNode);
         }
         else if (!(inputNode instanceof AudioParam)) {
             throw new Error("AudioComponents must be built from either and AudioNode or AudioParam");
         }
-        this._preventIOOverwrites();
+        this.preventIOOverwrites();
     }
 }
 
@@ -820,12 +894,12 @@ class AudioRateSignalSampler extends BaseComponent {
         samplePeriodMs !== null && samplePeriodMs !== void 0 ? samplePeriodMs : (samplePeriodMs = this.config.defaultSamplePeriodMs);
         this._analyzer = this.audioContext.createAnalyser();
         // Inputs
-        this.samplePeriodMs = this._defineControlInput('samplePeriodMs', samplePeriodMs);
-        this.audioInput = this._defineAudioInput('audioInput', this._analyzer);
-        this._setDefaultInput(this.audioInput);
+        this.samplePeriodMs = this.defineControlInput('samplePeriodMs', samplePeriodMs);
+        this.audioInput = this.defineAudioInput('audioInput', this._analyzer);
+        this.setDefaultInput(this.audioInput);
         // Output
-        this.controlOutput = this._defineControlOutput('controlOutput');
-        this._preventIOOverwrites();
+        this.controlOutput = this.defineControlOutput('controlOutput');
+        this.preventIOOverwrites();
     }
     stop() {
         // TODO: figure out how to actually stop this...
@@ -3233,11 +3307,19 @@ class MidiLearn {
     }
     enterMidiLearnMode() {
         this.isInMidiLearnMode = true;
-        $(this.contextMenuSelector).addClass(constants.MIDI_LEARN_CLASS);
+        $(this.contextMenuSelector)
+            .removeClass(constants.MIDI_LEARN_ASSIGNED_CLASS)
+            .addClass(constants.MIDI_LEARN_LISTENING_CLASS);
+        // Exit on escape.
+        window.addEventListener("keydown", (event) => {
+            if (event.key == "Escape") {
+                this.exitMidiLearnMode();
+            }
+        }, { once: true });
     }
     exitMidiLearnMode() {
         this.isInMidiLearnMode = false;
-        $(this.contextMenuSelector).removeClass(constants.MIDI_LEARN_CLASS);
+        $(this.contextMenuSelector).removeClass(constants.MIDI_LEARN_LISTENING_CLASS);
     }
     matchesLearnedFilter(input, event) {
         var _a;
@@ -3254,6 +3336,8 @@ class MidiLearn {
             this.learnedMidiEvent = event;
             this.onMidiLearnConnection(input, event.data);
             this.onMidiMessage(event);
+            $(this.contextMenuSelector)
+                .addClass(constants.MIDI_LEARN_ASSIGNED_CLASS);
             this.exitMidiLearnMode();
         }
         else if (this.matchesLearnedFilter(input, event)) {
@@ -3343,7 +3427,21 @@ class VisualComponent extends BaseComponent {
             width: `${maxWidth}px`
         });
     }
-    addToDom(iaRootElement, { left = 0, top = 0, width = undefined, height = undefined } = {}) {
+    static rotate($container, rotateDeg) {
+        $container.css({
+            "transform-origin": "top left",
+            transform: `rotate(${rotateDeg}deg)`
+        });
+        const parentRect = $container.parent().get(0).getBoundingClientRect();
+        const top = +$container.css("top").replace("px", "");
+        const left = +$container.css("left").replace("px", "");
+        const rect = $container.get(0).getBoundingClientRect();
+        $container.css({
+            top: top - rect.top + parentRect.top,
+            left: left - rect.left + parentRect.left
+        });
+    }
+    addToDom(iaRootElement, { left = 0, top = 0, width = undefined, height = undefined, rotateDeg = 0 } = {}) {
         __classPrivateFieldGet$8(this, _VisualComponent_instances, "m", _VisualComponent_assertDisplayIsUsable).call(this);
         const cls = this.constructor;
         width !== null && width !== void 0 ? width : (width = cls.defaultWidth);
@@ -3371,7 +3469,10 @@ class VisualComponent extends BaseComponent {
         this.$root.append(this.$container);
         //this.$container.append($component)
         this.display._display(this.$container, width, height);
-        _a$1.adjustSize(this.$root);
+        afterRender(() => {
+            _a$1.adjustSize(this.$root);
+            _a$1.rotate(this.$container, rotateDeg);
+        });
         return $component;
     }
     refreshDom() {
@@ -3418,8 +3519,8 @@ class Bang extends VisualComponent {
         super();
         this.lastMidiValue = 0;
         this.display = new this._.BangDisplay(this);
-        this.output = this._defineControlOutput('output');
-        this._preventIOOverwrites();
+        this.output = this.defineControlOutput('output');
+        this.preventIOOverwrites();
         // Trigger on nonzero MIDI inputs.
         this.midiLearn = new MidiLearn({
             contextMenuSelector: this.uniqueDomSelector,
@@ -11221,6 +11322,7 @@ class FunctionComponent extends BaseComponent {
         for (let i = 0; i < parameters.length; i++) {
             const arg = parameters[i];
             const inputName = "$" + arg.name;
+            const indexName = "$" + i;
             const isRequired = !arg.hasDefault;
             if (arg.destructureType == "rest") {
                 // Can't use it or anything after it
@@ -11231,7 +11333,9 @@ class FunctionComponent extends BaseComponent {
             }
             //
             const passThroughInput = createConstantSource(this.audioContext);
-            this[inputName] = this._defineHybridInput(inputName, passThroughInput.offset, constants.UNSET_VALUE, isRequired);
+            // Define input and its alias.
+            this[inputName] = this.defineHybridInput(inputName, passThroughInput.offset, constants.UNSET_VALUE, isRequired);
+            this[indexName] = this.defineInputAlias(indexName, this[inputName]);
             for (let c = 0; c < numChannelsPerInput; c++) {
                 const fromChannel = c;
                 const toChannel = numChannelsPerInput * i + c;
@@ -11243,10 +11347,10 @@ class FunctionComponent extends BaseComponent {
         }
         let requiredArgs = parameters.filter(a => !a.hasDefault);
         if (requiredArgs.length == 1) {
-            this._setDefaultInput(this["$" + requiredArgs[0].name]);
+            this.setDefaultInput(this["$" + requiredArgs[0].name]);
         }
-        this.output = this._defineHybridOutput('output', this._audioProcessor);
-        this._preventIOOverwrites();
+        this.output = this.defineHybridOutput('output', this._audioProcessor);
+        this.preventIOOverwrites();
     }
     _createScriptProcessor(numInputs, numChannelsPerInput) {
         const bufferSize = undefined; // 256
@@ -11293,13 +11397,21 @@ class FunctionComponent extends BaseComponent {
     process(event) {
         return this.fn(event);
     }
-    call(...inputs) {
-        if (inputs.length > this._orderedFunctionInputs.length) {
-            throw new Error(`Too many inputs for the call() method on ${this}. Expected ${this._orderedFunctionInputs.length} but got ${inputs.length}.`);
+    withInputs(...inputs) {
+        var _a;
+        let inputDict;
+        if ((_a = inputs[0]) === null || _a === void 0 ? void 0 : _a.connect) { // instanceof Connectable
+            if (inputs.length > this._orderedFunctionInputs.length) {
+                throw new Error(`Too many inputs for the call() method on ${this}. Expected ${this._orderedFunctionInputs.length} but got ${inputs.length}.`);
+            }
+            for (let i = 0; i < inputs.length; i++) {
+                inputDict["$" + i] = inputs[i];
+            }
         }
-        for (let i = 0; i < inputs.length; i++) {
-            inputs[i].connect(this._orderedFunctionInputs[i]);
+        else {
+            inputDict = inputs[0];
         }
+        super.withInputs(inputDict);
         return this;
     }
 }
@@ -11323,8 +11435,8 @@ _FunctionComponent_instances = new WeakSet(), _FunctionComponent_parallelApplyAc
 class IgnoreDuplicates extends BaseComponent {
     constructor() {
         super();
-        this.input = this._defineControlInput('input');
-        this.output = this._defineControlOutput('output');
+        this.input = this.defineControlInput('input');
+        this.output = this.defineControlOutput('output');
     }
     inputDidUpdate(input, newValue) {
         if (newValue != this.value) {
@@ -11346,13 +11458,13 @@ class Keyboard extends VisualComponent {
         _Keyboard_instances.add(this);
         this.display = new this._.KeyboardDisplay(this);
         // Inputs
-        this.numKeys = this._defineControlInput('numKeys', numKeys);
-        this.lowestPitch = this._defineControlInput('lowestPitch', lowestPitch);
-        this.midiInput = this._defineControlInput('midiInput');
-        this._setDefaultInput(this.midiInput);
+        this.numKeys = this.defineControlInput('numKeys', numKeys);
+        this.lowestPitch = this.defineControlInput('lowestPitch', lowestPitch);
+        this.midiInput = this.defineControlInput('midiInput');
+        this.setDefaultInput(this.midiInput);
         // Output
-        this.midiOutput = this._defineControlOutput('midiOutput');
-        this._preventIOOverwrites();
+        this.midiOutput = this.defineControlOutput('midiOutput');
+        this.preventIOOverwrites();
     }
     inputDidUpdate(input, newValue) {
         if (input == this.numKeys || input == this.lowestPitch) {
@@ -11382,6 +11494,37 @@ _Keyboard_instances = new WeakSet(), _Keyboard_getKeyId = function _Keyboard_get
 // Display options. TODO: move to display class?
 Keyboard.defaultHeight = 64;
 Keyboard.defaultWidth = 256;
+
+class MediaElementComponent extends BaseComponent {
+    constructor(selectorOrElement, { preservePitchOnStretch = false } = {}) {
+        super();
+        this.mediaElement = $(selectorOrElement).get(0);
+        console.log(this.mediaElement);
+        console.log($(selectorOrElement));
+        this.audioNode = this.audioContext.createMediaElementSource(this.mediaElement);
+        this.mediaElement.disableRemotePlayback = false;
+        this.mediaElement.preservesPitch = preservePitchOnStretch;
+        this.start = this.defineControlInput('start');
+        this.stop = this.defineControlInput('stop');
+        this.playbackRate = this.defineControlInput('playbackRate');
+        this.volume = this.defineControlInput('volume');
+        this.audioOutput = this.defineAudioOutput('audioOutput', this.audioNode);
+    }
+    inputDidUpdate(input, newValue) {
+        if (input == this.start) {
+            this.mediaElement.pause();
+        }
+        else if (input == this.stop) {
+            this.mediaElement.play();
+        }
+        else if (input == this.playbackRate) {
+            this.mediaElement.playbackRate = Math.max(constants.MIN_PLAYBACK_RATE, Math.min(newValue, constants.MAX_PLAYBACK_RATE));
+        }
+        else if (input == this.volume) {
+            this.mediaElement.volume = newValue;
+        }
+    }
+}
 
 class SelectDisplay extends BaseDisplay {
     _display($root) {
@@ -11429,10 +11572,10 @@ class MidiInputDevice extends VisualComponent {
         // Internals.
         this.deviceMap = {};
         this.display = new SelectDisplay(this);
-        this.selectedDeviceInput = this._defineControlInput('selectedDeviceInput');
-        this.midiOut = this._defineControlOutput('midiOut');
-        this.availableDevices = this._defineControlOutput('availableDevices');
-        this.activeDevices = this._defineControlOutput('selectedDevicesOutput');
+        this.selectedDeviceInput = this.defineControlInput('selectedDeviceInput');
+        this.midiOut = this.defineControlOutput('midiOut');
+        this.availableDevices = this.defineControlOutput('availableDevices');
+        this.activeDevices = this.defineControlOutput('selectedDevicesOutput');
         // Update the menu and outputs when access changes.
         this.accessListener = new MidiAccessListener(this.onMidiAccessChange.bind(this));
         // Send filtered MIDI messages out.
@@ -11544,21 +11687,6 @@ class MidiInputDevice extends VisualComponent {
     }
 }
 
-var WaveType;
-(function (WaveType) {
-    WaveType["SINE"] = "sine";
-    WaveType["SQUARE"] = "square";
-    WaveType["SAWTOOTH"] = "sawtooth";
-    WaveType["TRIANGLE"] = "triangle";
-    WaveType["CUSTOM"] = "custom";
-    // TODO: add more
-})(WaveType || (WaveType = {}));
-var RangeType;
-(function (RangeType) {
-    RangeType["SLIDER"] = "slider";
-    RangeType["KNOB"] = "knob";
-})(RangeType || (RangeType = {}));
-
 class RangeInputComponent extends VisualComponent {
     constructor(minValue = -1, maxValue = 1, step, defaultValue, displayType = RangeType.SLIDER) {
         super();
@@ -11569,13 +11697,13 @@ class RangeInputComponent extends VisualComponent {
             defaultValue = (minValue + maxValue) / 2;
         }
         // Inputs
-        this.minValue = this._defineControlInput('minValue', minValue);
-        this.maxValue = this._defineControlInput('maxValue', maxValue);
-        this.step = this._defineControlInput('step', step);
-        this.input = this._defineControlInput('input', defaultValue);
-        this._setDefaultInput(this.input);
+        this.minValue = this.defineControlInput('minValue', minValue);
+        this.maxValue = this.defineControlInput('maxValue', maxValue);
+        this.step = this.defineControlInput('step', step);
+        this.input = this.defineControlInput('input', defaultValue);
+        this.setDefaultInput(this.input);
         // Output
-        this.output = this._defineControlOutput('output');
+        this.output = this.defineControlOutput('output');
         // Update slider on messages from Midi-learned control.
         this.midiLearn = new MidiLearn({
             learnMode: MidiLearn.Mode.FIRST_BYTE,
@@ -11626,16 +11754,16 @@ class ScrollingAudioMonitor extends VisualComponent {
         this._sampler = new this._.AudioRateSignalSampler(samplePeriodMs);
         this._passthrough = createConstantSource(this.audioContext);
         // Inputs
-        this.samplePeriodMs = this._defineControlInput('samplePeriodMs', samplePeriodMs);
-        this.memorySize = this._defineControlInput('memorySize', memorySize);
-        this.minValue = this._defineControlInput('minValue', minValue);
-        this.maxValue = this._defineControlInput('maxValue', maxValue);
-        this.hideZeroSignal = this._defineControlInput('hideZeroSignal', hideZeroSignal);
-        this.input = this._defineAudioInput('input', this._passthrough.offset);
-        this._setDefaultInput(this.input);
+        this.samplePeriodMs = this.defineControlInput('samplePeriodMs', samplePeriodMs);
+        this.memorySize = this.defineControlInput('memorySize', memorySize);
+        this.minValue = this.defineControlInput('minValue', minValue);
+        this.maxValue = this.defineControlInput('maxValue', maxValue);
+        this.hideZeroSignal = this.defineControlInput('hideZeroSignal', hideZeroSignal);
+        this.input = this.defineAudioInput('input', this._passthrough.offset);
+        this.setDefaultInput(this.input);
         // Output
-        this.audioOutput = this._defineAudioOutput('audioOutput', this._passthrough);
-        this.controlOutput = this._defineControlOutput('controlOutput');
+        this.audioOutput = this.defineAudioOutput('audioOutput', this._passthrough);
+        this.controlOutput = this.defineControlOutput('controlOutput');
         // Routing
         this.audioOutput.connect(this._sampler.audioInput);
         this._sampler.controlOutput.onUpdate((v) => {
@@ -11644,7 +11772,7 @@ class ScrollingAudioMonitor extends VisualComponent {
             this.controlOutput.setValue(v);
         });
         this._memory = Array(this.memorySize.value).fill(0.);
-        this._preventIOOverwrites();
+        this.preventIOOverwrites();
     }
     inputDidUpdate(input, newValue) {
         if (input == this.memorySize) {
@@ -11691,16 +11819,16 @@ class SimplePolyphonicSynth extends BaseComponent {
         this._currNodeIdx = 0;
         this._masterGainNode = this.audioContext.createGain();
         // Inputs
-        this.numNotes = this._defineControlInput('numNotes', numNotes);
-        this.waveform = this._defineControlInput('waveform', waveform);
-        this.midiInput = this._defineControlInput('midiInput');
-        this._setDefaultInput(this.midiInput);
+        this.numNotes = this.defineControlInput('numNotes', numNotes);
+        this.waveform = this.defineControlInput('waveform', waveform);
+        this.midiInput = this.defineControlInput('midiInput');
+        this.setDefaultInput(this.midiInput);
         // Output
-        this.audioOutput = this._defineAudioOutput('audioOutput', this._masterGainNode);
+        this.audioOutput = this.defineAudioOutput('audioOutput', this._masterGainNode);
         for (let i = 0; i < numNotes; i++) {
             this._soundNodes.push(__classPrivateFieldGet$4(this, _SimplePolyphonicSynth_instances, "m", _SimplePolyphonicSynth_createOscillatorGraph).call(this, this.waveform.value));
         }
-        this._preventIOOverwrites();
+        this.preventIOOverwrites();
     }
     inputDidUpdate(input, newValue) {
         if (input == this.midiInput) {
@@ -11742,7 +11870,7 @@ _SimplePolyphonicSynth_instances = new WeakSet(), _SimplePolyphonicSynth_createO
     let gainNode = this.audioContext.createGain();
     oscillator.connect(gainNode);
     gainNode.connect(this._masterGainNode);
-    this._masterGainNode.gain.setValueAtTime(1 / this.numNotes.value, this._now());
+    this._masterGainNode.gain.setValueAtTime(1 / this.numNotes.value, this.now());
     return {
         oscillator: oscillator,
         gainNode: gainNode,
@@ -11753,30 +11881,36 @@ _SimplePolyphonicSynth_instances = new WeakSet(), _SimplePolyphonicSynth_createO
     };
 };
 
-var TimeMeasure;
-(function (TimeMeasure) {
-    TimeMeasure["CYCLES"] = "cycles";
-    TimeMeasure["SECONDS"] = "seconds";
-})(TimeMeasure || (TimeMeasure = {}));
+class SlowDown extends BaseComponent {
+    constructor(rate = 1, bufferLengthSec = 60) {
+        super();
+        this.rate = rate;
+        this.bufferLengthSec = bufferLengthSec;
+        this.delayNode = this.audioContext.createDelay(bufferLengthSec);
+        //this.delayNode.delayTime.setValueAtTime(bufferLengthSec, 0)
+        this.delayModulator = createConstantSource(this.audioContext);
+        this.delayModulator.connect(this.delayNode.delayTime);
+        this.audioInput = this.defineAudioInput('audioInput', this.delayNode);
+        this.audioOutput = this.defineAudioOutput('audioOutput', this.delayNode);
+        this.rampOut = this.defineAudioOutput('rampOut', this.delayModulator);
+    }
+    start() {
+        defineTimeRamp(this.audioContext, TimeMeasure.SECONDS, this.delayModulator, this.mapFn.bind(this));
+    }
+    mapFn(v) {
+        return v * (1 - this.rate);
+    }
+}
+
 class TimeVaryingSignal extends FunctionComponent {
     constructor(generatorFn, timeMeasure = TimeMeasure.SECONDS) {
         super(generatorFn);
         if (this._orderedFunctionInputs.length != 1) {
             throw new Error(`A time-varying signal function can only have one argument. Given ${this.fn}`);
         }
-        const timeRamp = this.defineTimeRamp(timeMeasure);
+        const timeRamp = defineTimeRamp(this.audioContext, timeMeasure);
         timeRamp.connect(this.channelMerger, 0, 0);
-        this._preventIOOverwrites();
-    }
-    defineTimeRamp(timeMeasure) {
-        // Continuous ramp representing the AudioContext time.
-        let multiplier = timeMeasure == TimeMeasure.CYCLES ? 2 * Math.PI : 1;
-        let timeRamp = createConstantSource(this.audioContext);
-        let currTime = this._now();
-        let endTime = 1e8;
-        timeRamp.offset.setValueAtTime(multiplier * currTime, currTime);
-        timeRamp.offset.linearRampToValueAtTime(multiplier * endTime, endTime);
-        return timeRamp;
+        this.preventIOOverwrites();
     }
 }
 TimeVaryingSignal.TimeMeasure = TimeMeasure;
@@ -11793,16 +11927,16 @@ class TypingKeyboardMIDI extends BaseComponent {
         super();
         _TypingKeyboardMIDI_instances.add(this);
         // Inputs
-        this.velocity = this._defineControlInput('velocity', velocity);
-        this.octaveInput = this._defineControlInput('octaveInput', octave);
-        this.midiInput = this._defineControlInput('midiInput', constants.UNSET_VALUE, false);
-        this._setDefaultInput(this.midiInput);
+        this.velocity = this.defineControlInput('velocity', velocity);
+        this.octaveInput = this.defineControlInput('octaveInput', octave);
+        this.midiInput = this.defineControlInput('midiInput', constants.UNSET_VALUE, false);
+        this.setDefaultInput(this.midiInput);
         // Output
-        this.midiOutput = this._defineControlOutput('midiOutput');
-        this.octaveOutput = this._defineControlOutput('octaveOutput');
-        this._setDefaultOutput(this.midiOutput);
-        this._preventIOOverwrites();
-        this._validateIsSingleton();
+        this.midiOutput = this.defineControlOutput('midiOutput');
+        this.octaveOutput = this.defineControlOutput('octaveOutput');
+        this.setDefaultOutput(this.midiOutput);
+        this.preventIOOverwrites();
+        this.validateIsSingleton();
         __classPrivateFieldGet$3(this, _TypingKeyboardMIDI_instances, "m", _TypingKeyboardMIDI_registerKeyHandlers).call(this);
     }
     inputDidUpdate(input, newValue) {
@@ -11886,10 +12020,10 @@ class Wave extends BaseComponent {
             periodicWave: wavetable
         });
         this._oscillatorNode.start();
-        this.type = this._defineControlInput('type', waveType);
-        this.waveTable = this._defineControlInput('waveTable', wavetable);
-        this.frequency = this._defineAudioInput('frequency', this._oscillatorNode.frequency);
-        this.output = this._defineAudioOutput('output', this._oscillatorNode);
+        this.type = this.defineControlInput('type', waveType);
+        this.waveTable = this.defineControlInput('waveTable', wavetable);
+        this.frequency = this.defineAudioInput('frequency', this._oscillatorNode.frequency);
+        this.output = this.defineAudioOutput('output', this._oscillatorNode);
     }
     inputDidUpdate(input, newValue) {
         if (input == this.waveTable) {
@@ -12347,6 +12481,7 @@ var internals = /*#__PURE__*/Object.freeze({
   Keyboard: Keyboard,
   KeyboardDisplay: KeyboardDisplay,
   KnobDisplay: KnobDisplay,
+  MediaElementComponent: MediaElementComponent,
   MidiAccessListener: MidiAccessListener,
   MidiInputDevice: MidiInputDevice,
   MidiLearn: MidiLearn,
@@ -12359,6 +12494,8 @@ var internals = /*#__PURE__*/Object.freeze({
   ScrollingAudioMonitorDisplay: ScrollingAudioMonitorDisplay,
   SimplePolyphonicSynth: SimplePolyphonicSynth,
   SliderDisplay: SliderDisplay,
+  SlowDown: SlowDown,
+  get TimeMeasure () { return TimeMeasure; },
   TimeVaryingSignal: TimeVaryingSignal,
   ToStringAndUUID: ToStringAndUUID,
   TypedConfigurable: TypedConfigurable,

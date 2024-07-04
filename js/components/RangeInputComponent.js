@@ -12,13 +12,13 @@ export class RangeInputComponent extends VisualComponent {
             defaultValue = (minValue + maxValue) / 2;
         }
         // Inputs
-        this.minValue = this._defineControlInput('minValue', minValue);
-        this.maxValue = this._defineControlInput('maxValue', maxValue);
-        this.step = this._defineControlInput('step', step);
-        this.input = this._defineControlInput('input', defaultValue);
-        this._setDefaultInput(this.input);
+        this.minValue = this.defineControlInput('minValue', minValue);
+        this.maxValue = this.defineControlInput('maxValue', maxValue);
+        this.step = this.defineControlInput('step', step);
+        this.input = this.defineControlInput('input', defaultValue);
+        this.setDefaultInput(this.input);
         // Output
-        this.output = this._defineControlOutput('output');
+        this.output = this.defineControlOutput('output');
         // Update slider on messages from Midi-learned control.
         this.midiLearn = new MidiLearn({
             learnMode: MidiLearn.Mode.FIRST_BYTE,

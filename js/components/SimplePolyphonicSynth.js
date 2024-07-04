@@ -15,16 +15,16 @@ export class SimplePolyphonicSynth extends BaseComponent {
         this._currNodeIdx = 0;
         this._masterGainNode = this.audioContext.createGain();
         // Inputs
-        this.numNotes = this._defineControlInput('numNotes', numNotes);
-        this.waveform = this._defineControlInput('waveform', waveform);
-        this.midiInput = this._defineControlInput('midiInput');
-        this._setDefaultInput(this.midiInput);
+        this.numNotes = this.defineControlInput('numNotes', numNotes);
+        this.waveform = this.defineControlInput('waveform', waveform);
+        this.midiInput = this.defineControlInput('midiInput');
+        this.setDefaultInput(this.midiInput);
         // Output
-        this.audioOutput = this._defineAudioOutput('audioOutput', this._masterGainNode);
+        this.audioOutput = this.defineAudioOutput('audioOutput', this._masterGainNode);
         for (let i = 0; i < numNotes; i++) {
             this._soundNodes.push(__classPrivateFieldGet(this, _SimplePolyphonicSynth_instances, "m", _SimplePolyphonicSynth_createOscillatorGraph).call(this, this.waveform.value));
         }
-        this._preventIOOverwrites();
+        this.preventIOOverwrites();
     }
     inputDidUpdate(input, newValue) {
         if (input == this.midiInput) {
@@ -66,7 +66,7 @@ _SimplePolyphonicSynth_instances = new WeakSet(), _SimplePolyphonicSynth_createO
     let gainNode = this.audioContext.createGain();
     oscillator.connect(gainNode);
     gainNode.connect(this._masterGainNode);
-    this._masterGainNode.gain.setValueAtTime(1 / this.numNotes.value, this._now());
+    this._masterGainNode.gain.setValueAtTime(1 / this.numNotes.value, this.now());
     return {
         oscillator: oscillator,
         gainNode: gainNode,

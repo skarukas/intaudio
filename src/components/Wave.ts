@@ -32,11 +32,11 @@ export class Wave extends BaseComponent {
       periodicWave: wavetable
     })
     this._oscillatorNode.start()
-    this.type = this._defineControlInput('type', waveType)
-    this.waveTable = this._defineControlInput('waveTable', wavetable)
-    this.frequency = this._defineAudioInput('frequency', this._oscillatorNode.frequency)
+    this.type = this.defineControlInput('type', waveType)
+    this.waveTable = this.defineControlInput('waveTable', wavetable)
+    this.frequency = this.defineAudioInput('frequency', this._oscillatorNode.frequency)
 
-    this.output = this._defineAudioOutput('output', this._oscillatorNode)
+    this.output = this.defineAudioOutput('output', this._oscillatorNode)
   }
   inputDidUpdate<T>(input: ControlInput<T>, newValue: T) {
     if (input == this.waveTable) {

@@ -21,3 +21,19 @@ export enum RangeType {
   SLIDER = 'slider',
   KNOB = 'knob'
 }
+
+export enum TimeMeasure {
+  CYCLES = 'cycles',
+  SECONDS = 'seconds',
+  SAMPLES = 'samples'
+}
+
+export type AnyFn<T0, T1, T2, T3, T4, T5, ReturnType> = Function
+  | (() => ReturnType)
+  | ((a0?: T0) => ReturnType)
+  | ((a0?: T0, a1?: T1) => ReturnType)
+  | ((a0?: T0, a1?: T1, a2?: T2) => ReturnType)
+  | ((a0?: T0, a1?: T1, a2?: T2, a3?: T3) => ReturnType)
+  | ((a0?: T0, a1?: T1, a2?: T2, a3?: T3, a4?: T4) => ReturnType)
+  | ((a0?: T0, a1?: T1, a2?: T2, a3?: T3, a4?: T4, a5?: T5) => ReturnType)
+  | ((a0?: T0, a1?: T1, a2?: T2, a3?: T3, a4?: T4, a5?: T5, ...args: any[]) => ReturnType);

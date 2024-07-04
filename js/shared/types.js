@@ -12,3 +12,9 @@ export var RangeType;
     RangeType["SLIDER"] = "slider";
     RangeType["KNOB"] = "knob";
 })(RangeType || (RangeType = {}));
+export var TimeMeasure;
+(function (TimeMeasure) {
+    TimeMeasure["CYCLES"] = "cycles";
+    TimeMeasure["SECONDS"] = "seconds";
+    TimeMeasure["SAMPLES"] = "samples";
+})(TimeMeasure || (TimeMeasure = {}));

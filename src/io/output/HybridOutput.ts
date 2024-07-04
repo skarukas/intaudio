@@ -3,7 +3,7 @@ import { ControlInput } from "../input/ControlInput.js"
 import { AudioRateOutput } from "./AudioRateOutput.js"
 import { ControlOutput } from "./ControlOutput.js"
 
-export class HybridOutput extends AudioRateOutput {
+export class HybridOutput<T=any> extends AudioRateOutput {
   connect(destination) {
     let { input } = this.getDestinationInfo(destination)
     if (input instanceof AudioRateInput) {
@@ -14,7 +14,7 @@ export class HybridOutput extends AudioRateOutput {
       throw new Error("Unable to connect to " + destination)
     }
   }
-  setValue(value, rawObject: boolean = false) {
+  setValue(value: T, rawObject: boolean = false) {
     ControlOutput.prototype.setValue.bind(this)(value, rawObject)
   }
   onUpdate(callback: (val?) => void) {

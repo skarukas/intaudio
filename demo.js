@@ -133,7 +133,7 @@ const tests = {
     let gain = ia.audioContext.createGain()
     gain.gain.value = 0
     let attackBang = new ia.Bang()
-    attackBang.addToDom($root, { width: 48, height: 48})
+    attackBang.addToDom($root, { width: 48, height: 48 })
 
     // Control
     attackBang.connect(envelope.attackEvent).connect(gain.gain)
@@ -145,7 +145,7 @@ const tests = {
 
     // Analyze the envelope
     envelope.connect(new ia.ScrollingAudioMonitor())
-      .addToDom($root, { top: 48, width: 128, height: 48})
+      .addToDom($root, { top: 48, width: 128, height: 48 })
   },
   adsrSummingEnvelopes($root) {
     let envelope1 = new ia.ADSR(500, 200, 0.5, 1000)
@@ -153,18 +153,25 @@ const tests = {
     let attackBang = new ia.Bang()
     let releaseBang = new ia.Bang()
     attackBang.addToDom($root, { width: 48, height: 48 })
-    let oscillator = new ia.AudioComponent(createOscillator(10))
-    let oscillator2 = new ia.AudioComponent(createOscillator(3))
+    let oscillator = new ia.AudioComponent(createOscillator(440))
+    let oscillator2 = new ia.AudioComponent(createOscillator(220))
 
-    let fn = new ia.FunctionComponent((e1, e2, w, w2) => (e1 + e2) * (w * 0.03 + w2 * 0.2 + Math.random() * 0.1))
+    // withInputs supports constant and varying values!
+    const compoundEnvelope = new ia.FunctionComponent((e1, e2, w, w2, v) => {
+      return (e1 + e2) * (w * 0.03 + w2 * 0.2 + Math.random() * 0.01) * v
+    }).withInputs({
+      e1: envelope1,
+      e2: envelope2,
+      w: oscillator,
+      w2: oscillator2,
+      v: 0.5
+    })
+    compoundEnvelope.connect(ia.out)
+
     attackBang.connect(envelope1.attackEvent)
     attackBang.connect(envelope2.attackEvent)
     releaseBang.connect(envelope1.releaseEvent)
     releaseBang.connect(envelope2.releaseEvent)
-
-    const compoundEnvelope = fn.call(envelope1, envelope2, oscillator, oscillator2)
-
-    compoundEnvelope.connect(v => Math.random() * v).connect(ia.out)
 
     attackBang.connect(() => {
       setTimeout(() => releaseBang.trigger(), 2000)
@@ -173,8 +180,8 @@ const tests = {
 
 
     let monitor = new ia.ScrollingAudioMonitor(20, 128, 'auto', 'auto')
-    monitor.addToDom($root, { width: 48, height: 48, left: 48})
-    fn.connect(monitor)
+    monitor.addToDom($root, { width: 48, height: 48, left: 48 })
+    compoundEnvelope.connect(monitor)
   },
   adsrEnvelopeComplex() {
     // This should:
@@ -215,7 +222,7 @@ const tests = {
     const synth = new ia.SimplePolyphonicSynth()
     keyInput.connect(uiKeyboard)
     uiKeyboard.connect(synth)
-    uiKeyboard.addToDom($root, { width: 512, height: 64 })
+    uiKeyboard.addToDom($root, { width: 512, height: 64, rotateDeg: -90 })
     synth.connect(ia.out)
 
     let monitor = new ia.ScrollingAudioMonitor(4, 128, 'auto', 'auto')
@@ -259,7 +266,7 @@ const tests = {
   },
   sliderControl($root) {
     let slider = new ia.RangeInputComponent()
-    slider.addToDom($root)
+    slider.addToDom($root, { width: 100, height: 20, rotateDeg: -90 })
     let inputs = []
     slider.connect(v => {
       console.log("slider value: " + v)
@@ -305,20 +312,62 @@ const tests = {
     midiIn.midiOut.connect(v => console.log(v))
     midiIn.availableDevices.connect(v => console.log(v))
     midiIn.activeDevices.connect(v => console.log(v))
+  },
+  mediaElement($root) {
+    $root.append(`
+    <div>
+      <audio controls id="audio" crossorigin="anonymous">
+        <source src="assets/fugue.m4a"  type="audio/mpeg">
+      </audio>
+      <video id="video" controls="controls" preload='none' width="600">
+        <source id='mp4' src="http://media.w3.org/2010/05/sintel/trailer.mp4" type='video/mp4' />
+      </video>
+    </div>`)
+    setTimeout(() => {
+      const playbackRate = new ia.RangeInputComponent(0, 32, undefined, 1)
+      const audio = new ia.MediaElementComponent("#audio")
+      const video = new ia.MediaElementComponent("#video")
+
+      playbackRate.addToDom($root)
+      playbackRate.connect(audio.playbackRate)
+      playbackRate.connect(video.playbackRate)
+      audio.connect(ia.out)
+      video.connect(ia.out)
+    }, 1000)
+  },
+  slowDown($root) {
+    $root.append(`
+    <div>
+      <audio controls id="audio" crossorigin="anonymous">
+        <source src="assets/fugue.m4a"  type="audio/mpeg">
+      </audio>
+      <video id="video" controls="controls" preload='none' width="600">
+        <source id='mp4' src="http://media.w3.org/2010/05/sintel/trailer.mp4" type='video/mp4' />
+      </video>
+    </div>`)
+    setTimeout(() => {
+      const audio = new ia.MediaElementComponent("#audio")
+      const slow = new ia.SlowDown(0.5)
+      audio.connect(slow).audioOutput.connect(ia.out)
+      slow.rampOut.sampleSignal().connect(v => console.log(v))
+      setTimeout(() => slow.start(), 5000)
+    }, 1000)
   }
-  /* periodicWaveTest() {
+  /* periodicWaveTest() { 
     const w = new Wave(Wave.Type.SINE)
   } */
 }
 
 ia.run(() => {
   //return tests.midiInput()
-  for (let test in {'midiInput': tests.midiInput, 'sliderControl': tests.sliderControl, 'createBang': tests.createBang}) {
+  for (let test in { adsrSummingEnvelopes: tests.adsrSummingEnvelopes }) {
     const $testRoot = $(document.createElement('div'))
     tests[test]($testRoot)
-    if ($testRoot.children().length) {
-      $testRoot.appendTo('#root')
-    }
+    ia.util.afterRender(() => {
+      if ($testRoot.children().length) {
+        $testRoot.appendTo('#root')
+      }
+    })
   }
 })
 

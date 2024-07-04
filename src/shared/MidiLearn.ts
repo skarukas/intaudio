@@ -2,10 +2,10 @@
 import { MidiMessageListener } from "./MidiListener.js";
 import constants from "./constants.js";
 declare var $: JQueryStatic;
-import {ContextMenu } from 'jquery-contextmenu';
+import { ContextMenu } from 'jquery-contextmenu';
 
 enum MidiLearnMode {
-  /** Accept all messages matching the input device from the MIDI learn message. */ 
+  /** Accept all messages matching the input device from the MIDI learn message. */
   INPUT = "input",
   /** Accept all messages matching the input device and status from the MIDI learn message. */
   STATUS = "status",
@@ -28,10 +28,10 @@ export class MidiLearn {
   protected onMidiMessage: ((event: MIDIMessageEvent) => void)
 
   constructor({
-    learnMode=MidiLearnMode.STATUS,
-    contextMenuSelector=undefined,
-    onMidiLearnConnection=NULL_OP,
-    onMidiMessage=NULL_OP
+    learnMode = MidiLearnMode.STATUS,
+    contextMenuSelector = undefined,
+    onMidiLearnConnection = NULL_OP,
+    onMidiMessage = NULL_OP
   }: {
     learnMode?: MidiLearnMode,
     contextMenuSelector?: string,
@@ -62,11 +62,20 @@ export class MidiLearn {
   }
   enterMidiLearnMode() {
     this.isInMidiLearnMode = true
-    $(this.contextMenuSelector).addClass(constants.MIDI_LEARN_CLASS)
+    $(this.contextMenuSelector)
+      .removeClass(constants.MIDI_LEARN_ASSIGNED_CLASS)
+      .addClass(constants.MIDI_LEARN_LISTENING_CLASS)
+    
+    // Exit on escape.
+    window.addEventListener("keydown", (event: KeyboardEvent) => {
+      if (event.key == "Escape") {
+        this.exitMidiLearnMode()
+      }
+    }, { once: true })
   }
   exitMidiLearnMode() {
     this.isInMidiLearnMode = false
-    $(this.contextMenuSelector).removeClass(constants.MIDI_LEARN_CLASS)
+    $(this.contextMenuSelector).removeClass(constants.MIDI_LEARN_LISTENING_CLASS)
   }
   private matchesLearnedFilter(input: MIDIInput, event: MIDIMessageEvent) {
     const inputMatches = this.learnedMidiInput?.id == input.id
@@ -86,6 +95,8 @@ export class MidiLearn {
       this.learnedMidiEvent = event
       this.onMidiLearnConnection(input, event.data)
       this.onMidiMessage(event)
+      $(this.contextMenuSelector)
+        .addClass(constants.MIDI_LEARN_ASSIGNED_CLASS)
       this.exitMidiLearnMode()
     } else if (this.matchesLearnedFilter(input, event)) {
       this.onMidiMessage(event)

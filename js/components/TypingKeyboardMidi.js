@@ -13,16 +13,16 @@ export class TypingKeyboardMIDI extends BaseComponent {
         super();
         _TypingKeyboardMIDI_instances.add(this);
         // Inputs
-        this.velocity = this._defineControlInput('velocity', velocity);
-        this.octaveInput = this._defineControlInput('octaveInput', octave);
-        this.midiInput = this._defineControlInput('midiInput', constants.UNSET_VALUE, false);
-        this._setDefaultInput(this.midiInput);
+        this.velocity = this.defineControlInput('velocity', velocity);
+        this.octaveInput = this.defineControlInput('octaveInput', octave);
+        this.midiInput = this.defineControlInput('midiInput', constants.UNSET_VALUE, false);
+        this.setDefaultInput(this.midiInput);
         // Output
-        this.midiOutput = this._defineControlOutput('midiOutput');
-        this.octaveOutput = this._defineControlOutput('octaveOutput');
-        this._setDefaultOutput(this.midiOutput);
-        this._preventIOOverwrites();
-        this._validateIsSingleton();
+        this.midiOutput = this.defineControlOutput('midiOutput');
+        this.octaveOutput = this.defineControlOutput('octaveOutput');
+        this.setDefaultOutput(this.midiOutput);
+        this.preventIOOverwrites();
+        this.validateIsSingleton();
         __classPrivateFieldGet(this, _TypingKeyboardMIDI_instances, "m", _TypingKeyboardMIDI_registerKeyHandlers).call(this);
     }
     inputDidUpdate(input, newValue) {

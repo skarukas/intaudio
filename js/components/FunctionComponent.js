@@ -22,6 +22,7 @@ export class FunctionComponent extends BaseComponent {
         for (let i = 0; i < parameters.length; i++) {
             const arg = parameters[i];
             const inputName = "$" + arg.name;
+            const indexName = "$" + i;
             const isRequired = !arg.hasDefault;
             if (arg.destructureType == "rest") {
                 // Can't use it or anything after it
@@ -32,7 +33,9 @@ export class FunctionComponent extends BaseComponent {
             }
             //
             const passThroughInput = createConstantSource(this.audioContext);
-            this[inputName] = this._defineHybridInput(inputName, passThroughInput.offset, constants.UNSET_VALUE, isRequired);
+            // Define input and its alias.
+            this[inputName] = this.defineHybridInput(inputName, passThroughInput.offset, constants.UNSET_VALUE, isRequired);
+            this[indexName] = this.defineInputAlias(indexName, this[inputName]);
             for (let c = 0; c < numChannelsPerInput; c++) {
                 const fromChannel = c;
                 const toChannel = numChannelsPerInput * i + c;
@@ -44,10 +47,10 @@ export class FunctionComponent extends BaseComponent {
         }
         let requiredArgs = parameters.filter(a => !a.hasDefault);
         if (requiredArgs.length == 1) {
-            this._setDefaultInput(this["$" + requiredArgs[0].name]);
+            this.setDefaultInput(this["$" + requiredArgs[0].name]);
         }
-        this.output = this._defineHybridOutput('output', this._audioProcessor);
-        this._preventIOOverwrites();
+        this.output = this.defineHybridOutput('output', this._audioProcessor);
+        this.preventIOOverwrites();
     }
     _createScriptProcessor(numInputs, numChannelsPerInput) {
         const bufferSize = undefined; // 256
@@ -94,13 +97,21 @@ export class FunctionComponent extends BaseComponent {
     process(event) {
         return this.fn(event);
     }
-    call(...inputs) {
-        if (inputs.length > this._orderedFunctionInputs.length) {
-            throw new Error(`Too many inputs for the call() method on ${this}. Expected ${this._orderedFunctionInputs.length} but got ${inputs.length}.`);
+    withInputs(...inputs) {
+        var _a;
+        let inputDict;
+        if ((_a = inputs[0]) === null || _a === void 0 ? void 0 : _a.connect) { // instanceof Connectable
+            if (inputs.length > this._orderedFunctionInputs.length) {
+                throw new Error(`Too many inputs for the call() method on ${this}. Expected ${this._orderedFunctionInputs.length} but got ${inputs.length}.`);
+            }
+            for (let i = 0; i < inputs.length; i++) {
+                inputDict["$" + i] = inputs[i];
+            }
         }
-        for (let i = 0; i < inputs.length; i++) {
-            inputs[i].connect(this._orderedFunctionInputs[i]);
+        else {
+            inputDict = inputs[0];
         }
+        super.withInputs(inputDict);
         return this;
     }
 }
@@ -120,3 +131,5 @@ _FunctionComponent_instances = new WeakSet(), _FunctionComponent_parallelApplyAc
         }
     }
 };
+class HasDynamicInput {
+}

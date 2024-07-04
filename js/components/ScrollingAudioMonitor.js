@@ -17,16 +17,16 @@ export class ScrollingAudioMonitor extends VisualComponent {
         this._sampler = new this._.AudioRateSignalSampler(samplePeriodMs);
         this._passthrough = createConstantSource(this.audioContext);
         // Inputs
-        this.samplePeriodMs = this._defineControlInput('samplePeriodMs', samplePeriodMs);
-        this.memorySize = this._defineControlInput('memorySize', memorySize);
-        this.minValue = this._defineControlInput('minValue', minValue);
-        this.maxValue = this._defineControlInput('maxValue', maxValue);
-        this.hideZeroSignal = this._defineControlInput('hideZeroSignal', hideZeroSignal);
-        this.input = this._defineAudioInput('input', this._passthrough.offset);
-        this._setDefaultInput(this.input);
+        this.samplePeriodMs = this.defineControlInput('samplePeriodMs', samplePeriodMs);
+        this.memorySize = this.defineControlInput('memorySize', memorySize);
+        this.minValue = this.defineControlInput('minValue', minValue);
+        this.maxValue = this.defineControlInput('maxValue', maxValue);
+        this.hideZeroSignal = this.defineControlInput('hideZeroSignal', hideZeroSignal);
+        this.input = this.defineAudioInput('input', this._passthrough.offset);
+        this.setDefaultInput(this.input);
         // Output
-        this.audioOutput = this._defineAudioOutput('audioOutput', this._passthrough);
-        this.controlOutput = this._defineControlOutput('controlOutput');
+        this.audioOutput = this.defineAudioOutput('audioOutput', this._passthrough);
+        this.controlOutput = this.defineControlOutput('controlOutput');
         // Routing
         this.audioOutput.connect(this._sampler.audioInput);
         this._sampler.controlOutput.onUpdate((v) => {
@@ -35,7 +35,7 @@ export class ScrollingAudioMonitor extends VisualComponent {
             this.controlOutput.setValue(v);
         });
         this._memory = Array(this.memorySize.value).fill(0.);
-        this._preventIOOverwrites();
+        this.preventIOOverwrites();
     }
     inputDidUpdate(input, newValue) {
         if (input == this.memorySize) {

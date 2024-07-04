@@ -9,6 +9,7 @@ import constants from "../../shared/constants.js";
 import { WebAudioConnectable, CanBeConnectedTo } from "../../shared/types.js";
 import { FunctionComponent } from "../FunctionComponent.js";
 import { Component } from "./Component.js";
+import { Connectable } from "../../shared/base/Connectable.js";
 
 export abstract class BaseComponent extends BaseConnectable implements Component {
   readonly isComponent = true
@@ -27,14 +28,14 @@ export abstract class BaseComponent extends BaseConnectable implements Component
   constructor() {
     super()
     // Reserved default inputs.
-    this.isBypassed = this._defineControlInput('isBypassed', false)
-    this.isMuted = this._defineControlInput('isMuted', false)
-    this.triggerInput = this._defineControlInput('triggerInput')
+    this.isBypassed = this.defineControlInput('isBypassed', false)
+    this.isMuted = this.defineControlInput('isMuted', false)
+    this.triggerInput = this.defineControlInput('triggerInput')
 
     // Special inputs that are not automatically set as default I/O.
     this._reservedInputs = [this.isBypassed, this.isMuted, this.triggerInput]
     this._reservedOutputs = []
-    this._preventIOOverwrites()
+    this.preventIOOverwrites()
   }
 
   toString() {
@@ -49,10 +50,10 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     let out = _getNames(this.outputs, this._reservedOutputs)
     return `${this._className}(${inp} => ${out})`
   }
-  _now() {
+  protected now() {
     return this.audioContext.currentTime
   }
-  _validateIsSingleton() {
+  protected validateIsSingleton() {
     const Class = (<typeof FunctionComponent>this.constructor)
     if (Class.instanceExists) {
       throw new Error(`Only one instance of ${this.constructor} can exist.`)
@@ -60,61 +61,66 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     Class.instanceExists = true
   }
 
-  _preventIOOverwrites() {
-    Object.keys(this.inputs).map(this.#freezeProperty.bind(this))
-    Object.keys(this.outputs).map(this.#freezeProperty.bind(this))
+  protected preventIOOverwrites() {
+    Object.keys(this.inputs).map(this.freezeProperty.bind(this))
+    Object.keys(this.outputs).map(this.freezeProperty.bind(this))
   }
-  #freezeProperty(propName) {
+  private freezeProperty(propName) {
     Object.defineProperty(this, propName, {
       writable: false,
       configurable: false
     })
   }
-  #defineInputOrOutput(propName, inputOrOutput, inputsOrOutputsArray) {
+  private defineInputOrOutput(propName, inputOrOutput, inputsOrOutputsArray) {
     inputsOrOutputsArray[propName] = inputOrOutput
     return inputOrOutput
   }
-
-  _defineControlInput<T>(
+  protected defineOutputAlias<T>(name: string, output: AbstractOutput<T>): AbstractOutput<T> {
+    return this.defineInputOrOutput(name, output, this.outputs)
+  }
+  protected defineInputAlias<T>(name: string, input: AbstractInput<T>): AbstractInput<T> {
+    return this.defineInputOrOutput(name, input, this.inputs)
+  }
+  protected defineControlInput<T>(
     name: string,
     defaultValue: T = constants.UNSET_VALUE,
     isRequired: boolean = false
   ): ControlInput<T> {
     let input = new this._.ControlInput(name, this, defaultValue, isRequired)
-    return this.#defineInputOrOutput(name, input, this.inputs)
+    return this.defineInputOrOutput(name, input, this.inputs)
   }
-  _defineAudioInput(
+  protected defineAudioInput(
     name: string,
     destinationNode: WebAudioConnectable
   ): AudioRateInput {
     let input = new this._.AudioRateInput(name, this, destinationNode)
-    return this.#defineInputOrOutput(name, input, this.inputs)
+    return this.defineInputOrOutput(name, input, this.inputs)
   }
-  _defineHybridInput<T>(
+  protected defineHybridInput<T>(
     name: string,
     destinationNode: WebAudioConnectable,
     defaultValue: T = constants.UNSET_VALUE,
     isRequired: boolean = false
   ): HybridInput<T> {
     let input = new this._.HybridInput(name, this, destinationNode, defaultValue, isRequired)
-    return this.#defineInputOrOutput(name, input, this.inputs)
+    return this.defineInputOrOutput(name, input, this.inputs)
   }
-  _defineControlOutput(name: string): ControlOutput<any> {
+  protected defineControlOutput(name: string): ControlOutput<any> {
     let output = new this._.ControlOutput(name)
-    return this.#defineInputOrOutput(name, output, this.outputs)
+    return this.defineInputOrOutput(name, output, this.outputs)
   }
-  _defineAudioOutput(name: string, audioNode: AudioNode): AudioRateOutput {
+  protected defineAudioOutput(name: string, audioNode: AudioNode): AudioRateOutput {
     let output = new this._.AudioRateOutput(name, audioNode)
-    return this.#defineInputOrOutput(name, output, this.outputs)
+    return this.defineInputOrOutput(name, output, this.outputs)
   }
-  _defineHybridOutput(name: string, audioNode: AudioNode): HybridOutput {
+  protected defineHybridOutput(name: string, audioNode: AudioNode): HybridOutput {
     let output = new this._.HybridOutput(name, audioNode)
-    return this.#defineInputOrOutput(name, output, this.outputs)
+    return this.defineInputOrOutput(name, output, this.outputs)
   }
-  _setDefaultInput(input: AbstractInput) {
+  protected setDefaultInput(input: AbstractInput) {
     this._defaultInput = input
   }
-  _setDefaultOutput(output: AbstractOutput) {
+  protected setDefaultOutput(output: AbstractOutput) {
     this._defaultOutput = output
   }
   getDefaultInput(): ComponentInput<any> {
@@ -141,7 +147,7 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     }
   }
 
-  #allInputsAreDefined() {
+  protected allInputsAreDefined() {
     let violations = []
     for (let inputName in this.inputs) {
       let input = this.inputs[inputName]
@@ -164,7 +170,7 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     if (inputStream == this.triggerInput) {
       // Always execute function, even if it's unsafe.
       this.inputDidUpdate(undefined, undefined)
-    } else if (this.#allInputsAreDefined()) {
+    } else if (this.allInputsAreDefined()) {
       this.inputDidUpdate(inputStream, newValue)
     } else {
       console.warn("Not passing event because not all required inputs are defined.")
@@ -172,11 +178,11 @@ export abstract class BaseComponent extends BaseConnectable implements Component
   }
 
   // Abstract methods.
-  outputAdded(output) { }
-  inputAdded(output) { }
-  onBypassEvent(event) { }
-  onMuteEvent(event) { }
-  inputDidUpdate(input, newValue) { }
+  protected outputAdded(output) { }
+  protected inputAdded(output) { }
+  protected onBypassEvent(event) { }
+  protected onMuteEvent(event) { }
+  protected inputDidUpdate(input, newValue) { }
   processEvent(event) {
     // Method describing how an incoming event is mutated before passing to the
     // component outputs.
@@ -202,6 +208,21 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     }
     output.connect(input)
     return component
+  }
+  withInputs(argDict: { [name: string]: Connectable | unknown}): Component {
+    for (const name in argDict) {
+      const thisInput = this.inputs[name] ?? this.inputs["$" + name]
+      if (!thisInput) {
+        throw new Error(`No input found named '${name}'. Valid inputs: [${Object.keys(this.inputs)}]`)
+      }
+      const argValue = argDict[name]
+      if (argValue instanceof Object && 'connect' in argValue) {
+        (<Connectable>argValue).connect(thisInput)
+      } else {
+        thisInput.setValue(argValue)
+      }
+    }
+    return this
   }
   setValues(valueObj) {
     return this.getDefaultInput().setValue(valueObj)

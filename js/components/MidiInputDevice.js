@@ -23,10 +23,10 @@ export class MidiInputDevice extends VisualComponent {
         // Internals.
         this.deviceMap = {};
         this.display = new SelectDisplay(this);
-        this.selectedDeviceInput = this._defineControlInput('selectedDeviceInput');
-        this.midiOut = this._defineControlOutput('midiOut');
-        this.availableDevices = this._defineControlOutput('availableDevices');
-        this.activeDevices = this._defineControlOutput('selectedDevicesOutput');
+        this.selectedDeviceInput = this.defineControlInput('selectedDeviceInput');
+        this.midiOut = this.defineControlOutput('midiOut');
+        this.availableDevices = this.defineControlOutput('availableDevices');
+        this.activeDevices = this.defineControlOutput('selectedDevicesOutput');
         // Update the menu and outputs when access changes.
         this.accessListener = new MidiAccessListener(this.onMidiAccessChange.bind(this));
         // Send filtered MIDI messages out.

@@ -12,13 +12,13 @@ export class Keyboard extends VisualComponent {
         _Keyboard_instances.add(this);
         this.display = new this._.KeyboardDisplay(this);
         // Inputs
-        this.numKeys = this._defineControlInput('numKeys', numKeys);
-        this.lowestPitch = this._defineControlInput('lowestPitch', lowestPitch);
-        this.midiInput = this._defineControlInput('midiInput');
-        this._setDefaultInput(this.midiInput);
+        this.numKeys = this.defineControlInput('numKeys', numKeys);
+        this.lowestPitch = this.defineControlInput('lowestPitch', lowestPitch);
+        this.midiInput = this.defineControlInput('midiInput');
+        this.setDefaultInput(this.midiInput);
         // Output
-        this.midiOutput = this._defineControlOutput('midiOutput');
-        this._preventIOOverwrites();
+        this.midiOutput = this.defineControlOutput('midiOutput');
+        this.preventIOOverwrites();
     }
     inputDidUpdate(input, newValue) {
         if (input == this.numKeys || input == this.lowestPitch) {

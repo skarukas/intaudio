@@ -5,15 +5,33 @@ import { BaseComponent } from "./base/BaseComponent.js"
 import constants from "../shared/constants.js"
 import { createConstantSource } from "../shared/util.js"
 import describeFunction from 'function-descriptor'
+import { AnyFn } from "../shared/types.js"
+import { AbstractInput } from "../io/input/AbstractInput.js"
 
-export class FunctionComponent extends BaseComponent {
-  output: HybridOutput
+export class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any, T5 = any, R = any> extends BaseComponent {
+  readonly $0: HybridInput<T0>;
+  readonly $1: HybridInput<T1>;
+  readonly $2: HybridInput<T2>;
+  readonly $3: HybridInput<T3>;
+  readonly $4: HybridInput<T4>;
+  readonly $5: HybridInput<T5>;
+
+  output: HybridOutput<R>
 
   protected _orderedFunctionInputs: Array<HybridInput<any>> = []
   protected _audioProcessor: ScriptProcessorNode
   protected channelMerger: ChannelMergerNode
 
-  constructor(public fn: Function) {
+  constructor(fn: Function)
+  constructor(fn: () => R)
+  constructor(fn: (a0?: T0) => R)
+  constructor(fn: (a0?: T0, a1?: T1) => R)
+  constructor(fn: (a0?: T0, a1?: T1, a2?: T2) => R)
+  constructor(fn: (a0?: T0, a1?: T1, a2?: T2, a3?: T3) => R)
+  constructor(fn: (a0?: T0, a1?: T1, a2?: T2, a3?: T3, a4?: T4) => R)
+  constructor(fn: (a0?: T0, a1?: T1, a2?: T2, a3?: T3, a4?: T4, a5?: T5) => R)
+  constructor(fn: (a0?: T0, a1?: T1, a2?: T2, a3?: T3, a4?: T4, a5?: T5, ...args: any[]) => R);
+  constructor(public fn: AnyFn<T0, T1, T2, T3, T4, T5, R>) {
     super()
     const descriptor = describeFunction(fn)
     const parameters = descriptor.parameters
@@ -24,6 +42,7 @@ export class FunctionComponent extends BaseComponent {
     for (let i = 0; i < parameters.length; i++) {
       const arg = parameters[i]
       const inputName = "$" + arg.name
+      const indexName = "$" + i
       const isRequired = !arg.hasDefault
       if (arg.destructureType == "rest") {
         // Can't use it or anything after it
@@ -35,7 +54,9 @@ export class FunctionComponent extends BaseComponent {
 
       //
       const passThroughInput = createConstantSource(this.audioContext)
-      this[inputName] = this._defineHybridInput(inputName, passThroughInput.offset, constants.UNSET_VALUE, isRequired)
+      // Define input and its alias.
+      this[inputName] = this.defineHybridInput(inputName, passThroughInput.offset, constants.UNSET_VALUE, isRequired)
+      this[indexName] = this.defineInputAlias(indexName, this[inputName])
       for (let c = 0; c < numChannelsPerInput; c++) {
         const fromChannel = c
         const toChannel = numChannelsPerInput * i + c
@@ -48,10 +69,10 @@ export class FunctionComponent extends BaseComponent {
     }
     let requiredArgs = parameters.filter(a => !a.hasDefault)
     if (requiredArgs.length == 1) {
-      this._setDefaultInput(this["$" + requiredArgs[0].name])
+      this.setDefaultInput(this["$" + requiredArgs[0].name])
     }
-    this.output = this._defineHybridOutput('output', this._audioProcessor)
-    this._preventIOOverwrites()
+    this.output = this.defineHybridOutput('output', this._audioProcessor)
+    this.preventIOOverwrites()
   }
   _createScriptProcessor(numInputs, numChannelsPerInput) {
     const bufferSize = undefined  // 256
@@ -114,13 +135,30 @@ export class FunctionComponent extends BaseComponent {
   process(event) {
     return this.fn(event)
   }
-  call(...inputs: Array<Connectable>) {
-    if (inputs.length > this._orderedFunctionInputs.length) {
-      throw new Error(`Too many inputs for the call() method on ${this}. Expected ${this._orderedFunctionInputs.length} but got ${inputs.length}.`)
+  withInputs(...inputs: Array<Connectable | unknown>): this;
+  withInputs(inputDict: { [name: string]: Connectable | unknown }): this;
+  override withInputs(...inputs: any): this {
+    let inputDict: { [name: string]: Connectable | unknown };
+    if (inputs[0]?.connect) {  // instanceof Connectable
+      if (inputs.length > this._orderedFunctionInputs.length) {
+        throw new Error(`Too many inputs for the call() method on ${this}. Expected ${this._orderedFunctionInputs.length} but got ${inputs.length}.`)
+      }
+      for (let i = 0; i < inputs.length; i++) {
+        inputDict["$" + i] = inputs[i]
+      }
+    } else {
+      inputDict = inputs[0]
     }
-    for (let i = 0; i < inputs.length; i++) {
-      inputs[i].connect(this._orderedFunctionInputs[i])
-    }
+    super.withInputs(inputDict)
     return this
   }
+}
+
+class HasDynamicInput {
+  [key: string]: AbstractInput<unknown>;
+}
+
+// Define static type on FunctionComponent.
+export module FunctionComponent {
+  export type Dynamic = FunctionComponent & HasDynamicInput
 }

@@ -10,8 +10,8 @@ export class IgnoreDuplicates<T = any> extends BaseComponent {
 
   constructor() {
     super()
-    this.input = this._defineControlInput('input')
-    this.output = this._defineControlOutput('output')
+    this.input = this.defineControlInput('input')
+    this.output = this.defineControlOutput('output')
   }
   inputDidUpdate(input: ControlInput<T>, newValue: T) {
     if (newValue != this.value) {

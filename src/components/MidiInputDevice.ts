@@ -52,11 +52,11 @@ export class MidiInputDevice extends VisualComponent implements SupportsSelect {
   ) {
     super()
     this.display = new SelectDisplay(this)
-    this.selectedDeviceInput = this._defineControlInput('selectedDeviceInput')
+    this.selectedDeviceInput = this.defineControlInput('selectedDeviceInput')
 
-    this.midiOut = this._defineControlOutput('midiOut')
-    this.availableDevices = this._defineControlOutput('availableDevices')
-    this.activeDevices = this._defineControlOutput('selectedDevicesOutput')
+    this.midiOut = this.defineControlOutput('midiOut')
+    this.availableDevices = this.defineControlOutput('availableDevices')
+    this.activeDevices = this.defineControlOutput('selectedDevicesOutput')
 
     // Update the menu and outputs when access changes.
     this.accessListener = new MidiAccessListener(this.onMidiAccessChange.bind(this))

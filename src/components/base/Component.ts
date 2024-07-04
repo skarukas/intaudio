@@ -15,12 +15,13 @@ export interface Component {
   inputs: { [name: string]: AbstractInput };
   getDefaultInput(): ComponentInput<unknown>;
   getDefaultOutput(): AbstractOutput<unknown>;
-  outputAdded<T>(output: AbstractOutput<T>): void;
-  inputAdded<T>(input: AbstractInput<T>): void;
-  inputDidUpdate<T>(input: AbstractInput<T>, newValue: T);
+  //outputAdded<T>(output: AbstractOutput<T>): void;
+  //inputAdded<T>(input: AbstractInput<T>): void;
+  //inputDidUpdate<T>(input: AbstractInput<T>, newValue: T);
   setBypassed(isBypassed?: boolean): void;
   setMuted(isMuted?: boolean): void;
   connect<T extends CanBeConnectedTo>(destination: T): Component;
+  withInputs(inputDict: { [name: string]: Connectable}): Component;
   setValues(valueObj: any);
   wasConnectedTo(other: Connectable): void;
   sampleSignal(samplePeriodMs?: number): Component;

@@ -1,10 +1,11 @@
 import constants from "../../shared/constants.js"
 import * as init from "../../shared/init.js"
+import { afterRender, scaleRange } from "../../shared/util.js";
 import { BaseDisplay } from "../../ui/BaseDisplay.js"
 import { BaseComponent } from "./BaseComponent.js"
 declare var $: JQueryStatic;
 
-interface NeedsDisplay<T>{
+interface NeedsDisplay<T> {
   display: NonNullable<T>
 }
 
@@ -59,10 +60,24 @@ export abstract class VisualComponent<T extends BaseDisplay = any> extends BaseC
       width: `${maxWidth}px`
     });
   }
+  static rotate($container: JQuery, rotateDeg: number) {
+    $container.css({
+      "transform-origin": "top left",
+      transform: `rotate(${rotateDeg}deg)`
+    })
+    const parentRect = $container.parent().get(0).getBoundingClientRect()
+    const top = +$container.css("top").replace("px", "")
+    const left = +$container.css("left").replace("px", "")
+    const rect = $container.get(0).getBoundingClientRect()
+    $container.css({
+      top: top - rect.top + parentRect.top,
+      left: left - rect.left + parentRect.left
+    })
+  }
   addToDom(
     iaRootElement,
-    { left=0, top=0, width=undefined, height=undefined }:
-      { left?: number, top?: number, width?: number, height?: number } = {}) {
+    { left = 0, top = 0, width = undefined, height = undefined, rotateDeg = 0 }:
+      { left?: number, top?: number, width?: number, height?: number, rotateDeg?: number } = {}) {
     this.#assertDisplayIsUsable()
     const cls = <typeof VisualComponent>this.constructor
     width ??= cls.defaultWidth
@@ -93,7 +108,10 @@ export abstract class VisualComponent<T extends BaseDisplay = any> extends BaseC
     this.$root.append(this.$container)
     //this.$container.append($component)
     this.display._display(this.$container, width, height)
-    VisualComponent.adjustSize(this.$root)
+    afterRender(() => {
+      VisualComponent.adjustSize(this.$root)
+      VisualComponent.rotate(this.$container, rotateDeg)
+    })
     return $component
   }
   refreshDom() {

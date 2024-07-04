@@ -16,8 +16,8 @@ export class Bang extends VisualComponent<BangDisplay> {
   constructor() {
     super()
     this.display = new this._.BangDisplay(this)
-    this.output = this._defineControlOutput('output')
-    this._preventIOOverwrites()
+    this.output = this.defineControlOutput('output')
+    this.preventIOOverwrites()
 
     // Trigger on nonzero MIDI inputs.
     this.midiLearn = new MidiLearn({

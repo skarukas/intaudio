@@ -40,11 +40,19 @@ export class MidiLearn {
     }
     enterMidiLearnMode() {
         this.isInMidiLearnMode = true;
-        $(this.contextMenuSelector).addClass(constants.MIDI_LEARN_CLASS);
+        $(this.contextMenuSelector)
+            .removeClass(constants.MIDI_LEARN_ASSIGNED_CLASS)
+            .addClass(constants.MIDI_LEARN_LISTENING_CLASS);
+        // Exit on escape.
+        window.addEventListener("keydown", (event) => {
+            if (event.key == "Escape") {
+                this.exitMidiLearnMode();
+            }
+        }, { once: true });
     }
     exitMidiLearnMode() {
         this.isInMidiLearnMode = false;
-        $(this.contextMenuSelector).removeClass(constants.MIDI_LEARN_CLASS);
+        $(this.contextMenuSelector).removeClass(constants.MIDI_LEARN_LISTENING_CLASS);
     }
     matchesLearnedFilter(input, event) {
         var _a;
@@ -61,6 +69,8 @@ export class MidiLearn {
             this.learnedMidiEvent = event;
             this.onMidiLearnConnection(input, event.data);
             this.onMidiMessage(event);
+            $(this.contextMenuSelector)
+                .addClass(constants.MIDI_LEARN_ASSIGNED_CLASS);
             this.exitMidiLearnMode();
         }
         else if (this.matchesLearnedFilter(input, event)) {

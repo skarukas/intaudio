@@ -29,13 +29,13 @@ export class SimplePolyphonicSynth extends BaseComponent {
     this._masterGainNode = this.audioContext.createGain()
 
     // Inputs
-    this.numNotes = this._defineControlInput('numNotes', numNotes)
-    this.waveform = this._defineControlInput('waveform', waveform)
-    this.midiInput = this._defineControlInput('midiInput')
-    this._setDefaultInput(this.midiInput)
+    this.numNotes = this.defineControlInput('numNotes', numNotes)
+    this.waveform = this.defineControlInput('waveform', waveform)
+    this.midiInput = this.defineControlInput('midiInput')
+    this.setDefaultInput(this.midiInput)
 
     // Output
-    this.audioOutput = this._defineAudioOutput('audioOutput', this._masterGainNode)
+    this.audioOutput = this.defineAudioOutput('audioOutput', this._masterGainNode)
 
 
     for (let i = 0; i < numNotes; i++) {
@@ -43,7 +43,7 @@ export class SimplePolyphonicSynth extends BaseComponent {
         this.#createOscillatorGraph(this.waveform.value)
       )
     }
-    this._preventIOOverwrites()
+    this.preventIOOverwrites()
   }
 
   #createOscillatorGraph(waveform: WaveType): SoundNode {
@@ -52,7 +52,7 @@ export class SimplePolyphonicSynth extends BaseComponent {
     let gainNode = this.audioContext.createGain()
     oscillator.connect(gainNode)
     gainNode.connect(this._masterGainNode)
-    this._masterGainNode.gain.setValueAtTime(1 / this.numNotes.value, this._now())
+    this._masterGainNode.gain.setValueAtTime(1 / this.numNotes.value, this.now())
 
     return {
       oscillator: oscillator,

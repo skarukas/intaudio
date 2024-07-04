@@ -7,6 +7,8 @@
 }
 
 .ia-root {
+  --midi-learn-color: rgb(0, 195, 255);
+
   padding: 0;
   margin: 0;
   background-color: rgb(240, 240, 240);
@@ -19,7 +21,8 @@
   padding: 0;
 }
 
-.keyboard-key-pressed, .keyboard-key:active {
+.keyboard-key-pressed,
+.keyboard-key:active {
   background: #e5e5e5;
   -webkit-box-shadow: inset 0px 0px 5px #c1c1c1;
   -moz-box-shadow: inset 0px 0px 5px #c1c1c1;
@@ -27,7 +30,8 @@
   outline: none;
 }
 
-.bang-pressed, .bang:active {
+.bang-pressed,
+.bang:active {
   background: #e5e5e5;
   -webkit-box-shadow: inset 0px 0px 5px #c1c1c1;
   -moz-box-shadow: inset 0px 0px 5px #c1c1c1;
@@ -40,17 +44,29 @@
   pointer-events: none;
 }
 
-.midi-learn {
-  border: 2px solid;
-  animation-name: midi-learn-color;
+.midi-learn-listening {
+  /* border: 2px solid; */
+  animation-name: midi-learn-color-animation;
   animation-duration: 1.5s;
   animation-iteration-count: infinite;
 }
 
-@keyframes midi-learn-color {
-  0% {border-color: rgb(0, 195, 255);}
-  50% {border-color: rgb(136, 0, 255);}
-  100% {border-color: rgb(0, 195, 255);}
+.midi-learn-assigned {
+  border-color: var(--midi-learn-color);
+}
+
+@keyframes midi-learn-color-animation {
+  0% {
+    border-color: var(--midi-learn-color);
+  }
+
+  50% {
+    border-color: rgb(255, 255, 255);
+  }
+
+  100% {
+    border-color: var(--midi-learn-color);
+  }
 }
 
 .component-bypassed {}

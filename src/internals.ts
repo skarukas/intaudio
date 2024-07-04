@@ -13,10 +13,12 @@ export * from './components/base/VisualComponent.js'
 export * from './components/FunctionComponent.js';
 export * from './components/IgnoreDuplicates.js';
 export * from './components/Keyboard.js'
+export * from './components/MediaElementComponent.js'
 export * from './components/MidiInputDevice.js'
 export * from './components/RangeInputComponent.js'
 export * from './components/ScrollingAudioMonitor.js'
 export * from './components/SimplePolyphonicSynth.js'
+export * from './components/SlowDown.js'
 export * from './components/TimeVaryingSignal.js'
 export * from './components/TypingKeyboardMidi.js'
 export * from './components/Wave.js'

@@ -1,26 +1,19 @@
-var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (receiver, state, kind, f) {
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
-    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-};
-var _BaseComponent_instances, _BaseComponent_freezeProperty, _BaseComponent_defineInputOrOutput, _BaseComponent_allInputsAreDefined;
 import { BaseConnectable } from "../../shared/base/BaseConnectable.js";
 import constants from "../../shared/constants.js";
 export class BaseComponent extends BaseConnectable {
     constructor() {
         super();
-        _BaseComponent_instances.add(this);
         this.isComponent = true;
         this.outputs = {};
         this.inputs = {};
         // Reserved default inputs.
-        this.isBypassed = this._defineControlInput('isBypassed', false);
-        this.isMuted = this._defineControlInput('isMuted', false);
-        this.triggerInput = this._defineControlInput('triggerInput');
+        this.isBypassed = this.defineControlInput('isBypassed', false);
+        this.isMuted = this.defineControlInput('isMuted', false);
+        this.triggerInput = this.defineControlInput('triggerInput');
         // Special inputs that are not automatically set as default I/O.
         this._reservedInputs = [this.isBypassed, this.isMuted, this.triggerInput];
         this._reservedOutputs = [];
-        this._preventIOOverwrites();
+        this.preventIOOverwrites();
     }
     toString() {
         function _getNames(obj, except) {
@@ -34,48 +27,64 @@ export class BaseComponent extends BaseConnectable {
         let out = _getNames(this.outputs, this._reservedOutputs);
         return `${this._className}(${inp} => ${out})`;
     }
-    _now() {
+    now() {
         return this.audioContext.currentTime;
     }
-    _validateIsSingleton() {
+    validateIsSingleton() {
         const Class = this.constructor;
         if (Class.instanceExists) {
             throw new Error(`Only one instance of ${this.constructor} can exist.`);
         }
         Class.instanceExists = true;
     }
-    _preventIOOverwrites() {
-        Object.keys(this.inputs).map(__classPrivateFieldGet(this, _BaseComponent_instances, "m", _BaseComponent_freezeProperty).bind(this));
-        Object.keys(this.outputs).map(__classPrivateFieldGet(this, _BaseComponent_instances, "m", _BaseComponent_freezeProperty).bind(this));
+    preventIOOverwrites() {
+        Object.keys(this.inputs).map(this.freezeProperty.bind(this));
+        Object.keys(this.outputs).map(this.freezeProperty.bind(this));
     }
-    _defineControlInput(name, defaultValue = constants.UNSET_VALUE, isRequired = false) {
+    freezeProperty(propName) {
+        Object.defineProperty(this, propName, {
+            writable: false,
+            configurable: false
+        });
+    }
+    defineInputOrOutput(propName, inputOrOutput, inputsOrOutputsArray) {
+        inputsOrOutputsArray[propName] = inputOrOutput;
+        return inputOrOutput;
+    }
+    defineOutputAlias(name, output) {
+        return this.defineInputOrOutput(name, output, this.outputs);
+    }
+    defineInputAlias(name, input) {
+        return this.defineInputOrOutput(name, input, this.inputs);
+    }
+    defineControlInput(name, defaultValue = constants.UNSET_VALUE, isRequired = false) {
         let input = new this._.ControlInput(name, this, defaultValue, isRequired);
-        return __classPrivateFieldGet(this, _BaseComponent_instances, "m", _BaseComponent_defineInputOrOutput).call(this, name, input, this.inputs);
+        return this.defineInputOrOutput(name, input, this.inputs);
     }
-    _defineAudioInput(name, destinationNode) {
+    defineAudioInput(name, destinationNode) {
         let input = new this._.AudioRateInput(name, this, destinationNode);
-        return __classPrivateFieldGet(this, _BaseComponent_instances, "m", _BaseComponent_defineInputOrOutput).call(this, name, input, this.inputs);
+        return this.defineInputOrOutput(name, input, this.inputs);
     }
-    _defineHybridInput(name, destinationNode, defaultValue = constants.UNSET_VALUE, isRequired = false) {
+    defineHybridInput(name, destinationNode, defaultValue = constants.UNSET_VALUE, isRequired = false) {
         let input = new this._.HybridInput(name, this, destinationNode, defaultValue, isRequired);
-        return __classPrivateFieldGet(this, _BaseComponent_instances, "m", _BaseComponent_defineInputOrOutput).call(this, name, input, this.inputs);
+        return this.defineInputOrOutput(name, input, this.inputs);
     }
-    _defineControlOutput(name) {
+    defineControlOutput(name) {
         let output = new this._.ControlOutput(name);
-        return __classPrivateFieldGet(this, _BaseComponent_instances, "m", _BaseComponent_defineInputOrOutput).call(this, name, output, this.outputs);
+        return this.defineInputOrOutput(name, output, this.outputs);
     }
-    _defineAudioOutput(name, audioNode) {
+    defineAudioOutput(name, audioNode) {
         let output = new this._.AudioRateOutput(name, audioNode);
-        return __classPrivateFieldGet(this, _BaseComponent_instances, "m", _BaseComponent_defineInputOrOutput).call(this, name, output, this.outputs);
+        return this.defineInputOrOutput(name, output, this.outputs);
     }
-    _defineHybridOutput(name, audioNode) {
+    defineHybridOutput(name, audioNode) {
         let output = new this._.HybridOutput(name, audioNode);
-        return __classPrivateFieldGet(this, _BaseComponent_instances, "m", _BaseComponent_defineInputOrOutput).call(this, name, output, this.outputs);
+        return this.defineInputOrOutput(name, output, this.outputs);
     }
-    _setDefaultInput(input) {
+    setDefaultInput(input) {
         this._defaultInput = input;
     }
-    _setDefaultOutput(output) {
+    setDefaultOutput(output) {
         this._defaultOutput = output;
     }
     getDefaultInput() {
@@ -100,6 +109,19 @@ export class BaseComponent extends BaseConnectable {
             return ownOutputs[0];
         }
     }
+    allInputsAreDefined() {
+        let violations = [];
+        for (let inputName in this.inputs) {
+            let input = this.inputs[inputName];
+            if (input.isRequired && input.value == constants.UNSET_VALUE) {
+                violations.push(inputName);
+            }
+        }
+        return !violations.length;
+        /* if (violations.length) {
+          throw new Error(`Unable to run ${this}. The following inputs are marked as required but do not have inputs set: [${violations}]`)
+        } */
+    }
     propagateUpdatedInput(inputStream, newValue) {
         if (inputStream == this.isBypassed) {
             this.onBypassEvent(newValue);
@@ -111,7 +133,7 @@ export class BaseComponent extends BaseConnectable {
             // Always execute function, even if it's unsafe.
             this.inputDidUpdate(undefined, undefined);
         }
-        else if (__classPrivateFieldGet(this, _BaseComponent_instances, "m", _BaseComponent_allInputsAreDefined).call(this)) {
+        else if (this.allInputsAreDefined()) {
             this.inputDidUpdate(inputStream, newValue);
         }
         else {
@@ -148,6 +170,23 @@ export class BaseComponent extends BaseConnectable {
         output.connect(input);
         return component;
     }
+    withInputs(argDict) {
+        var _a;
+        for (const name in argDict) {
+            const thisInput = (_a = this.inputs[name]) !== null && _a !== void 0 ? _a : this.inputs["$" + name];
+            if (!thisInput) {
+                throw new Error(`No input found named '${name}'. Valid inputs: [${Object.keys(this.inputs)}]`);
+            }
+            const argValue = argDict[name];
+            if (argValue instanceof Object && 'connect' in argValue) {
+                argValue.connect(thisInput);
+            }
+            else {
+                thisInput.setValue(argValue);
+            }
+        }
+        return this;
+    }
     setValues(valueObj) {
         return this.getDefaultInput().setValue(valueObj);
     }
@@ -159,25 +198,4 @@ export class BaseComponent extends BaseConnectable {
         return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs));
     }
 }
-_BaseComponent_instances = new WeakSet(), _BaseComponent_freezeProperty = function _BaseComponent_freezeProperty(propName) {
-    Object.defineProperty(this, propName, {
-        writable: false,
-        configurable: false
-    });
-}, _BaseComponent_defineInputOrOutput = function _BaseComponent_defineInputOrOutput(propName, inputOrOutput, inputsOrOutputsArray) {
-    inputsOrOutputsArray[propName] = inputOrOutput;
-    return inputOrOutput;
-}, _BaseComponent_allInputsAreDefined = function _BaseComponent_allInputsAreDefined() {
-    let violations = [];
-    for (let inputName in this.inputs) {
-        let input = this.inputs[inputName];
-        if (input.isRequired && input.value == constants.UNSET_VALUE) {
-            violations.push(inputName);
-        }
-    }
-    return !violations.length;
-    /* if (violations.length) {
-      throw new Error(`Unable to run ${this}. The following inputs are marked as required but do not have inputs set: [${violations}]`)
-    } */
-};
 BaseComponent.instanceExists = false;
