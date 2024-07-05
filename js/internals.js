@@ -15,6 +15,7 @@ export * from './components/AudioRateSignalSampler.js';
 export * from './components/Bang.js';
 export * from './components/base/BaseComponent.js';
 export * from './components/base/VisualComponent.js';
+export * from './components/ChannelSplitter.js';
 export * from './components/FunctionComponent.js';
 export * from './components/IgnoreDuplicates.js';
 export * from './components/Keyboard.js';

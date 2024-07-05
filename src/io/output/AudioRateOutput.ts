@@ -1,4 +1,3 @@
-import { AudioRateSignalSampler } from "../../components/AudioRateSignalSampler.js"
 import { Component } from "../../components/base/Component.js"
 import { AudioSignalStream } from "../../shared/AudioSignalStream.js"
 import { MultiChannel, connectWebAudioChannels, createMultiChannelView } from "../../shared/multichannel.js"
@@ -29,7 +28,7 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
   connect(destination) {
     let { component, input } = this.getDestinationInfo(destination)
     if (!(input instanceof AudioRateInput || input instanceof HybridInput)) {
-      throw new Error(`Can only connect audio-rate outputs to inputs that support audio-rate signals. Given: ${input}. Use ${AudioRateSignalSampler.name} to force a conversion.`)
+      throw new Error(`Can only connect audio-rate outputs to inputs that support audio-rate signals. Given: ${input}. Use 'AudioRateSignalSampler' to force a conversion.`)
     }
     input.audioSink && connectWebAudioChannels(
       this.audioContext,
@@ -42,7 +41,7 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
     component?.wasConnectedTo(this)
     return component
   }
-  sampleSignal(samplePeriodMs?: number): AudioRateSignalSampler {
+  sampleSignal(samplePeriodMs?: number): Component {
     return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs))
   }
   splitChannels(...inputChannelGroups: number[][]): Iterable<AudioRateOutput> {

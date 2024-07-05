@@ -36,6 +36,32 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay {
             __classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_displayWaveform).call(this, minValue, maxValue);
         }
     }
+    drawSingleWaveform(ctx, values, strokeStyle, toX, toY) {
+        // Draw graph
+        ctx.strokeStyle = strokeStyle;
+        ctx.beginPath();
+        for (let i = 0; i < values.length; i++) {
+            if (this.component.hideZeroSignal.value) {
+                if (values[i]) {
+                    ctx.lineTo(toX(i), toY(values[i]));
+                    ctx.stroke();
+                }
+                else {
+                    ctx.beginPath();
+                }
+            }
+            else {
+                // undefined if out of the memory range.
+                if (values[i] != undefined) {
+                    ctx.lineTo(toX(i), toY(values[i]));
+                    ctx.stroke();
+                }
+                else {
+                    ctx.beginPath();
+                }
+            }
+        }
+    }
 }
 _ScrollingAudioMonitorDisplay_instances = new WeakSet(), _ScrollingAudioMonitorDisplay_valueToDisplayableText = function _ScrollingAudioMonitorDisplay_valueToDisplayableText(value) {
     if (value === "auto") {
@@ -47,7 +73,8 @@ _ScrollingAudioMonitorDisplay_instances = new WeakSet(), _ScrollingAudioMonitorD
 }, _ScrollingAudioMonitorDisplay_displayWaveform = function _ScrollingAudioMonitorDisplay_displayWaveform(minValue, maxValue) {
     let maxX = Number(this.$canvas.attr('width'));
     let memory = this.component._memory;
-    let entryWidth = maxX / memory.length;
+    let memLength = memory[0].length;
+    let entryWidth = maxX / memLength;
     let maxY = Number(this.$canvas.attr('height'));
     const canvas = this.$canvas[0];
     var ctx = canvas.getContext("2d");
@@ -69,29 +96,9 @@ _ScrollingAudioMonitorDisplay_instances = new WeakSet(), _ScrollingAudioMonitorD
         ctx.lineTo(maxX, zeroY);
         ctx.stroke();
     }
-    // Draw graph
-    ctx.beginPath();
-    ctx.strokeStyle = "black";
-    for (let i = 0; i < memory.length; i++) {
-        if (this.component.hideZeroSignal.value) {
-            if (memory[i]) {
-                ctx.lineTo(toX(i), toY(memory[i]));
-                ctx.stroke();
-            }
-            else {
-                ctx.beginPath();
-            }
-        }
-        else {
-            // undefined if out of the memory range.
-            if (memory[i] != undefined) {
-                ctx.lineTo(toX(i), toY(memory[i]));
-                ctx.stroke();
-            }
-            else {
-                ctx.beginPath();
-            }
-        }
+    for (let i = memory.length - 1; i >= 0; i--) {
+        const whiteVal = Math.pow((i / memory.length), 0.5) * 255;
+        this.drawSingleWaveform(ctx, memory[i], `rgb(${whiteVal}, ${whiteVal}, ${whiteVal})`, toX, toY);
     }
     // Warn user visually if the range of the signal is not captured.
     if (hasOutOfBoundsValues) {

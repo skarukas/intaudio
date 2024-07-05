@@ -4,8 +4,6 @@ export class MediaElementComponent extends BaseComponent {
     constructor(selectorOrElement, { preservePitchOnStretch = false } = {}) {
         super();
         this.mediaElement = $(selectorOrElement).get(0);
-        console.log(this.mediaElement);
-        console.log($(selectorOrElement));
         this.audioNode = this.audioContext.createMediaElementSource(this.mediaElement);
         this.mediaElement.disableRemotePlayback = false;
         this.mediaElement.preservesPitch = preservePitchOnStretch;

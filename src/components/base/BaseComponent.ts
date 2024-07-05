@@ -1,4 +1,3 @@
-import { AudioRateInput, AudioRateOutput, ControlOutput, HybridInput, HybridOutput } from "../../internals.js";
 import { AbstractInput } from "../../io/input/AbstractInput.js";
 import { ControlInput } from "../../io/input/ControlInput.js";
 import { ComponentInput } from "../../io/input/ComponentInput.js";
@@ -11,6 +10,11 @@ import { FunctionComponent } from "../FunctionComponent.js";
 import { Component } from "./Component.js";
 import { Connectable } from "../../shared/base/Connectable.js";
 import { AudioSignalStream } from "../../shared/AudioSignalStream.js";
+import { ControlOutput } from "../../io/output/ControlOutput.js";
+import { AudioRateOutput } from "../../io/output/AudioRateOutput.js";
+import { HybridInput } from "../../io/input/HybridInput.js";
+import { HybridOutput } from "../../io/output/HybridOutput.js";
+import { AudioRateInput } from "../../io/input/AudioRateInput.js";
 
 export abstract class BaseComponent extends BaseConnectable implements Component, AudioSignalStream {
   readonly isComponent = true

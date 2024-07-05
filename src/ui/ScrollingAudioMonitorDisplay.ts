@@ -44,7 +44,8 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay<ScrollingAudioMoni
   #displayWaveform(minValue, maxValue) {
     let maxX = Number(this.$canvas.attr('width'))
     let memory = this.component._memory
-    let entryWidth = maxX / memory.length
+    let memLength = memory[0].length
+    let entryWidth = maxX / memLength
     let maxY = Number(this.$canvas.attr('height'))
     const canvas = this.$canvas[0]
 
@@ -67,27 +68,9 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay<ScrollingAudioMoni
       ctx.lineTo(maxX, zeroY);
       ctx.stroke();
     }
-
-    // Draw graph
-    ctx.beginPath();
-    ctx.strokeStyle = "black";
-    for (let i = 0; i < memory.length; i++) {
-      if (this.component.hideZeroSignal.value) {
-        if (memory[i]) {
-          ctx.lineTo(toX(i), toY(memory[i]));
-          ctx.stroke();
-        } else {
-          ctx.beginPath();
-        }
-      } else {
-        // undefined if out of the memory range.
-        if (memory[i] != undefined) {
-          ctx.lineTo(toX(i), toY(memory[i]));
-          ctx.stroke();
-        } else {
-          ctx.beginPath();
-        }
-      }
+    for (let i = memory.length - 1; i >= 0; i--) {
+      const whiteVal = (i / memory.length)**0.5 * 255
+      this.drawSingleWaveform(ctx, memory[i], `rgb(${whiteVal}, ${whiteVal}, ${whiteVal})`, toX, toY)
     }
 
     // Warn user visually if the range of the signal is not captured.
@@ -95,6 +78,35 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay<ScrollingAudioMoni
       this.$container.addClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS)
     } else {
       this.$container.removeClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS)
+    }
+  }
+  drawSingleWaveform(
+    ctx: CanvasRenderingContext2D,
+    values: number[],
+    strokeStyle: string,
+    toX: (v: number) => number,
+    toY: (v: number) => number
+  ) {
+    // Draw graph
+    ctx.strokeStyle = strokeStyle;
+    ctx.beginPath();
+    for (let i = 0; i < values.length; i++) {
+      if (this.component.hideZeroSignal.value) {
+        if (values[i]) {
+          ctx.lineTo(toX(i), toY(values[i]));
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+        }
+      } else {
+        // undefined if out of the memory range.
+        if (values[i] != undefined) {
+          ctx.lineTo(toX(i), toY(values[i]));
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+        }
+      }
     }
   }
 }

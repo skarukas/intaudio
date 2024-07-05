@@ -49,7 +49,10 @@ export class FunctionComponent extends BaseComponent {
         if (requiredArgs.length == 1) {
             this.setDefaultInput(this["$" + requiredArgs[0].name]);
         }
-        this.output = this.defineHybridOutput('output', this._audioProcessor);
+        // TODO: Change to splitter + merger to make the output size correct.
+        const out = createConstantSource(this.audioContext);
+        this._audioProcessor.connect(out.offset);
+        this.output = this.defineHybridOutput('output', out);
         this.preventIOOverwrites();
     }
     _createScriptProcessor(numInputs, numChannelsPerInput) {

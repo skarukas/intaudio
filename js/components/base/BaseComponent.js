@@ -1,6 +1,6 @@
-import { AudioRateOutput } from "../../internals.js";
 import { BaseConnectable } from "../../shared/base/BaseConnectable.js";
 import constants from "../../shared/constants.js";
+import { AudioRateOutput } from "../../io/output/AudioRateOutput.js";
 export class BaseComponent extends BaseConnectable {
     constructor() {
         super();

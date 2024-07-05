@@ -25,7 +25,7 @@ export class AudioRateSignalSampler extends BaseComponent {
     this.controlOutput = this.defineControlOutput('controlOutput')
     this.preventIOOverwrites()
   }
-  #getCurrentSignalValue(): number {
+  getCurrentSignalValue(): number {
     const dataArray = new Float32Array(1)
     this._analyzer.getFloatTimeDomainData(dataArray)
     return dataArray[0]
@@ -33,7 +33,7 @@ export class AudioRateSignalSampler extends BaseComponent {
   #setInterval(period: number) {
     this.#interval = window.setInterval(() => {
       try {
-        const signal = this.#getCurrentSignalValue()
+        const signal = this.getCurrentSignalValue()
         this.controlOutput.setValue(signal)
       } catch (e) {
         this.stop()

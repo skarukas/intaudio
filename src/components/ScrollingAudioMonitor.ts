@@ -4,9 +4,7 @@ import { AudioRateInput } from "../io/input/AudioRateInput.js"
 import { ControlInput } from "../io/input/ControlInput.js"
 import { AudioRateOutput } from "../io/output/AudioRateOutput.js"
 import { ControlOutput } from "../io/output/ControlOutput.js"
-import { createConstantSource } from "../shared/util.js"
 import { ScrollingAudioMonitorDisplay } from "../ui/ScrollingAudioMonitorDisplay.js"
-import { AudioRateSignalSampler } from "./AudioRateSignalSampler.js"
 import { VisualComponent } from "./base/VisualComponent.js"
 
 // one that captures N samples and displays them all at the same time.
@@ -18,11 +16,12 @@ export class ScrollingAudioMonitor extends VisualComponent<ScrollingAudioMonitor
   maxValue: ControlInput<number | 'auto'>
   input: AudioRateInput
   audioOutput: AudioRateOutput
-  controlOutput: ControlOutput<number>
+  controlOutput: ControlOutput<number[]>
 
-  _memory: Array<number>
-  private _sampler: AudioRateSignalSampler
-  private _passthrough: ConstantSourceNode
+  _memory: number[][] = [] // Channel * time.
+  private _analyzers: AnalyserNode[] = []
+  private _splitter: ChannelSplitterNode
+  private _merger: ChannelMergerNode
 
   // Display options. TODO: move to display class?
   static defaultHeight = 64;
@@ -33,54 +32,77 @@ export class ScrollingAudioMonitor extends VisualComponent<ScrollingAudioMonitor
     memorySize: number = 128,
     minValue: number | 'auto' = 'auto',
     maxValue: number | 'auto' = 'auto',
-    hideZeroSignal = true
+    hideZeroSignal = true,
+    numChannels: number = 6
   ) {
     super()
     samplePeriodMs ??= this.config.defaultSamplePeriodMs
     this.display = new this._.ScrollingAudioMonitorDisplay(this)
-    this._sampler = new this._.AudioRateSignalSampler(samplePeriodMs)
-    this._passthrough = createConstantSource(this.audioContext)
+    this._splitter = this.audioContext.createChannelSplitter()
+    this._merger = this.audioContext.createChannelMerger()
 
     // Inputs
-    this.samplePeriodMs = this.defineControlInput('samplePeriodMs', samplePeriodMs)
+    this.samplePeriodMs = this.defineControlInput('samplePeriodMs', samplePeriodMs) // TODO: make work again.
     this.memorySize = this.defineControlInput('memorySize', memorySize)
     this.minValue = this.defineControlInput('minValue', minValue)
     this.maxValue = this.defineControlInput('maxValue', maxValue)
     this.hideZeroSignal = this.defineControlInput('hideZeroSignal', hideZeroSignal)
-    this.input = this.defineAudioInput('input', this._passthrough.offset)
+    this.input = this.defineAudioInput('input', this._splitter)
     this.setDefaultInput(this.input)
 
+    // It seems a subgraph including analyzers may be optimized out when the 
+    // sink itself is not an analyzer. So add a no-op analyzer sink to keep the
+    // signal flowing.
+    this._merger.connect(this.audioContext.createAnalyser())
+
     // Output
-    this.audioOutput = this.defineAudioOutput('audioOutput', this._passthrough)
+    this.audioOutput = this.defineAudioOutput('audioOutput', this._merger)
     this.controlOutput = this.defineControlOutput('controlOutput')
+    
+    // Audio routing
+    for (let i = 0; i < numChannels; i++) {
+      const analyzer = this.audioContext.createAnalyser()
+      this._splitter.connect(analyzer, i, 0).connect(this._merger, 0, i)
+      this._analyzers.push(analyzer)
+      this._memory.push(Array(this.memorySize.value).fill(0.))
+    }
 
-    // Routing
-    this.audioOutput.connect(this._sampler.audioInput)
-    this._sampler.controlOutput.onUpdate((v: number) => {
-      this.#addToMemory(v)
+    // Define animation loop
+    const updateSignalValues = () => {
+      const channelValues = []
+      for (let i = 0; i < numChannels; i++) {
+        // Get i'th channel info.
+        const dataArray = new Float32Array(128)
+        this._analyzers[i].getFloatTimeDomainData(dataArray)
+        const v = dataArray[0]
+        this.#addToMemory(this._memory[i], v)
+        channelValues.push(v)
+      }
+      
       this.display.updateWaveformDisplay()
-      this.controlOutput.setValue(v)
-    })
+      this.controlOutput.setValue(channelValues)
+      requestAnimationFrame(updateSignalValues)
+    }
+    updateSignalValues()
 
-    this._memory = Array(this.memorySize.value).fill(0.)
     this.preventIOOverwrites()
   }
   inputDidUpdate<T>(input: ControlInput<T>, newValue: T) {
     if (input == this.memorySize) {
       throw new Error("Can't update memorySize yet.")
     } else if (input == this.samplePeriodMs) {
-      this._sampler.samplePeriodMs.setValue(<number>newValue)
+      //this._sampler.samplePeriodMs.setValue(<number>newValue)
     }
   }
-  #addToMemory(v: number) {
-    this._memory.push(v)
-    if (this._memory.length > this.memorySize.value) {
-      this._memory.shift()
+  #addToMemory(arr: number[], v: number) {
+    arr.push(v)
+    if (arr.length > this.memorySize.value) {
+      arr.shift()
     }
   }
   getCurrentValueRange(): { minValue: number, maxValue: number } {
-    let minValue = this.minValue.value == 'auto' ? Math.min(...this._memory) : this.minValue.value
-    let maxValue = this.maxValue.value == 'auto' ? Math.max(...this._memory) : this.maxValue.value
+    let minValue = this.minValue.value == 'auto' ? Math.min(...this._memory.map(a => Math.min(...a))) : this.minValue.value
+    let maxValue = this.maxValue.value == 'auto' ? Math.max(...this._memory.map(a => Math.max(...a))) : this.maxValue.value
     let isEmptyRange = (minValue == maxValue)
     if (!Number.isFinite(minValue) || isEmptyRange) {
       minValue = -1

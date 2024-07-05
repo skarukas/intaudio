@@ -4,6 +4,7 @@
 import { BaseComponent } from "../../components/base/BaseComponent.js"
 import { AbstractInput } from "./AbstractInput.js"
 import { AudioRateInput } from "./AudioRateInput.js"
+import { HybridInput } from "./HybridInput.js"
 
 // i.setValue({ input1: "val1", input2: "val2" })  // sets vals on parent.
 export class ComponentInput<T> extends AudioRateInput {
@@ -13,7 +14,7 @@ export class ComponentInput<T> extends AudioRateInput {
     parent: BaseComponent,
     public defaultInput?: AbstractInput<T>
   ) {
-    const audioNode = (defaultInput instanceof AudioRateInput) ? defaultInput.audioSink : undefined
+    const audioNode = (defaultInput instanceof AudioRateInput || defaultInput instanceof HybridInput) ? defaultInput.audioSink : undefined
     super(name, parent, audioNode)
     this.defaultInput = defaultInput
     this._value = defaultInput?.value

@@ -182,8 +182,12 @@ const tests = {
 
 
     let monitor = new ia.ScrollingAudioMonitor(20, 128, 'auto', 'auto')
-    monitor.addToDom($root, { width: 48, height: 48, left: 48 })
-    compoundEnvelope.connect(monitor)
+    monitor.addToDom($root, { width: 256, height: 48, left: 48 })
+
+    compoundEnvelope.connect(monitor.input.left)
+    compoundEnvelope.connect(v => -v).connect(monitor.input.right)
+    compoundEnvelope.connect(v => v + 0.1).connect(monitor.input.channels[2])
+    compoundEnvelope.connect(v => v - 0.1).connect(monitor.input.channels[3])
   },
   adsrEnvelopeComplex() {
     // This should:
