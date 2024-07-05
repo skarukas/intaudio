@@ -214,7 +214,7 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     output.connect(input)
     return component
   }
-  withInputs(argDict: { [name: string]: Connectable | unknown}): Component {
+  withInputs(argDict: { [name: string | number]: Connectable | unknown}): this {
     for (const name in argDict) {
       const thisInput = this.inputs[name] ?? this.inputs["$" + name]
       if (!thisInput) {

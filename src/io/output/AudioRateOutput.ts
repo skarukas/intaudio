@@ -1,6 +1,6 @@
 import { Component } from "../../components/base/Component.js"
 import { AudioSignalStream } from "../../shared/AudioSignalStream.js"
-import { MultiChannel, connectWebAudioChannels, createMultiChannelView } from "../../shared/multichannel.js"
+import { MultiChannel, connectWebAudioChannels, createMultiChannelView, numChannels } from "../../shared/multichannel.js"
 import { CanBeConnectedTo } from "../../shared/types.js"
 import { AudioRateInput } from "../input/AudioRateInput.js"
 import { HybridInput } from "../input/HybridInput.js"
@@ -48,12 +48,17 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
     if (inputChannelGroups.length > 32) {
       throw new Error("Can only split into 32 or fewer channels.")
     }
-    if (inputChannelGroups.length) {
-      return this.connect(new this._.ChannelSplitter(...inputChannelGroups))
-    } else {
+    if (!inputChannelGroups.length) {
+      // Split each channel separately: [0], [1], [2], etc.
+      for (let i = 0; i < numChannels(this.audioNode); i++) {
+        inputChannelGroups.push([i])
+      }
+      /* // Seems to be broken? Consider removing "channel views" as they do not 
+      // have a correct channel count etc.
       // This is an optimization that returns the channel views instead of 
       // split+merged channels.
-      return this.channels
+      return this.channels */
     }
+    return this.connect(new this._.ChannelSplitter(...inputChannelGroups))
   }
 }

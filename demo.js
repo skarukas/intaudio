@@ -358,6 +358,25 @@ const tests = {
       slow.rampOut.sampleSignal().connect(v => console.log(v))
       setTimeout(() => slow.start(), 5000)
     }, 1000)
+  },
+  channelStackerAndSplitter($root) {
+    let oscillator = new ia.AudioComponent(createOscillator(440))
+    let oscillator2 = new ia.AudioComponent(createOscillator(441))
+    const monitor = new ia.ScrollingAudioMonitor()
+    monitor.addToDom($root)
+    console.log(new ia.ChannelStacker())
+
+    // Weird quirk, each oscillator is actually stereo, so we need to discard 
+    // channel 1 and 3 after stacking.
+    const stacked = ia.stackChannels([oscillator, oscillator2])
+    stacked.connect(monitor)
+    // TODO: Maybe make stackAsChannels which mono-izes each 
+    // input, or another arg numChannelsPerInput (ex: [1, 1]) that explicitly
+    // clarifies the intended result?
+    const [left, _1, right] = stacked.splitChannels()
+    console.log([left, right])
+    left.connect(ia.out)
+    right.connect(ia.out)
   }
   /* periodicWaveTest() { 
     const w = new Wave(Wave.Type.SINE)
@@ -366,7 +385,7 @@ const tests = {
 
 ia.run(() => {
   //return tests.midiInput()
-  for (let test in { adsrSummingEnvelopes: tests.adsrSummingEnvelopes }) {
+  for (let test in { channelStackerAndSplitter: tests.channelStackerAndSplitter }) {
     const $testRoot = $(document.createElement('div'))
     tests[test]($testRoot)
     ia.util.afterRender(() => {

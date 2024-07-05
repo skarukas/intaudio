@@ -31,6 +31,7 @@ export class ScrollingAudioMonitor extends VisualComponent {
         this._merger.connect(this.audioContext.createAnalyser());
         // Output
         this.audioOutput = this.defineAudioOutput('audioOutput', this._merger);
+        this.setDefaultOutput(this.audioOutput);
         this.controlOutput = this.defineControlOutput('controlOutput');
         // Audio routing
         for (let i = 0; i < numChannels; i++) {

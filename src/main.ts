@@ -14,6 +14,7 @@ export default {
   internals,
   audioContext: init.GLOBAL_AUDIO_CONTEXT,
   out: new internals.AudioRateInput('out', undefined, init.GLOBAL_AUDIO_CONTEXT.destination),
+  stackChannels: internals.stackChannels,
   run: init.run,
   withConfig
 }

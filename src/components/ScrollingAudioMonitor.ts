@@ -57,6 +57,7 @@ export class ScrollingAudioMonitor extends VisualComponent<ScrollingAudioMonitor
 
     // Output
     this.audioOutput = this.defineAudioOutput('audioOutput', this._merger)
+    this.setDefaultOutput(this.audioOutput)
     this.controlOutput = this.defineControlOutput('controlOutput')
     
     // Audio routing

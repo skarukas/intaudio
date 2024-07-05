@@ -1,9 +1,15 @@
+export function numChannels(node) {
+    if (node instanceof ChannelMergerNode) {
+        return node.numberOfInputs;
+    }
+    return node instanceof AudioNode ? node.channelCount : 1;
+}
 export function createMultiChannelView(multiChannelIO, node) {
     let channels = [];
     if (!(node instanceof AudioNode)) {
         return channels;
     }
-    for (let c = 0; c < node.channelCount; c++) {
+    for (let c = 0; c < numChannels(node); c++) {
         channels.push(createChannelView(multiChannelIO, c));
     }
     return channels;

@@ -378,12 +378,18 @@ class AbstractInput extends ToStringAndUUID {
     }
 }
 
+function numChannels(node) {
+    if (node instanceof ChannelMergerNode) {
+        return node.numberOfInputs;
+    }
+    return node instanceof AudioNode ? node.channelCount : 1;
+}
 function createMultiChannelView(multiChannelIO, node) {
     let channels = [];
     if (!(node instanceof AudioNode)) {
         return channels;
     }
-    for (let c = 0; c < node.channelCount; c++) {
+    for (let c = 0; c < numChannels(node); c++) {
         channels.push(createChannelView(multiChannelIO, c));
     }
     return channels;
@@ -791,14 +797,18 @@ class AudioRateOutput extends AbstractOutput {
         if (inputChannelGroups.length > 32) {
             throw new Error("Can only split into 32 or fewer channels.");
         }
-        if (inputChannelGroups.length) {
-            return this.connect(new this._.ChannelSplitter(...inputChannelGroups));
-        }
-        else {
-            // This is an optimization that returns the channel views instead of 
+        if (!inputChannelGroups.length) {
+            // Split each channel separately: [0], [1], [2], etc.
+            for (let i = 0; i < numChannels(this.audioNode); i++) {
+                inputChannelGroups.push([i]);
+            }
+            /* // Seems to be broken? Consider removing "channel views" as they do not
+            // have a correct channel count etc.
+            // This is an optimization that returns the channel views instead of
             // split+merged channels.
-            return this.channels;
+            return this.channels */
         }
+        return this.connect(new this._.ChannelSplitter(...inputChannelGroups));
     }
 }
 
@@ -3802,6 +3812,49 @@ class ChannelSplitter extends BaseComponent {
             },
         };
     }
+}
+
+const PRIVATE_CONSTRUCTOR = Symbol("PRIVATE_CONSTRUCTOR");
+class ChannelStacker extends BaseComponent {
+    constructor(numChannelsPerInput, __privateConstructorCall = undefined) {
+        super();
+        this.stackedInputs = [];
+        if (__privateConstructorCall !== PRIVATE_CONSTRUCTOR) {
+            throw new Error("ChannelStacker cannot be constructed directly. Use ChannelStacker.fromInputs instead.");
+        }
+        const numOutputChannels = numChannelsPerInput.reduce((a, b) => a + b);
+        const merger = this.audioContext.createChannelMerger(numOutputChannels);
+        let outChannel = 0;
+        for (let i = 0; i < numChannelsPerInput.length; i++) {
+            const splitter = this.audioContext.createChannelSplitter();
+            // Route inputs to outputs
+            for (let inChannel = 0; inChannel < numChannelsPerInput[i]; inChannel++) {
+                splitter.connect(merger, inChannel, outChannel);
+                outChannel++;
+            }
+            const input = this.defineAudioInput("" + i, splitter);
+            this.stackedInputs.push(input);
+            this[i] = input;
+        }
+        this.output = this.defineAudioOutput('output', merger);
+    }
+    static fromInputs(destinations) {
+        const numChannelsPerInput = [];
+        const inputObj = {};
+        for (let i = 0; i < destinations.length; i++) {
+            const { input } = this.prototype.getDestinationInfo(destinations[i]);
+            if (!(input instanceof HybridInput || input instanceof AudioRateInput)) {
+                throw new Error(`A ChannelStacker can only be created from audio-rate inputs. Given ${destinations[i]}, which is not an audio-rate input nor a component with a default audio-rate input.`);
+            }
+            numChannelsPerInput.push(numChannels(input.audioSink));
+            inputObj[i] = destinations[i];
+        }
+        const stacker = new this._.ChannelStacker(numChannelsPerInput, PRIVATE_CONSTRUCTOR);
+        return stacker.withInputs(inputObj);
+    }
+}
+function stackChannels(inputs) {
+    return ChannelStacker.fromInputs(inputs);
 }
 
 // This file was generated. Do not modify manually!
@@ -12017,6 +12070,7 @@ class ScrollingAudioMonitor extends VisualComponent {
         this._merger.connect(this.audioContext.createAnalyser());
         // Output
         this.audioOutput = this.defineAudioOutput('audioOutput', this._merger);
+        this.setDefaultOutput(this.audioOutput);
         this.controlOutput = this.defineControlOutput('controlOutput');
         // Audio routing
         for (let i = 0; i < numChannels; i++) {
@@ -12694,6 +12748,7 @@ var internals = /*#__PURE__*/Object.freeze({
   BaseEvent: BaseEvent,
   BypassEvent: BypassEvent,
   ChannelSplitter: ChannelSplitter,
+  ChannelStacker: ChannelStacker,
   ComponentInput: ComponentInput,
   ControlInput: ControlInput,
   ControlOutput: ControlOutput,
@@ -12733,6 +12788,8 @@ var internals = /*#__PURE__*/Object.freeze({
   constants: constants,
   createMultiChannelView: createMultiChannelView,
   events: events,
+  numChannels: numChannels,
+  stackChannels: stackChannels,
   util: util
 });
 
@@ -12740,6 +12797,6 @@ var internals = /*#__PURE__*/Object.freeze({
 var public_namespace = Object.assign({ 'SimplePolyphonicSynth': SimplePolyphonicSynth, 'Keyboard': Keyboard, 'ADSR': ADSR, 'TypingKeyboardMIDI': TypingKeyboardMIDI }, internals);
 
 const withConfig = main$1.registerAndCreateFactoryFn(defaultConfig, public_namespace, Object.assign({}, internals));
-var main = Object.assign(Object.assign({}, public_namespace), { internals, audioContext: GLOBAL_AUDIO_CONTEXT, out: new AudioRateInput('out', undefined, GLOBAL_AUDIO_CONTEXT.destination), run: run, withConfig });
+var main = Object.assign(Object.assign({}, public_namespace), { internals, audioContext: GLOBAL_AUDIO_CONTEXT, out: new AudioRateInput('out', undefined, GLOBAL_AUDIO_CONTEXT.destination), stackChannels: stackChannels, run: run, withConfig });
 
 export { main as default };
