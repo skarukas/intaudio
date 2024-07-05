@@ -77,6 +77,8 @@ export class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any,
   _createScriptProcessor(numInputs, numChannelsPerInput) {
     const bufferSize = undefined  // 256
     let numInputChannels = (numChannelsPerInput * numInputs) || 1
+    // TODO: I don't think the handling of channels is correct here because the 
+    // output still has N channels.
     this.channelMerger = this.audioContext.createChannelMerger(numInputChannels)
     let processor = this.audioContext.createScriptProcessor(bufferSize, numInputChannels, numChannelsPerInput)
     this.channelMerger.connect(processor)

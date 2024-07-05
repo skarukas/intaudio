@@ -3,7 +3,6 @@ import { AudioConfig } from "./config.js"
 // TODO: make this stuff stache-configurable.
 
 export const GLOBAL_AUDIO_CONTEXT = new AudioContext()
-export const MAIN_OUT = GLOBAL_AUDIO_CONTEXT.destination
 
 export const defaultConfig: AudioConfig = {
   audioContext: GLOBAL_AUDIO_CONTEXT,

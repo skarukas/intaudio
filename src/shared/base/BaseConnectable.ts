@@ -9,7 +9,8 @@ import { ToStringAndUUID } from "./ToStringAndUUID.js";
 
 
 export abstract class BaseConnectable extends ToStringAndUUID implements Connectable {
-  abstract connect<T extends CanBeConnectedTo>(destination: T): Connectable;
+  abstract connect<T extends Component>(destination: T): T;
+  abstract connect<T extends CanBeConnectedTo>(destination: T): Component;
 
   getDestinationInfo(destination: CanBeConnectedTo): { component: Component, input: AbstractInput} {
     if (destination instanceof Function) {

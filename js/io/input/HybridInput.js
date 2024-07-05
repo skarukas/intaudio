@@ -1,5 +1,6 @@
 import { AbstractInput } from "./AbstractInput.js";
 import constants from "../../shared/constants.js";
+import { createMultiChannelView } from "../../shared/multichannel.js";
 export class HybridInput extends AbstractInput {
     // Hybrid input can connect an audio input to a sink, but it also can
     // receive control inputs.
@@ -9,7 +10,16 @@ export class HybridInput extends AbstractInput {
         this.parent = parent;
         this.audioSink = audioSink;
         this.isRequired = isRequired;
+        this.activeChannel = undefined;
         this._value = defaultValue;
+        this.channels = createMultiChannelView(this, audioSink);
+    }
+    get left() {
+        return this.channels[0];
+    }
+    get right() {
+        var _a;
+        return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
     }
     get value() {
         return this._value;

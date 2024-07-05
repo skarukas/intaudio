@@ -166,7 +166,9 @@ const tests = {
       w2: oscillator2,
       v: 0.5
     })
-    compoundEnvelope.connect(ia.out)
+    compoundEnvelope.connect(ia.out.right)
+    const [a, b, c] = compoundEnvelope.splitChannels([0, 1], [2, 3], [4])
+    console.log([a, b, c])
 
     attackBang.connect(envelope1.attackEvent)
     attackBang.connect(envelope2.attackEvent)

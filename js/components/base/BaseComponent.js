@@ -1,3 +1,4 @@
+import { AudioRateOutput } from "../../internals.js";
 import { BaseConnectable } from "../../shared/base/BaseConnectable.js";
 import constants from "../../shared/constants.js";
 export class BaseComponent extends BaseConnectable {
@@ -196,6 +197,15 @@ export class BaseComponent extends BaseConnectable {
     }
     sampleSignal(samplePeriodMs) {
         return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs));
+    }
+    splitChannels(...inputChannelGroups) {
+        const output = this.getDefaultOutput();
+        if (output instanceof AudioRateOutput) {
+            return output.splitChannels(...inputChannelGroups);
+        }
+        else {
+            throw new Error(`Unclear or invalid 'splitChannels' invocation. No default audio-rate output found for ${this}. Select an audio-rate output and call 'output.splitChannels(...)' instead.`);
+        }
     }
 }
 BaseComponent.instanceExists = false;

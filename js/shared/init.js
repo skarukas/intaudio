@@ -1,6 +1,5 @@
 // TODO: make this stuff stache-configurable.
 export const GLOBAL_AUDIO_CONTEXT = new AudioContext();
-export const MAIN_OUT = GLOBAL_AUDIO_CONTEXT.destination;
 export const defaultConfig = {
     audioContext: GLOBAL_AUDIO_CONTEXT,
     state: { isInitialized: false },

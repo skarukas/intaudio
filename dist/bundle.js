@@ -378,24 +378,6 @@ class AbstractInput extends ToStringAndUUID {
     }
 }
 
-class AudioRateInput extends AbstractInput {
-    constructor(name, parent, audioSink) {
-        super(name, parent, false);
-        this.name = name;
-        this.parent = parent;
-        this.audioSink = audioSink;
-    }
-    get value() {
-        return this.audioSink["value"]; // TODO: fix? AudioNodes have no value.
-    }
-    setValue(value) {
-        if (value == constants.TRIGGER) {
-            value = this.value;
-        }
-        this.audioSink["value"] = value;
-    }
-}
-
 var WaveType;
 (function (WaveType) {
     WaveType["SINE"] = "sine";
@@ -512,103 +494,6 @@ class BaseConnectable extends ToStringAndUUID {
         return { component, input };
     }
 }
-
-class AbstractOutput extends BaseConnectable {
-    constructor(name) {
-        super();
-        this.name = name;
-        this.connections = [];
-        this.callbacks = [];
-    }
-}
-
-class ControlOutput extends AbstractOutput {
-    connect(destination) {
-        let { component, input } = this.getDestinationInfo(destination);
-        // TODO: fix... should be "destination" but won't work for non-connectables like Function.
-        /* const connectable = destination instanceof AbstractInput ? destination : component */
-        this.connections.push(input);
-        return component;
-    }
-    setValue(value, rawObject = false) {
-        if ((value === null || value === void 0 ? void 0 : value.constructor) === Object && rawObject) {
-            value = Object.assign({ _raw: true }, value);
-        }
-        for (let c of this.connections) {
-            c.setValue(value);
-        }
-        for (const callback of this.callbacks) {
-            callback(value);
-        }
-    }
-    onUpdate(callback) {
-        this.callbacks.push(callback);
-    }
-}
-
-var __classPrivateFieldSet$1 = (undefined && undefined.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
-    if (kind === "m") throw new TypeError("Private method is not writable");
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
-    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
-};
-var __classPrivateFieldGet$a = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
-    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-};
-var _BaseEvent_defaultIgnored;
-class BaseEvent extends ToStringAndUUID {
-    constructor() {
-        super(...arguments);
-        this._isLocal = false;
-        _BaseEvent_defaultIgnored.set(this, false);
-    }
-    ignoreDefault() {
-        __classPrivateFieldSet$1(this, _BaseEvent_defaultIgnored, true, "f");
-    }
-    defaultIsIgnored() {
-        return __classPrivateFieldGet$a(this, _BaseEvent_defaultIgnored, "f");
-    }
-}
-_BaseEvent_defaultIgnored = new WeakMap();
-class BypassEvent extends BaseEvent {
-    constructor(shouldBypass) {
-        super();
-        this.shouldBypass = shouldBypass;
-        this._isLocal = true;
-    }
-}
-class MuteEvent extends BaseEvent {
-    constructor(shouldMute) {
-        super();
-        this.shouldMute = shouldMute;
-        this._isLocal = true;
-    }
-}
-var KeyEventType;
-(function (KeyEventType) {
-    KeyEventType["KEY_DOWN"] = "keydown";
-    KeyEventType["KEY_UP"] = "keyup";
-})(KeyEventType || (KeyEventType = {}));
-class KeyEvent extends BaseEvent {
-    constructor(eventType, eventPitch = 64, eventVelocity = 64, key) {
-        super();
-        this.eventType = eventType;
-        this.eventPitch = eventPitch;
-        this.eventVelocity = eventVelocity;
-        this.key = key !== null && key !== void 0 ? key : eventPitch;
-    }
-}
-
-var events = /*#__PURE__*/Object.freeze({
-  __proto__: null,
-  BaseEvent: BaseEvent,
-  BypassEvent: BypassEvent,
-  KeyEvent: KeyEvent,
-  get KeyEventType () { return KeyEventType; },
-  MuteEvent: MuteEvent
-});
 
 class BaseComponent extends BaseConnectable {
     constructor() {
@@ -807,8 +692,285 @@ class BaseComponent extends BaseConnectable {
     sampleSignal(samplePeriodMs) {
         return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs));
     }
+    splitChannels(...inputChannelGroups) {
+        const output = this.getDefaultOutput();
+        if (output instanceof AudioRateOutput) {
+            return output.splitChannels(...inputChannelGroups);
+        }
+        else {
+            throw new Error(`Unclear or invalid 'splitChannels' invocation. No default audio-rate output found for ${this}. Select an audio-rate output and call 'output.splitChannels(...)' instead.`);
+        }
+    }
 }
 BaseComponent.instanceExists = false;
+
+function createMultiChannelView(multiChannelIO, node) {
+    let channels = [];
+    if (!(node instanceof AudioNode)) {
+        return channels;
+    }
+    for (let c = 0; c < node.channelCount; c++) {
+        channels.push(createChannelView(multiChannelIO, c));
+    }
+    return channels;
+}
+function createChannelView(multiChannelIO, activeChannel) {
+    return new Proxy(multiChannelIO, {
+        get(target, p, receiver) {
+            if (p === 'activeChannel') {
+                return activeChannel;
+            }
+            else if (['channels', 'left', 'right'].includes(String(p))) {
+                throw new Error(`Forbidden property: '${String(p)}'. A channel view stores only a single channel.`);
+            }
+            else {
+                return Reflect.get(target, p, receiver);
+            }
+        }
+    });
+}
+/**
+ * Call the correct WebAudio methods to connect channels.
+ */
+function simpleConnect(source, destination, fromChannel = undefined, toChannel = undefined) {
+    if (destination instanceof AudioParam) {
+        return source.connect(destination, fromChannel);
+    }
+    else {
+        return source.connect(destination, fromChannel, toChannel);
+    }
+}
+/**
+ * Call the correct WebAudio methods to connect the selected channels, if any.
+ * TODO: Bring channel splitter / merger logic into the components,
+ * lazy-initialized when channels is accessed.
+ *
+ * @param source
+ * @param destination
+ * @param fromChannel
+ * @param toChannel
+ */
+function connectWebAudioChannels(audioContext, source, destination, fromChannel = undefined, toChannel = undefined) {
+    console.log([source, destination, fromChannel, toChannel]);
+    if (fromChannel != undefined) {
+        // Source -> Splitter -> [Dest]
+        // Main connection: Splitter -> Dest
+        const splitter = audioContext.createChannelSplitter();
+        source = source.connect(splitter);
+    }
+    if (toChannel != undefined) {
+        // [Source] -> Merger -> Dest
+        // Main connection: Source -> Merger
+        const merger = audioContext.createChannelMerger();
+        return source.connect(merger, fromChannel, toChannel).connect(destination);
+    }
+    return simpleConnect(source, destination, fromChannel, toChannel);
+}
+/*
+export function connectIO(
+  output: AudioRateOutput | HybridOutput,
+  input: AudioRateInput | HybridInput<number>,
+) {
+  if (output.activeChannels) {
+    if (input.activeChannels.length == 1) {
+      for (const c of output.activeChannels) {
+        output.splitter.connect(input.merger, c, c)
+      }
+    } else if (input.activeChannels.length > 1) {
+      // Connect as many as we can.
+      const numChannels = Math.min(input.activeChannels.length, output.activeChannels.length)
+      for (let i = 0; i < numChannels; i++) {
+        output.splitter.connect(
+          input.merger,
+          input.activeChannels[i],
+          output.activeChannels[i]
+        )
+      }
+    } else {
+      for (const c of output.activeChannels) {
+        output.splitter.connect(input.audioSink, c, 0)
+      }
+    }
+  } else {
+    if (input.activeChannels) {
+      for (const c of input.activeChannels) {
+        output.audioNode.connect(input.merger, c, c)
+      }
+    } else {
+      for (const c of output.activeChannels) {
+        output.splitter.connect(input.audioSink, c, 0)
+      }
+    }
+  }
+} */
+// TODO: factor out to new file.
+class ChannelSplitter extends BaseComponent {
+    constructor(...inputChannelGroups) {
+        super();
+        this.outputChannels = [];
+        this.length = inputChannelGroups.length;
+        this.splitter = this.audioContext.createChannelSplitter();
+        this.input = this.defineAudioInput('input', this.splitter);
+        this.createMergedOutputs(inputChannelGroups);
+    }
+    createMergedOutputs(inputChannelGroups) {
+        if (inputChannelGroups.length > 32) {
+            throw new Error("Can only split into 32 or fewer channels.");
+        }
+        for (let i = 0; i < inputChannelGroups.length; i++) {
+            const mergedNode = this.mergeChannels(inputChannelGroups[i]);
+            this[i] = this.defineAudioOutput("" + i, mergedNode);
+            this.outputChannels.push(this[i]);
+        }
+    }
+    mergeChannels(channels) {
+        const merger = this.audioContext.createChannelMerger(channels.length);
+        for (let c = 0; c < channels.length; c++) {
+            // The N input channels of the merger will contain the selected output
+            // channels of the splitter.
+            this.splitter.connect(merger, channels[c], c);
+        }
+        return merger;
+    }
+    [Symbol.iterator]() {
+        let index = 0;
+        const items = this.outputChannels;
+        return {
+            next() {
+                if (index < items.length) {
+                    return { value: items[index++], done: false };
+                }
+                else {
+                    return { value: 0, done: true };
+                }
+            },
+        };
+    }
+}
+
+class AudioRateInput extends AbstractInput {
+    constructor(name, parent, audioSink) {
+        super(name, parent, false);
+        this.name = name;
+        this.parent = parent;
+        this.audioSink = audioSink;
+        this.activeChannel = undefined;
+        this.channels = createMultiChannelView(this, audioSink);
+    }
+    get left() {
+        return this.channels[0];
+    }
+    get right() {
+        var _a;
+        return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
+    }
+    get value() {
+        return this.audioSink["value"]; // TODO: fix? AudioNodes have no value.
+    }
+    setValue(value) {
+        if (value == constants.TRIGGER) {
+            value = this.value;
+        }
+        this.audioSink["value"] = value;
+    }
+}
+
+class AbstractOutput extends BaseConnectable {
+    constructor(name) {
+        super();
+        this.name = name;
+        this.connections = [];
+        this.callbacks = [];
+    }
+}
+
+class ControlOutput extends AbstractOutput {
+    connect(destination) {
+        let { component, input } = this.getDestinationInfo(destination);
+        // TODO: fix... should be "destination" but won't work for non-connectables like Function.
+        /* const connectable = destination instanceof AbstractInput ? destination : component */
+        this.connections.push(input);
+        return component;
+    }
+    setValue(value, rawObject = false) {
+        if ((value === null || value === void 0 ? void 0 : value.constructor) === Object && rawObject) {
+            value = Object.assign({ _raw: true }, value);
+        }
+        for (let c of this.connections) {
+            c.setValue(value);
+        }
+        for (const callback of this.callbacks) {
+            callback(value);
+        }
+    }
+    onUpdate(callback) {
+        this.callbacks.push(callback);
+    }
+}
+
+var __classPrivateFieldSet$1 = (undefined && undefined.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
+    if (kind === "m") throw new TypeError("Private method is not writable");
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
+    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
+};
+var __classPrivateFieldGet$a = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
+    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+};
+var _BaseEvent_defaultIgnored;
+class BaseEvent extends ToStringAndUUID {
+    constructor() {
+        super(...arguments);
+        this._isLocal = false;
+        _BaseEvent_defaultIgnored.set(this, false);
+    }
+    ignoreDefault() {
+        __classPrivateFieldSet$1(this, _BaseEvent_defaultIgnored, true, "f");
+    }
+    defaultIsIgnored() {
+        return __classPrivateFieldGet$a(this, _BaseEvent_defaultIgnored, "f");
+    }
+}
+_BaseEvent_defaultIgnored = new WeakMap();
+class BypassEvent extends BaseEvent {
+    constructor(shouldBypass) {
+        super();
+        this.shouldBypass = shouldBypass;
+        this._isLocal = true;
+    }
+}
+class MuteEvent extends BaseEvent {
+    constructor(shouldMute) {
+        super();
+        this.shouldMute = shouldMute;
+        this._isLocal = true;
+    }
+}
+var KeyEventType;
+(function (KeyEventType) {
+    KeyEventType["KEY_DOWN"] = "keydown";
+    KeyEventType["KEY_UP"] = "keyup";
+})(KeyEventType || (KeyEventType = {}));
+class KeyEvent extends BaseEvent {
+    constructor(eventType, eventPitch = 64, eventVelocity = 64, key) {
+        super();
+        this.eventType = eventType;
+        this.eventPitch = eventPitch;
+        this.eventVelocity = eventVelocity;
+        this.key = key !== null && key !== void 0 ? key : eventPitch;
+    }
+}
+
+var events = /*#__PURE__*/Object.freeze({
+  __proto__: null,
+  BaseEvent: BaseEvent,
+  BypassEvent: BypassEvent,
+  KeyEvent: KeyEvent,
+  get KeyEventType () { return KeyEventType; },
+  MuteEvent: MuteEvent
+});
 
 class ADSR extends BaseComponent {
     constructor(attackDurationMs, decayDurationMs, sustainAmplitude, releaseDurationMs) {
@@ -3349,7 +3511,6 @@ MidiLearn.Mode = MidiLearnMode;
 
 // TODO: make this stuff stache-configurable.
 const GLOBAL_AUDIO_CONTEXT = new AudioContext();
-const MAIN_OUT = GLOBAL_AUDIO_CONTEXT.destination;
 const defaultConfig = {
     audioContext: GLOBAL_AUDIO_CONTEXT,
     state: { isInitialized: false },
@@ -11355,6 +11516,8 @@ class FunctionComponent extends BaseComponent {
     _createScriptProcessor(numInputs, numChannelsPerInput) {
         const bufferSize = undefined; // 256
         let numInputChannels = (numChannelsPerInput * numInputs) || 1;
+        // TODO: I don't think the handling of channels is correct here because the 
+        // output still has N channels.
         this.channelMerger = this.audioContext.createChannelMerger(numInputChannels);
         let processor = this.audioContext.createScriptProcessor(bufferSize, numInputChannels, numChannelsPerInput);
         this.channelMerger.connect(processor);
@@ -12098,7 +12261,16 @@ class HybridInput extends AbstractInput {
         this.parent = parent;
         this.audioSink = audioSink;
         this.isRequired = isRequired;
+        this.activeChannel = undefined;
         this._value = defaultValue;
+        this.channels = createMultiChannelView(this, audioSink);
+    }
+    get left() {
+        return this.channels[0];
+    }
+    get right() {
+        var _a;
+        return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
     }
     get value() {
         return this._value;
@@ -12122,19 +12294,45 @@ class AudioRateOutput extends AbstractOutput {
         super(name);
         this.name = name;
         this.audioNode = audioNode;
+        this._channels = undefined;
+        this.activeChannel = undefined;
+    }
+    get channels() {
+        var _a;
+        return (_a = this._channels) !== null && _a !== void 0 ? _a : (this._channels = createMultiChannelView(this, this.audioNode));
+    }
+    get left() {
+        return this.channels[0];
+    }
+    get right() {
+        var _a;
+        return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
     }
     connect(destination) {
         let { component, input } = this.getDestinationInfo(destination);
         if (!(input instanceof AudioRateInput || input instanceof HybridInput)) {
             throw new Error(`Can only connect audio-rate outputs to inputs that support audio-rate signals. Given: ${input}. Use ${AudioRateSignalSampler.name} to force a conversion.`);
         }
-        input.audioSink && this.audioNode.connect(input.audioSink);
+        input.audioSink && connectWebAudioChannels(this.audioContext, this.audioNode, input.audioSink, this.activeChannel, input.activeChannel);
         this.connections.push(input);
         component === null || component === void 0 ? void 0 : component.wasConnectedTo(this);
         return component;
     }
     sampleSignal(samplePeriodMs) {
         return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs));
+    }
+    splitChannels(...inputChannelGroups) {
+        if (inputChannelGroups.length > 32) {
+            throw new Error("Can only split into 32 or fewer channels.");
+        }
+        if (inputChannelGroups.length) {
+            return this.connect(new this._.ChannelSplitter(...inputChannelGroups));
+        }
+        else {
+            // This is an optimization that returns the channel views instead of 
+            // split+merged channels.
+            return this.channels;
+        }
     }
 }
 
@@ -12468,6 +12666,7 @@ var internals = /*#__PURE__*/Object.freeze({
   BaseDisplay: BaseDisplay,
   BaseEvent: BaseEvent,
   BypassEvent: BypassEvent,
+  ChannelSplitter: ChannelSplitter,
   ComponentInput: ComponentInput,
   ControlInput: ControlInput,
   ControlOutput: ControlOutput,
@@ -12503,7 +12702,9 @@ var internals = /*#__PURE__*/Object.freeze({
   VisualComponent: VisualComponent,
   Wave: Wave,
   get WaveType () { return WaveType; },
+  connectWebAudioChannels: connectWebAudioChannels,
   constants: constants,
+  createMultiChannelView: createMultiChannelView,
   events: events,
   util: util
 });
@@ -12512,6 +12713,6 @@ var internals = /*#__PURE__*/Object.freeze({
 var public_namespace = Object.assign({ 'SimplePolyphonicSynth': SimplePolyphonicSynth, 'Keyboard': Keyboard, 'ADSR': ADSR, 'TypingKeyboardMIDI': TypingKeyboardMIDI }, internals);
 
 const withConfig = main$1.registerAndCreateFactoryFn(defaultConfig, public_namespace, Object.assign({}, internals));
-var main = Object.assign(Object.assign({}, public_namespace), { internals, audioContext: GLOBAL_AUDIO_CONTEXT, out: MAIN_OUT, run: run, withConfig });
+var main = Object.assign(Object.assign({}, public_namespace), { internals, audioContext: GLOBAL_AUDIO_CONTEXT, out: new AudioRateInput('out', undefined, GLOBAL_AUDIO_CONTEXT.destination), run: run, withConfig });
 
 export { main as default };

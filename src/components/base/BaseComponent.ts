@@ -10,8 +10,9 @@ import { WebAudioConnectable, CanBeConnectedTo } from "../../shared/types.js";
 import { FunctionComponent } from "../FunctionComponent.js";
 import { Component } from "./Component.js";
 import { Connectable } from "../../shared/base/Connectable.js";
+import { AudioSignalStream } from "../../shared/AudioSignalStream.js";
 
-export abstract class BaseComponent extends BaseConnectable implements Component {
+export abstract class BaseComponent extends BaseConnectable implements Component, AudioSignalStream {
   readonly isComponent = true
   private static instanceExists = false
   outputs: { [name: string]: AbstractOutput } = {};
@@ -231,7 +232,15 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     this.inputAdded(other)
     return other
   }
-  sampleSignal(samplePeriodMs?: number) {
+  sampleSignal(samplePeriodMs?: number): Component {
     return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs))
+  }
+  splitChannels(...inputChannelGroups: number[][]): Iterable<AudioRateOutput> {
+    const output = this.getDefaultOutput()
+    if (output instanceof AudioRateOutput) {
+      return output.splitChannels(...inputChannelGroups)
+    } else {
+      throw new Error(`Unclear or invalid 'splitChannels' invocation. No default audio-rate output found for ${this}. Select an audio-rate output and call 'output.splitChannels(...)' instead.`)
+    }
   }
 }

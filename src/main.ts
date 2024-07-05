@@ -13,7 +13,7 @@ export default {
   ...public_namespace,
   internals,
   audioContext: init.GLOBAL_AUDIO_CONTEXT,
-  out: init.MAIN_OUT,
+  out: new internals.AudioRateInput('out', undefined, init.GLOBAL_AUDIO_CONTEXT.destination),
   run: init.run,
   withConfig
 }
