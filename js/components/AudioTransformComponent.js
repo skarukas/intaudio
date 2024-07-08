@@ -33,7 +33,7 @@ function processTime(fn, inputChunk, outputChunk) {
  * @returns The number of channels output by the function.
  */
 function processTimeAndChannels(fn, inputChunk, outputChunk) {
-    const result = fn(...inputChunk);
+    const result = fn(inputChunk);
     for (let c = 0; c < result.length; c++) {
         if (result[c] == undefined) {
             continue; // This signifies that the channel should be empty.
@@ -67,7 +67,7 @@ function processChannels(fn, inputChunk, outputChunk) {
     const numSamples = inputChunk[0].length;
     for (let i = 0; i < numSamples; i++) {
         const inputChannels = getColumn(inputChunk, i);
-        const outputChannels = fn(...inputChannels).map(v => isFinite(v) ? v : 0);
+        const outputChannels = fn(inputChannels).map(v => isFinite(v) ? v : 0);
         writeColumn(outputChunk, i, outputChannels);
         numOutputChannels = outputChannels.length;
     }

@@ -417,7 +417,7 @@ const tests = {
     monitor.addToDom($root)
 
     // Apply to each sample, across channels.
-    const channelTransform = oscillator.transformAudio((left, right) => {
+    const channelTransform = oscillator.transformAudio(([left, right]) => {
       return [left, undefined, right, undefined]
     }, "channels")
     assertEqual(channelTransform.numOutputChannels, 4)
@@ -427,7 +427,7 @@ const tests = {
     assertSilentSignal(channelTransform.output.channels[3])
     
     // Apply across channels and time.
-    const ctTransform = oscillator.transformAudio((left, right, c2, c3) => {
+    const ctTransform = oscillator.transformAudio(([left, right]) => {
       for (let i = 0; i < left.length; i++) {
         left[i] = (left[i] + right[(left.length - i) - 1]) / 2
       }

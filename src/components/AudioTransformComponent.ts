@@ -52,11 +52,11 @@ function processTime(
  * @returns The number of channels output by the function.
  */
 function processTimeAndChannels(
-  fn: (...channels: Float32Array[]) => (Float32Array | number[])[],
+  fn: (channels: Float32Array[]) => (Float32Array | number[])[],
   inputChunk: Float32Array[],
   outputChunk: Float32Array[]
 ): number {
-  const result = fn(...inputChunk)
+  const result = fn(inputChunk)
   for (let c = 0; c < result.length; c++) {
     if (result[c] == undefined) {
       continue  // This signifies that the channel should be empty.
@@ -91,7 +91,7 @@ function writeColumn<T>(arr: ArrayLike<ArrayLike<T>>, col: number, values: T[]) 
  * @returns The number of channels output by the function.
  */
 function processChannels(
-  fn: (...channels: number[]) => number[],
+  fn: (channels: number[]) => number[],
   inputChunk: Float32Array[],
   outputChunk: Float32Array[]
 ): number {
@@ -99,7 +99,7 @@ function processChannels(
   const numSamples = inputChunk[0].length
   for (let i = 0; i < numSamples; i++) {
     const inputChannels = getColumn(inputChunk, i)
-    const outputChannels = fn(...inputChannels).map(v => isFinite(v) ? v : 0)
+    const outputChannels = fn(inputChannels).map(v => isFinite(v) ? v : 0)
     writeColumn(outputChunk, i, outputChannels)
     numOutputChannels = outputChannels.length
   }

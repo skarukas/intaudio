@@ -68,8 +68,8 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
     }
     return this.connect(new this._.ChannelSplitter(...inputChannelGroups))
   }
-  transformAudio(fn: (left: Float32Array, right?: Float32Array, ...channels: Float32Array[]) => (number[] | Float32Array)[], dimension: "all", windowSize?: number): Component;
-  transformAudio(fn: (left: number, right?: number, ...channels: number[]) => number[], dimension: "channels"): Component;
+  transformAudio(fn: (input: [left: Float32Array, right?: Float32Array, ...channels: Float32Array[]]) => (number[] | Float32Array)[], dimension: "all", windowSize?: number): Component;
+  transformAudio(fn: (input: [left: number, right?: number, ...channels: number[]]) => number[], dimension: "channels"): Component;
   transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", windowSize?: number): Component;
   transformAudio(fn: (x: number) => number, dimension?: "none"): Component;
   transformAudio(fn: Function, dimension?: AudioDimension, windowSize?: number): Component {
