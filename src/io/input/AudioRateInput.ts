@@ -2,11 +2,14 @@ import { Component } from "../../components/base/Component.js"
 import { AbstractInput } from "./AbstractInput.js"
 import constants from "../../shared/constants.js"
 import { WebAudioConnectable } from "../../shared/types.js"
-import { MultiChannel, createMultiChannelView } from "../../shared/multichannel.js"
+import { MultiChannel, createMultiChannelView, getNumInputChannels } from "../../shared/multichannel.js"
 
 export class AudioRateInput extends AbstractInput<number> implements MultiChannel<AudioRateInput> {
   readonly channels: this[]
   activeChannel: number = undefined
+  get numInputChannels(): number {
+    return this.activeChannel ? 1 : getNumInputChannels(this.audioSink)
+  }
 
   constructor(
     public name: string,

@@ -1,6 +1,6 @@
 import { AudioRateInput } from "../io/input/AudioRateInput.js";
 import { HybridInput } from "../io/input/HybridInput.js";
-import { numChannels } from "../shared/multichannel.js";
+import { getNumInputChannels } from "../shared/multichannel.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 const PRIVATE_CONSTRUCTOR = Symbol("PRIVATE_CONSTRUCTOR");
 export class ChannelStacker extends BaseComponent {
@@ -36,7 +36,7 @@ export class ChannelStacker extends BaseComponent {
                 throw new Error(`A ChannelStacker can only be created from audio-rate inputs. Given ${destinations[i]}, which is not an audio-rate input nor a component with a default audio-rate input.`);
             }
             inputs.push(input);
-            numChannelsPerInput.push(numChannels(input.audioSink));
+            numChannelsPerInput.push(getNumInputChannels(input.audioSink));
             inputObj[i] = destinations[i];
         }
         const stacker = new this._.ChannelStacker(numChannelsPerInput, PRIVATE_CONSTRUCTOR);

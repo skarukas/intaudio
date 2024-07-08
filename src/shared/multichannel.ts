@@ -13,9 +13,20 @@ export interface MultiChannel<T extends (AbstractInput | AbstractOutput) = any> 
   activeChannel: number
 }
 
-export function numChannels(node: WebAudioConnectable) {
+export function getNumInputChannels(node: WebAudioConnectable) {
   if (node instanceof ChannelMergerNode) {
     return node.numberOfInputs
+  } else if (node instanceof ScriptProcessorNode) {
+    return node['__numInputChannels'] ?? node.channelCount
+  }
+  return node instanceof AudioNode ? node.channelCount : 1
+}
+
+export function getNumOutputChannels(node: WebAudioConnectable) {
+  if (node instanceof ChannelSplitterNode) {
+    return node.numberOfOutputs
+  } else if (node instanceof ScriptProcessorNode) {
+    return node['__numOutputChannels'] ?? node.channelCount
   }
   return node instanceof AudioNode ? node.channelCount : 1
 }
@@ -28,7 +39,8 @@ export function createMultiChannelView<T extends MultiChannel>(
   if (!(node instanceof AudioNode)) {
     return channels
   }
-  for (let c = 0; c < numChannels(node); c++) {
+  const numChannels = multiChannelIO instanceof AbstractInput ? getNumInputChannels(node) : getNumOutputChannels(node)
+  for (let c = 0; c < numChannels; c++) {
     channels.push(createChannelView(multiChannelIO, c))
   }
   return channels

@@ -5,9 +5,43 @@ if (!ia) {
 }
 console.log(ia)
 
+function assertEqual(actual, expected, msg=undefined) {
+  assertTrue(actual == expected, msg ?? `${actual} != ${expected}`)
+}
+
 const assertTrue = (pred, msg) => {
   console.assert(pred, msg)
   console.log("Passed assertion")
+}
+
+const ASSERT_SAMPLING_PERIOD_MS = 200
+
+function assertSilentSignal(output) {
+  const trace = Error().stack
+  output.sampleSignal(ASSERT_SAMPLING_PERIOD_MS).connect(v => {
+    if (v) {
+      console.error(output)
+      console.error(`Expected silent signal, found value ${v}. ` + trace)
+      ia.disconnect()
+    }
+  })
+}
+
+function assertNonzeroSignal(output, maxGapMs=4000) {
+  let zeroCount = 0
+  const trace = Error().stack
+  output.sampleSignal(ASSERT_SAMPLING_PERIOD_MS).connect(v => {
+    if (v) {
+      zeroCount = 0
+    } else {
+      zeroCount++
+      if (zeroCount > maxGapMs / ASSERT_SAMPLING_PERIOD_MS) {
+        console.error(output)
+        console.error(`Expected nonzero signal, found silence for more than ${maxGapMs}ms. ` + trace)
+        ia.disconnect()
+      }
+    }
+  })
 }
 
 function assertThrows(fn, substr) {
@@ -361,10 +395,9 @@ const tests = {
   },
   channelStackerAndSplitter($root) {
     let oscillator = new ia.AudioComponent(createOscillator(440))
-    let oscillator2 = new ia.AudioComponent(createOscillator(441))
+    let oscillator2 = new ia.AudioComponent(createOscillator(445))
     const monitor = new ia.ScrollingAudioMonitor()
     monitor.addToDom($root)
-    console.log(new ia.ChannelStacker())
 
     // Weird quirk, each oscillator is actually stereo, so we need to discard 
     // channel 1 and 3 after stacking.
@@ -375,17 +408,66 @@ const tests = {
     // clarifies the intended result?
     const [left, _1, right] = stacked.splitChannels()
     console.log([left, right])
-    left.connect(ia.out)
-    right.connect(ia.out)
+    left.connect(ia.out.left)
+    right.connect(ia.out.right)
+  },
+  mapOverDimensions($root) {
+    let oscillator = new ia.AudioComponent(createOscillator(440))
+    const monitor = new ia.ScrollingAudioMonitor()
+    monitor.addToDom($root)
+
+    // Apply to each sample, across channels.
+    const channelTransform = oscillator.transformAudio((left, right) => {
+      return [left, undefined, right, undefined]
+    }, "channels")
+    assertEqual(channelTransform.numOutputChannels, 4)
+    assertNonzeroSignal(channelTransform.output.channels[0])
+    assertSilentSignal(channelTransform.output.channels[1])
+    assertNonzeroSignal(channelTransform.output.channels[2])
+    assertSilentSignal(channelTransform.output.channels[3])
+    
+    // Apply across channels and time.
+    const ctTransform = oscillator.transformAudio((left, right, c2, c3) => {
+      for (let i = 0; i < left.length; i++) {
+        left[i] = (left[i] + right[(left.length - i) - 1]) / 2
+      }
+      return [left]
+    }, "all")
+
+    assertEqual(ctTransform.numOutputChannels, 1)
+    assertNonzeroSignal(ctTransform.output.left)
+
+    // Apply to each sample in each channel.
+    const sampleTransform = oscillator.transformAudio(x => {
+      return x * 0.5
+    }, "none")
+
+    assertEqual(sampleTransform.numOutputChannels, 2)
+    assertNonzeroSignal(sampleTransform.output.channels[0])
+    assertNonzeroSignal(sampleTransform.output.channels[1])
+
+    // Reduce over the time dimension.
+    const timeTransform = oscillator.transformAudio(arr => {
+      for (let i = 0; i < arr.length-1; i++) {
+        arr[i] = (arr[i] + arr[i+1]) / 2
+      }
+      return arr
+    }, "time")
+    assertNonzeroSignal(timeTransform.output.channels[0])
+    assertNonzeroSignal(timeTransform.output.channels[1])
+
+    assertEqual(timeTransform.numOutputChannels, 2)
   }
   /* periodicWaveTest() { 
     const w = new Wave(Wave.Type.SINE)
   } */
 }
+// All, time -> 0
+// channel -> NaN
 
 ia.run(() => {
   //return tests.midiInput()
-  for (let test in { channelStackerAndSplitter: tests.channelStackerAndSplitter }) {
+  for (let test in { mapOverDimensions: tests.mapOverDimensions }) {
     const $testRoot = $(document.createElement('div'))
     tests[test]($testRoot)
     ia.util.afterRender(() => {
@@ -395,6 +477,12 @@ ia.run(() => {
     })
   }
 })
+
+// Split then merge channels.
+/* oscillator.transformAudio((left, right, c2, c3) => {
+  left = left.connect(x => x * 0.5)
+  return [left, right, c2, c3]
+}, ["channels"]) */
 
 //keyboard.setMuted(true)
 

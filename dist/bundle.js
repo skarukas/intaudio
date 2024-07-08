@@ -355,11 +355,13 @@ var constants = Object.freeze({
     BANG_PRESSED_CLASS: "bang-pressed",
     MIDI_LEARN_LISTENING_CLASS: "midi-learn-listening",
     MIDI_LEARN_ASSIGNED_CLASS: "midi-learn-assigned",
+    EVENT_AUDIOPROCESS: "audioprocess",
     EVENT_MOUSEDOWN: "mousedown",
     EVENT_MOUSEUP: "mouseup",
     TRIGGER: Symbol("trigger"),
     MIN_PLAYBACK_RATE: 0.0625,
     MAX_PLAYBACK_RATE: 16.0,
+    MAX_CHANNELS: 32,
     // Special placeholder for when an input both has no defaultValue and it has 
     // never been set.
     // TODO: need special value?
@@ -378,9 +380,23 @@ class AbstractInput extends ToStringAndUUID {
     }
 }
 
-function numChannels(node) {
+function getNumInputChannels(node) {
+    var _a;
     if (node instanceof ChannelMergerNode) {
         return node.numberOfInputs;
+    }
+    else if (node instanceof ScriptProcessorNode) {
+        return (_a = node['__numInputChannels']) !== null && _a !== void 0 ? _a : node.channelCount;
+    }
+    return node instanceof AudioNode ? node.channelCount : 1;
+}
+function getNumOutputChannels(node) {
+    var _a;
+    if (node instanceof ChannelSplitterNode) {
+        return node.numberOfOutputs;
+    }
+    else if (node instanceof ScriptProcessorNode) {
+        return (_a = node['__numOutputChannels']) !== null && _a !== void 0 ? _a : node.channelCount;
     }
     return node instanceof AudioNode ? node.channelCount : 1;
 }
@@ -389,7 +405,8 @@ function createMultiChannelView(multiChannelIO, node) {
     if (!(node instanceof AudioNode)) {
         return channels;
     }
-    for (let c = 0; c < numChannels(node); c++) {
+    const numChannels = multiChannelIO instanceof AbstractInput ? getNumInputChannels(node) : getNumOutputChannels(node);
+    for (let c = 0; c < numChannels; c++) {
         channels.push(createChannelView(multiChannelIO, c));
     }
     return channels;
@@ -484,6 +501,9 @@ export function connectIO(
 } */
 
 class AudioRateInput extends AbstractInput {
+    get numInputChannels() {
+        return this.activeChannel ? 1 : getNumInputChannels(this.audioSink);
+    }
     constructor(name, parent, audioSink) {
         super(name, parent, false);
         this.name = name;
@@ -510,6 +530,12 @@ class AudioRateInput extends AbstractInput {
     }
 }
 
+class Disconnect extends Error {
+}
+/**
+ * A special Error object that, when thrown within a FunctionComponent, will cause the component to disconnect, but not log the error.
+ */
+const disconnect = () => { throw new Disconnect("DISCONNECT"); };
 var WaveType;
 (function (WaveType) {
     WaveType["SINE"] = "sine";
@@ -780,6 +806,12 @@ class AudioRateOutput extends AbstractOutput {
         var _a;
         return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
     }
+    get numInputChannels() {
+        return this.activeChannel ? 1 : getNumInputChannels(this.audioNode);
+    }
+    get numOutputChannels() {
+        return this.activeChannel ? 1 : getNumOutputChannels(this.audioNode);
+    }
     connect(destination) {
         let { component, input } = this.getDestinationInfo(destination);
         if (!(input instanceof AudioRateInput || input instanceof HybridInput)) {
@@ -799,7 +831,7 @@ class AudioRateOutput extends AbstractOutput {
         }
         if (!inputChannelGroups.length) {
             // Split each channel separately: [0], [1], [2], etc.
-            for (let i = 0; i < numChannels(this.audioNode); i++) {
+            for (let i = 0; i < this.numOutputChannels; i++) {
                 inputChannelGroups.push([i]);
             }
             /* // Seems to be broken? Consider removing "channel views" as they do not
@@ -809,6 +841,10 @@ class AudioRateOutput extends AbstractOutput {
             return this.channels */
         }
         return this.connect(new this._.ChannelSplitter(...inputChannelGroups));
+    }
+    transformAudio(fn, dimension, windowSize) {
+        const transformer = new this._.AudioTransformComponent(fn, dimension, windowSize, this.numInputChannels);
+        return this.connect(transformer);
     }
 }
 
@@ -1006,17 +1042,30 @@ class BaseComponent extends BaseConnectable {
         this.inputAdded(other);
         return other;
     }
-    sampleSignal(samplePeriodMs) {
-        return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs));
-    }
-    splitChannels(...inputChannelGroups) {
+    getAudioOutputProperty(propName) {
         const output = this.getDefaultOutput();
         if (output instanceof AudioRateOutput) {
-            return output.splitChannels(...inputChannelGroups);
+            const prop = output[propName];
+            return prop instanceof Function ? prop.bind(output) : prop;
         }
         else {
-            throw new Error(`Unclear or invalid 'splitChannels' invocation. No default audio-rate output found for ${this}. Select an audio-rate output and call 'output.splitChannels(...)' instead.`);
+            throw new Error(`Cannot get property '${propName}'. No default audio-rate output found for ${this}. Select an audio-rate output and use 'output.${propName}' instead.`);
         }
+    }
+    get numInputChannels() {
+        return this.getDefaultInput().numInputChannels;
+    }
+    get numOutputChannels() {
+        return this.getAudioOutputProperty('numOutputChannels');
+    }
+    sampleSignal(samplePeriodMs) {
+        return this.getAudioOutputProperty('sampleSignal')(samplePeriodMs);
+    }
+    splitChannels(...inputChannelGroups) {
+        return this.getAudioOutputProperty('splitChannels')(...inputChannelGroups);
+    }
+    transformAudio(fn, dimension, windowSize) {
+        return this.getAudioOutputProperty('transformAudio')(fn, dimension, windowSize);
     }
 }
 BaseComponent.instanceExists = false;
@@ -1084,6 +1133,144 @@ class AudioComponent extends BaseComponent {
     }
 }
 
+function processSamples(fn, inputChunk, outputChunk) {
+    for (let c = 0; c < inputChunk.length; c++) {
+        for (let i = 0; i < inputChunk[c].length; i++) {
+            outputChunk[c][i] = fn(inputChunk[c][i]);
+        }
+    }
+    return undefined;
+}
+function processTime(fn, inputChunk, outputChunk) {
+    var _a;
+    for (let c = 0; c < inputChunk.length; c++) {
+        // Assume mutation in-place if the function returns undefined.
+        const output = (_a = fn(inputChunk[c])) !== null && _a !== void 0 ? _a : inputChunk[c];
+        outputChunk[c].set(output);
+    }
+    return undefined;
+}
+/**
+ * Apply a fuction across the audio chunk (channels and time).
+ *
+ * @param fn
+ * @param inputChunk
+ * @param outputChunk
+ * @returns The number of channels output by the function.
+ */
+function processTimeAndChannels(fn, inputChunk, outputChunk) {
+    const result = fn(...inputChunk);
+    for (let c = 0; c < result.length; c++) {
+        if (result[c] == undefined) {
+            continue; // This signifies that the channel should be empty.
+        }
+        outputChunk[c].set(result[c]);
+    }
+    return result.length;
+}
+function getColumn(arr, col) {
+    const result = [];
+    for (let i = 0; i < arr.length; i++) {
+        result.push(arr[i][col]);
+    }
+    return result;
+}
+function writeColumn(arr, col, values) {
+    for (let i = 0; i < arr.length; i++) {
+        arr[i][col] = values[i];
+    }
+}
+/**
+ * Apply a fuction to each sample, across channels.
+ *
+ * @param fn
+ * @param inputChunk
+ * @param outputChunk
+ * @returns The number of channels output by the function.
+ */
+function processChannels(fn, inputChunk, outputChunk) {
+    let numOutputChannels = undefined;
+    const numSamples = inputChunk[0].length;
+    for (let i = 0; i < numSamples; i++) {
+        const inputChannels = getColumn(inputChunk, i);
+        const outputChannels = fn(...inputChannels).map(v => isFinite(v) ? v : 0);
+        writeColumn(outputChunk, i, outputChannels);
+        numOutputChannels = outputChannels.length;
+    }
+    return numOutputChannels;
+}
+function getProcessingFunction(dimension) {
+    switch (dimension) {
+        case "all":
+            return processTimeAndChannels;
+        case "channels":
+            return processChannels;
+        case "time":
+            return processTime;
+        case "none":
+            return processSamples;
+        default:
+            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
+    }
+}
+class AudioTransformComponent extends BaseComponent {
+    constructor(fn, dimension, windowSize, numInputChannels = 2) {
+        super();
+        this.fn = fn;
+        this.applyToChunk = getProcessingFunction(dimension);
+        const numOutputChannels = this.inferNumOutputChannels(numInputChannels, windowSize);
+        this.processor = this.audioContext.createScriptProcessor(windowSize, numInputChannels, numOutputChannels);
+        // Store true values because the constructor settings are not persisted on 
+        // the WebAudio object.
+        this.processor['__numInputChannels'] = numInputChannels;
+        this.processor['__numOutputChannels'] = numOutputChannels;
+        this.input = this.defineAudioInput('input', this.processor);
+        this.output = this.defineAudioOutput('output', this.processor);
+        this.defineAudioProcessHandler(this.processor);
+    }
+    /**
+     * Guess the number of output channels by applying the function to a fake input.
+     */
+    inferNumOutputChannels(numInputChannels, windowSize) {
+        const numSamples = windowSize || 256;
+        function createChunk(numChannels) {
+            const shell = Array(numChannels).fill(0);
+            return shell.map(() => new Float32Array(numSamples));
+        }
+        const fillerIn = createChunk(numInputChannels);
+        // The output may have more channels than the input, so be flexible when 
+        // testing it so as to not break the implementation.
+        const fillerOut = createChunk(constants.MAX_CHANNELS);
+        // The returned value will be the number of new output channels, if it's 
+        // different from the provided buffer size, otherwise undefined.
+        const numOutputChannels = this.applyToChunk(this.fn, fillerIn, fillerOut);
+        return numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : numInputChannels;
+    }
+    defineAudioProcessHandler(processor) {
+        const handler = (event) => {
+            try {
+                this.processAudioFrame(event.inputBuffer, event.outputBuffer);
+            }
+            catch (e) {
+                processor.removeEventListener(constants.EVENT_AUDIOPROCESS, handler);
+                e instanceof Disconnect || console.error(e);
+            }
+        };
+        processor.addEventListener(constants.EVENT_AUDIOPROCESS, handler);
+    }
+    processAudioFrame(inputBuffer, outputBuffer) {
+        const inputChunk = [];
+        const outputChunk = [];
+        for (let c = 0; c < inputBuffer.numberOfChannels; c++) {
+            inputChunk.push(inputBuffer.getChannelData(c));
+        }
+        for (let c = 0; c < outputBuffer.numberOfChannels; c++) {
+            outputChunk.push(outputBuffer.getChannelData(c));
+        }
+        this.applyToChunk(this.fn, inputChunk, outputChunk);
+    }
+}
+
 var __classPrivateFieldSet = (undefined && undefined.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
     if (kind === "m") throw new TypeError("Private method is not writable");
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
@@ -1096,6 +1283,7 @@ var __classPrivateFieldGet$9 = (undefined && undefined.__classPrivateFieldGet) |
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
 };
 var _AudioRateSignalSampler_instances, _AudioRateSignalSampler_interval, _AudioRateSignalSampler_setInterval;
+// TODO: make this multi-channel.
 class AudioRateSignalSampler extends BaseComponent {
     // Utility for converting an audio-rate signal into a control signal.
     constructor(samplePeriodMs) {
@@ -1142,7 +1330,9 @@ _AudioRateSignalSampler_interval = new WeakMap(), _AudioRateSignalSampler_instan
         }
         catch (e) {
             this.stop();
-            throw e;
+            if (!(e instanceof Disconnect)) {
+                throw e;
+            }
         }
     }, period), "f");
 };
@@ -3846,7 +4036,7 @@ class ChannelStacker extends BaseComponent {
             if (!(input instanceof HybridInput || input instanceof AudioRateInput)) {
                 throw new Error(`A ChannelStacker can only be created from audio-rate inputs. Given ${destinations[i]}, which is not an audio-rate input nor a component with a default audio-rate input.`);
             }
-            numChannelsPerInput.push(numChannels(input.audioSink));
+            numChannelsPerInput.push(getNumInputChannels(input.audioSink));
             inputObj[i] = destinations[i];
         }
         const stacker = new this._.ChannelStacker(numChannelsPerInput, PRIVATE_CONSTRUCTOR);
@@ -11686,7 +11876,7 @@ class FunctionComponent extends BaseComponent {
             }
             catch (e) {
                 processor.removeEventListener('audioprocess', handler);
-                throw e;
+                e instanceof Disconnect || console.error(e);
             }
         };
         processor.addEventListener('audioprocess', handler);
@@ -12740,6 +12930,7 @@ var internals = /*#__PURE__*/Object.freeze({
   AudioRateInput: AudioRateInput,
   AudioRateOutput: AudioRateOutput,
   AudioRateSignalSampler: AudioRateSignalSampler,
+  AudioTransformComponent: AudioTransformComponent,
   Bang: Bang,
   BangDisplay: BangDisplay,
   BaseComponent: BaseComponent,
@@ -12753,6 +12944,7 @@ var internals = /*#__PURE__*/Object.freeze({
   ControlInput: ControlInput,
   ControlOutput: ControlOutput,
   get DefaultDeviceBehavior () { return DefaultDeviceBehavior; },
+  Disconnect: Disconnect,
   FunctionComponent: FunctionComponent,
   HybridInput: HybridInput,
   HybridOutput: HybridOutput,
@@ -12787,8 +12979,10 @@ var internals = /*#__PURE__*/Object.freeze({
   connectWebAudioChannels: connectWebAudioChannels,
   constants: constants,
   createMultiChannelView: createMultiChannelView,
+  disconnect: disconnect,
   events: events,
-  numChannels: numChannels,
+  getNumInputChannels: getNumInputChannels,
+  getNumOutputChannels: getNumOutputChannels,
   stackChannels: stackChannels,
   util: util
 });

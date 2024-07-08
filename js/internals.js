@@ -11,6 +11,7 @@ export * as events from './shared/events.js';
 export * as util from './shared/util.js';
 export * from './components/ADSR.js';
 export * from './components/AudioComponent.js';
+export * from './components/AudioTransformComponent.js';
 export * from './components/AudioRateSignalSampler.js';
 export * from './components/Bang.js';
 export * from './components/base/BaseComponent.js';

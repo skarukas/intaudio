@@ -1,6 +1,7 @@
+import { AudioDimension } from "../../components/AudioTransformComponent.js"
 import { Component } from "../../components/base/Component.js"
 import { AudioSignalStream } from "../../shared/AudioSignalStream.js"
-import { MultiChannel, connectWebAudioChannels, createMultiChannelView, numChannels } from "../../shared/multichannel.js"
+import { MultiChannel, connectWebAudioChannels, createMultiChannelView, getNumInputChannels, getNumOutputChannels } from "../../shared/multichannel.js"
 import { CanBeConnectedTo } from "../../shared/types.js"
 import { AudioRateInput } from "../input/AudioRateInput.js"
 import { HybridInput } from "../input/HybridInput.js"
@@ -22,6 +23,12 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
   }
   get right(): AudioRateOutput {
     return this.channels[1] ?? this.left
+  }
+  get numInputChannels(): number {
+    return this.activeChannel ? 1 : getNumInputChannels(this.audioNode)
+  }
+  get numOutputChannels(): number {
+    return this.activeChannel ? 1 : getNumOutputChannels(this.audioNode)
   }
   connect<T extends Component>(destination: T): T;
   connect<T extends CanBeConnectedTo>(destination: T): Component;
@@ -50,7 +57,7 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
     }
     if (!inputChannelGroups.length) {
       // Split each channel separately: [0], [1], [2], etc.
-      for (let i = 0; i < numChannels(this.audioNode); i++) {
+      for (let i = 0; i < this.numOutputChannels; i++) {
         inputChannelGroups.push([i])
       }
       /* // Seems to be broken? Consider removing "channel views" as they do not 
@@ -60,5 +67,13 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
       return this.channels */
     }
     return this.connect(new this._.ChannelSplitter(...inputChannelGroups))
+  }
+  transformAudio(fn: (left: Float32Array, right?: Float32Array, ...channels: Float32Array[]) => (number[] | Float32Array)[], dimension: "all", windowSize?: number): Component;
+  transformAudio(fn: (left: number, right?: number, ...channels: number[]) => number[], dimension: "channels"): Component;
+  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", windowSize?: number): Component;
+  transformAudio(fn: (x: number) => number, dimension?: "none"): Component;
+  transformAudio(fn: Function, dimension?: AudioDimension, windowSize?: number): Component {
+    const transformer = new this._.AudioTransformComponent(fn, dimension, windowSize, this.numInputChannels)
+    return this.connect(transformer)
   }
 }

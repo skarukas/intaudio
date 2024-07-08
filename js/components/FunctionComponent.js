@@ -8,6 +8,7 @@ import { BaseComponent } from "./base/BaseComponent.js";
 import constants from "../shared/constants.js";
 import { createConstantSource } from "../shared/util.js";
 import describeFunction from 'function-descriptor';
+import { Disconnect } from "../shared/types.js";
 export class FunctionComponent extends BaseComponent {
     constructor(fn) {
         super();
@@ -88,7 +89,7 @@ export class FunctionComponent extends BaseComponent {
             }
             catch (e) {
                 processor.removeEventListener('audioprocess', handler);
-                throw e;
+                e instanceof Disconnect || console.error(e);
             }
         };
         processor.addEventListener('audioprocess', handler);

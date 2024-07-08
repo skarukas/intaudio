@@ -25,7 +25,7 @@ export abstract class BaseComponent extends BaseConnectable implements Component
   isBypassed: ControlInput<boolean>
   isMuted: ControlInput<boolean>
   triggerInput: ControlInput<typeof constants.TRIGGER>
-  
+
   private _defaultInput: AbstractInput
   private _defaultOutput: AbstractOutput
   private _reservedInputs: Array<AbstractInput>
@@ -214,7 +214,7 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     output.connect(input)
     return component
   }
-  withInputs(argDict: { [name: string | number]: Connectable | unknown}): this {
+  withInputs(argDict: { [name: string | number]: Connectable | unknown }): this {
     for (const name in argDict) {
       const thisInput = this.inputs[name] ?? this.inputs["$" + name]
       if (!thisInput) {
@@ -236,15 +236,32 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     this.inputAdded(other)
     return other
   }
-  sampleSignal(samplePeriodMs?: number): Component {
-    return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs))
-  }
-  splitChannels(...inputChannelGroups: number[][]): Iterable<AudioRateOutput> {
+  protected getAudioOutputProperty(propName: string) {
     const output = this.getDefaultOutput()
     if (output instanceof AudioRateOutput) {
-      return output.splitChannels(...inputChannelGroups)
+      const prop = output[propName]
+      return prop instanceof Function ? prop.bind(output) : prop
     } else {
-      throw new Error(`Unclear or invalid 'splitChannels' invocation. No default audio-rate output found for ${this}. Select an audio-rate output and call 'output.splitChannels(...)' instead.`)
+      throw new Error(`Cannot get property '${propName}'. No default audio-rate output found for ${this}. Select an audio-rate output and use 'output.${propName}' instead.`)
     }
+  }
+  get numInputChannels() {
+    return this.getDefaultInput().numInputChannels
+  }
+  get numOutputChannels() {
+    return this.getAudioOutputProperty('numOutputChannels')
+  }
+  sampleSignal(samplePeriodMs?: number): Component {
+    return this.getAudioOutputProperty('sampleSignal')(samplePeriodMs)
+  }
+  splitChannels(...inputChannelGroups: number[][]): Iterable<AudioRateOutput> {
+    return this.getAudioOutputProperty('splitChannels')(...inputChannelGroups)
+  }
+  transformAudio(fn: (left: Float32Array, right?: Float32Array, ...channels: Float32Array[]) => (number[] | Float32Array)[], dimension: "all", windowSize?: number): Component;
+  transformAudio(fn: (left: number, right?: number, ...channels: number[]) => number[], dimension: "channels"): Component;
+  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", windowSize?: number): Component;
+  transformAudio(fn: (x: number) => number, dimension?: "none"): Component;
+  transformAudio(fn: unknown, dimension?: unknown, windowSize?: number): Component {
+    return this.getAudioOutputProperty('transformAudio')(fn, dimension, windowSize)
   }
 }

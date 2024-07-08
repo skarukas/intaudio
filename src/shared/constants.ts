@@ -12,11 +12,13 @@ export default Object.freeze({
   BANG_PRESSED_CLASS: "bang-pressed",
   MIDI_LEARN_LISTENING_CLASS: "midi-learn-listening",
   MIDI_LEARN_ASSIGNED_CLASS: "midi-learn-assigned",
+  EVENT_AUDIOPROCESS: "audioprocess",
   EVENT_MOUSEDOWN: "mousedown",
   EVENT_MOUSEUP: "mouseup",
   TRIGGER: Symbol("trigger"),
   MIN_PLAYBACK_RATE: 0.0625,
   MAX_PLAYBACK_RATE: 16.0,
+  MAX_CHANNELS: 32,
   // Special placeholder for when an input both has no defaultValue and it has 
   // never been set.
   // TODO: need special value?

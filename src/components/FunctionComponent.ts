@@ -5,7 +5,7 @@ import { BaseComponent } from "./base/BaseComponent.js"
 import constants from "../shared/constants.js"
 import { createConstantSource } from "../shared/util.js"
 import describeFunction from 'function-descriptor'
-import { AnyFn } from "../shared/types.js"
+import { AnyFn, Disconnect } from "../shared/types.js"
 import { AbstractInput } from "../io/input/AbstractInput.js"
 
 export class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any, T5 = any, R = any> extends BaseComponent {
@@ -110,7 +110,7 @@ export class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any,
         this.#parallelApplyAcrossChannels(inputChannels, outputChannels)
       } catch (e) {
         processor.removeEventListener('audioprocess', handler)
-        throw e
+        e instanceof Disconnect || console.error(e)
       }
     }
     processor.addEventListener('audioprocess', handler)

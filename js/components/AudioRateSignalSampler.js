@@ -10,7 +10,9 @@ var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
 };
 var _AudioRateSignalSampler_instances, _AudioRateSignalSampler_interval, _AudioRateSignalSampler_setInterval;
+import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
+// TODO: make this multi-channel.
 export class AudioRateSignalSampler extends BaseComponent {
     // Utility for converting an audio-rate signal into a control signal.
     constructor(samplePeriodMs) {
@@ -57,7 +59,9 @@ _AudioRateSignalSampler_interval = new WeakMap(), _AudioRateSignalSampler_instan
         }
         catch (e) {
             this.stop();
-            throw e;
+            if (!(e instanceof Disconnect)) {
+                throw e;
+            }
         }
     }, period), "f");
 };

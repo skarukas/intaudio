@@ -1,6 +1,13 @@
 import { BaseComponent } from "../components/base/BaseComponent.js"
 import { AbstractInput } from "../io/input/AbstractInput.js"
 
+export class Disconnect extends Error {}
+
+/**
+ * A special Error object that, when thrown within a FunctionComponent, will cause the component to disconnect, but not log the error.
+ */
+export const disconnect = () => { throw new Disconnect("DISCONNECT") }
+
 export type CanBeConnectedTo = (
   BaseComponent | WebAudioConnectable | AudioNode | Function | AbstractInput
 )

@@ -1,7 +1,10 @@
 import { AbstractInput } from "./AbstractInput.js";
 import constants from "../../shared/constants.js";
-import { createMultiChannelView } from "../../shared/multichannel.js";
+import { createMultiChannelView, getNumInputChannels } from "../../shared/multichannel.js";
 export class AudioRateInput extends AbstractInput {
+    get numInputChannels() {
+        return this.activeChannel ? 1 : getNumInputChannels(this.audioSink);
+    }
     constructor(name, parent, audioSink) {
         super(name, parent, false);
         this.name = name;

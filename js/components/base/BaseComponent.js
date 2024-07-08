@@ -195,17 +195,30 @@ export class BaseComponent extends BaseConnectable {
         this.inputAdded(other);
         return other;
     }
-    sampleSignal(samplePeriodMs) {
-        return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs));
-    }
-    splitChannels(...inputChannelGroups) {
+    getAudioOutputProperty(propName) {
         const output = this.getDefaultOutput();
         if (output instanceof AudioRateOutput) {
-            return output.splitChannels(...inputChannelGroups);
+            const prop = output[propName];
+            return prop instanceof Function ? prop.bind(output) : prop;
         }
         else {
-            throw new Error(`Unclear or invalid 'splitChannels' invocation. No default audio-rate output found for ${this}. Select an audio-rate output and call 'output.splitChannels(...)' instead.`);
+            throw new Error(`Cannot get property '${propName}'. No default audio-rate output found for ${this}. Select an audio-rate output and use 'output.${propName}' instead.`);
         }
+    }
+    get numInputChannels() {
+        return this.getDefaultInput().numInputChannels;
+    }
+    get numOutputChannels() {
+        return this.getAudioOutputProperty('numOutputChannels');
+    }
+    sampleSignal(samplePeriodMs) {
+        return this.getAudioOutputProperty('sampleSignal')(samplePeriodMs);
+    }
+    splitChannels(...inputChannelGroups) {
+        return this.getAudioOutputProperty('splitChannels')(...inputChannelGroups);
+    }
+    transformAudio(fn, dimension, windowSize) {
+        return this.getAudioOutputProperty('transformAudio')(fn, dimension, windowSize);
     }
 }
 BaseComponent.instanceExists = false;

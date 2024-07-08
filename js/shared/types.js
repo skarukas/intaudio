@@ -1,3 +1,9 @@
+export class Disconnect extends Error {
+}
+/**
+ * A special Error object that, when thrown within a FunctionComponent, will cause the component to disconnect, but not log the error.
+ */
+export const disconnect = () => { throw new Disconnect("DISCONNECT"); };
 export var WaveType;
 (function (WaveType) {
     WaveType["SINE"] = "sine";

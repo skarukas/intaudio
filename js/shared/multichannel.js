@@ -1,6 +1,21 @@
-export function numChannels(node) {
+import { AbstractInput } from "../io/input/AbstractInput.js";
+export function getNumInputChannels(node) {
+    var _a;
     if (node instanceof ChannelMergerNode) {
         return node.numberOfInputs;
+    }
+    else if (node instanceof ScriptProcessorNode) {
+        return (_a = node['__numInputChannels']) !== null && _a !== void 0 ? _a : node.channelCount;
+    }
+    return node instanceof AudioNode ? node.channelCount : 1;
+}
+export function getNumOutputChannels(node) {
+    var _a;
+    if (node instanceof ChannelSplitterNode) {
+        return node.numberOfOutputs;
+    }
+    else if (node instanceof ScriptProcessorNode) {
+        return (_a = node['__numOutputChannels']) !== null && _a !== void 0 ? _a : node.channelCount;
     }
     return node instanceof AudioNode ? node.channelCount : 1;
 }
@@ -9,7 +24,8 @@ export function createMultiChannelView(multiChannelIO, node) {
     if (!(node instanceof AudioNode)) {
         return channels;
     }
-    for (let c = 0; c < numChannels(node); c++) {
+    const numChannels = multiChannelIO instanceof AbstractInput ? getNumInputChannels(node) : getNumOutputChannels(node);
+    for (let c = 0; c < numChannels; c++) {
         channels.push(createChannelView(multiChannelIO, c));
     }
     return channels;

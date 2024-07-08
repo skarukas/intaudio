@@ -1,8 +1,10 @@
 import { AudioRateInput } from "../io/input/AudioRateInput.js"
 import { ControlInput } from "../io/input/ControlInput.js"
 import { ControlOutput } from "../io/output/ControlOutput.js"
+import { Disconnect } from "../shared/types.js"
 import { BaseComponent } from "./base/BaseComponent.js"
 
+// TODO: make this multi-channel.
 export class AudioRateSignalSampler extends BaseComponent {
   #interval: number
   audioInput: AudioRateInput
@@ -37,7 +39,9 @@ export class AudioRateSignalSampler extends BaseComponent {
         this.controlOutput.setValue(signal)
       } catch (e) {
         this.stop()
-        throw e
+        if (!(e instanceof Disconnect)) {
+          throw e
+        }
       }
     }, period)
   }
