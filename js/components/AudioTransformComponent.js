@@ -1,4 +1,5 @@
 import constants from "../shared/constants.js";
+import { toMultiChannelArray } from "../shared/multichannel.js";
 import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 function enumValues(Enum) {
@@ -33,7 +34,8 @@ function processTime(fn, inputChunk, outputChunk) {
  * @returns The number of channels output by the function.
  */
 function processTimeAndChannels(fn, inputChunk, outputChunk) {
-    const result = fn(inputChunk);
+    const wrapper = toMultiChannelArray(inputChunk);
+    const result = fn(wrapper);
     for (let c = 0; c < result.length; c++) {
         if (result[c] == undefined) {
             continue; // This signifies that the channel should be empty.
@@ -67,7 +69,8 @@ function processChannels(fn, inputChunk, outputChunk) {
     const numSamples = inputChunk[0].length;
     for (let i = 0; i < numSamples; i++) {
         const inputChannels = getColumn(inputChunk, i);
-        const outputChannels = fn(inputChannels).map(v => isFinite(v) ? v : 0);
+        const wrapper = toMultiChannelArray(inputChannels);
+        const outputChannels = fn(wrapper).map(v => isFinite(v) ? v : 0);
         writeColumn(outputChunk, i, outputChannels);
         numOutputChannels = outputChannels.length;
     }

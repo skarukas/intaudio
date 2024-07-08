@@ -81,6 +81,29 @@ export function connectWebAudioChannels(audioContext, source, destination, fromC
     }
     return simpleConnect(source, destination, fromChannel, toChannel);
 }
+class OldMultiChannelView extends Array {
+    get left() {
+        return this[0];
+    }
+    get right() {
+        return this[1];
+    }
+}
+export function toMultiChannelArray(array) {
+    Object.defineProperties(array, {
+        left: {
+            get: function () {
+                return this[0];
+            }
+        },
+        right: {
+            get: function () {
+                return this[1];
+            }
+        }
+    });
+    return array;
+}
 /*
 export function connectIO(
   output: AudioRateOutput | HybridOutput,

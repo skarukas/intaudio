@@ -5,7 +5,7 @@ if (!ia) {
 }
 console.log(ia)
 
-function assertEqual(actual, expected, msg=undefined) {
+function assertEqual(actual, expected, msg = undefined) {
   assertTrue(actual == expected, msg ?? `${actual} != ${expected}`)
 }
 
@@ -27,7 +27,7 @@ function assertSilentSignal(output) {
   })
 }
 
-function assertNonzeroSignal(output, maxGapMs=4000) {
+function assertNonzeroSignal(output, maxGapMs = 4000) {
   let zeroCount = 0
   const trace = Error().stack
   output.sampleSignal(ASSERT_SAMPLING_PERIOD_MS).connect(v => {
@@ -417,7 +417,7 @@ const tests = {
     monitor.addToDom($root)
 
     // Apply to each sample, across channels.
-    const channelTransform = oscillator.transformAudio(([left, right]) => {
+    const channelTransform = oscillator.transformAudio(({ left, right }) => {
       return [left, undefined, right, undefined]
     }, "channels")
     assertEqual(channelTransform.numOutputChannels, 4)
@@ -425,9 +425,9 @@ const tests = {
     assertSilentSignal(channelTransform.output.channels[1])
     assertNonzeroSignal(channelTransform.output.channels[2])
     assertSilentSignal(channelTransform.output.channels[3])
-    
+
     // Apply across channels and time.
-    const ctTransform = oscillator.transformAudio(([left, right]) => {
+    const ctTransform = oscillator.transformAudio(({ left, right }) => {
       for (let i = 0; i < left.length; i++) {
         left[i] = (left[i] + right[(left.length - i) - 1]) / 2
       }
@@ -448,8 +448,8 @@ const tests = {
 
     // Reduce over the time dimension.
     const timeTransform = oscillator.transformAudio(arr => {
-      for (let i = 0; i < arr.length-1; i++) {
-        arr[i] = (arr[i] + arr[i+1]) / 2
+      for (let i = 0; i < arr.length - 1; i++) {
+        arr[i] = (arr[i] + arr[i + 1]) / 2
       }
       return arr
     }, "time")

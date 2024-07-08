@@ -1,7 +1,7 @@
 import { AudioDimension } from "../../components/AudioTransformComponent.js"
 import { Component } from "../../components/base/Component.js"
 import { AudioSignalStream } from "../../shared/AudioSignalStream.js"
-import { MultiChannel, connectWebAudioChannels, createMultiChannelView, getNumInputChannels, getNumOutputChannels } from "../../shared/multichannel.js"
+import { MultiChannel, MultiChannelArray, connectWebAudioChannels, createMultiChannelView, getNumInputChannels, getNumOutputChannels } from "../../shared/multichannel.js"
 import { CanBeConnectedTo } from "../../shared/types.js"
 import { AudioRateInput } from "../input/AudioRateInput.js"
 import { HybridInput } from "../input/HybridInput.js"
@@ -68,8 +68,8 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
     }
     return this.connect(new this._.ChannelSplitter(...inputChannelGroups))
   }
-  transformAudio(fn: (input: [left: Float32Array, right?: Float32Array, ...channels: Float32Array[]]) => (number[] | Float32Array)[], dimension: "all", windowSize?: number): Component;
-  transformAudio(fn: (input: [left: number, right?: number, ...channels: number[]]) => number[], dimension: "channels"): Component;
+  transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], dimension: "all", windowSize?: number): Component;
+  transformAudio(fn: (input: MultiChannelArray<number>) => number[], dimension: "channels"): Component;
   transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", windowSize?: number): Component;
   transformAudio(fn: (x: number) => number, dimension?: "none"): Component;
   transformAudio(fn: Function, dimension?: AudioDimension, windowSize?: number): Component {

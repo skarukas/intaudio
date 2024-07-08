@@ -1,5 +1,6 @@
 import { Component } from "../components/base/Component.js";
 import { Connectable } from "./base/Connectable.js";
+import { MultiChannelArray } from "./multichannel.js";
 
 export interface AudioSignalStream extends Connectable {
   get numInputChannels(): number;
@@ -10,8 +11,8 @@ export interface AudioSignalStream extends Connectable {
   splitChannels(...inputChannelGroups: number[][]): Iterable<AudioSignalStream>;
 
   // Lots of overloads.
-  transformAudio(fn: (input: [left: Float32Array, right?: Float32Array, ...channels: Float32Array[]]) => (number[] | Float32Array)[], dimension: "all", windowSize?: number): Component;
-  transformAudio(fn: (input: [left: number, right?: number, ...channels: number[]]) => number[], dimension: "channels"): Component;
+  transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], dimension: "all", windowSize?: number): Component;
+  transformAudio(fn: (input: MultiChannelArray<number>) => number[], dimension: "channels"): Component;
   transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", windowSize?: number): Component;
   transformAudio(fn: (x: number) => number, dimension?: "none"): Component;
 }

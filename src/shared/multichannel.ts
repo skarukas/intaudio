@@ -110,6 +110,32 @@ export function connectWebAudioChannels(
   }
   return simpleConnect(source, destination, fromChannel, toChannel)
 }
+
+class OldMultiChannelView<T> extends Array<T> {
+  get left(): T {
+    return this[0]
+  }
+  get right(): T {
+    return this[1]
+  }
+}
+
+export type MultiChannelArray<T> = T[] & { get left(): T, get right(): T }
+export function toMultiChannelArray<T>(array: T[]): MultiChannelArray<T> {
+  Object.defineProperties(array, {
+    left: {
+      get: function() {
+        return this[0]
+      }
+    },
+    right: {
+      get: function() {
+        return this[1]
+      }
+    }
+  })
+  return <MultiChannelArray<T>>array
+}
 /* 
 export function connectIO(
   output: AudioRateOutput | HybridOutput,

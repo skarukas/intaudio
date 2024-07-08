@@ -2,6 +2,7 @@
 import { AudioRateInput } from "../io/input/AudioRateInput.js";
 import { AudioRateOutput } from "../io/output/AudioRateOutput.js";
 import constants from "../shared/constants.js";
+import { MultiChannelArray, toMultiChannelArray } from "../shared/multichannel.js";
 import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 
@@ -52,11 +53,12 @@ function processTime(
  * @returns The number of channels output by the function.
  */
 function processTimeAndChannels(
-  fn: (channels: Float32Array[]) => (Float32Array | number[])[],
+  fn: (channels: MultiChannelArray<Float32Array>) => (Float32Array | number[])[],
   inputChunk: Float32Array[],
   outputChunk: Float32Array[]
 ): number {
-  const result = fn(inputChunk)
+  const wrapper = toMultiChannelArray(inputChunk)
+  const result = fn(wrapper)
   for (let c = 0; c < result.length; c++) {
     if (result[c] == undefined) {
       continue  // This signifies that the channel should be empty.
@@ -91,7 +93,7 @@ function writeColumn<T>(arr: ArrayLike<ArrayLike<T>>, col: number, values: T[]) 
  * @returns The number of channels output by the function.
  */
 function processChannels(
-  fn: (channels: number[]) => number[],
+  fn: (channels: MultiChannelArray<number>) => number[],
   inputChunk: Float32Array[],
   outputChunk: Float32Array[]
 ): number {
@@ -99,7 +101,8 @@ function processChannels(
   const numSamples = inputChunk[0].length
   for (let i = 0; i < numSamples; i++) {
     const inputChannels = getColumn(inputChunk, i)
-    const outputChannels = fn(inputChannels).map(v => isFinite(v) ? v : 0)
+    const wrapper = toMultiChannelArray(inputChannels)
+    const outputChannels = fn(wrapper).map(v => isFinite(v) ? v : 0)
     writeColumn(outputChunk, i, outputChannels)
     numOutputChannels = outputChannels.length
   }
