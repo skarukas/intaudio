@@ -109,24 +109,32 @@ export class AudioTransformComponent extends BaseComponent {
      * Guess the number of output channels by applying the function to a fake input.
      */
     inferNumOutputChannels(numInputChannels, windowSize) {
-        const numSamples = windowSize || 256;
-        function createChunk(numChannels) {
-            const shell = Array(numChannels).fill(0);
-            return shell.map(() => new Float32Array(numSamples));
+        const sampleRate = this.audioContext.sampleRate;
+        function createBuffer(numberOfChannels) {
+            return new AudioBuffer({
+                length: windowSize || 256,
+                numberOfChannels,
+                sampleRate
+            });
         }
-        const fillerIn = createChunk(numInputChannels);
+        const inputBuffer = createBuffer(numInputChannels);
         // The output may have more channels than the input, so be flexible when 
         // testing it so as to not break the implementation.
-        const fillerOut = createChunk(constants.MAX_CHANNELS);
+        const outputBuffer = createBuffer(constants.MAX_CHANNELS);
+        const fillerEvet = new AudioProcessingEvent(constants.EVENT_AUDIOPROCESS, {
+            playbackTime: 0,
+            inputBuffer,
+            outputBuffer
+        });
         // The returned value will be the number of new output channels, if it's 
         // different from the provided buffer size, otherwise undefined.
-        const numOutputChannels = this.applyToChunk(this.fn, fillerIn, fillerOut);
+        const numOutputChannels = this.processAudioFrame(fillerEvet);
         return numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : numInputChannels;
     }
     defineAudioProcessHandler(processor) {
         const handler = (event) => {
             try {
-                this.processAudioFrame(event.inputBuffer, event.outputBuffer);
+                this.processAudioFrame(event);
             }
             catch (e) {
                 processor.removeEventListener(constants.EVENT_AUDIOPROCESS, handler);
@@ -135,15 +143,15 @@ export class AudioTransformComponent extends BaseComponent {
         };
         processor.addEventListener(constants.EVENT_AUDIOPROCESS, handler);
     }
-    processAudioFrame(inputBuffer, outputBuffer) {
+    processAudioFrame(event) {
         const inputChunk = [];
         const outputChunk = [];
-        for (let c = 0; c < inputBuffer.numberOfChannels; c++) {
-            inputChunk.push(inputBuffer.getChannelData(c));
+        for (let c = 0; c < event.inputBuffer.numberOfChannels; c++) {
+            inputChunk.push(event.inputBuffer.getChannelData(c));
         }
-        for (let c = 0; c < outputBuffer.numberOfChannels; c++) {
-            outputChunk.push(outputBuffer.getChannelData(c));
+        for (let c = 0; c < event.outputBuffer.numberOfChannels; c++) {
+            outputChunk.push(event.outputBuffer.getChannelData(c));
         }
-        this.applyToChunk(this.fn, inputChunk, outputChunk);
+        return this.applyToChunk(this.fn.bind(event), inputChunk, outputChunk);
     }
 }

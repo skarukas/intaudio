@@ -446,6 +446,15 @@ const tests = {
     assertNonzeroSignal(sampleTransform.output.channels[0])
     assertNonzeroSignal(sampleTransform.output.channels[1])
 
+    // The AudioProcessingEvent is bound to `this`.
+    const thisSampleTransform = oscillator.transformAudio(function(x) {
+      return this.playbackTime
+    }, "none")
+    thisSampleTransform.connect(monitor)
+    assertEqual(thisSampleTransform.numOutputChannels, 2)
+    assertNonzeroSignal(thisSampleTransform.output.channels[0])
+    assertNonzeroSignal(thisSampleTransform.output.channels[1])
+
     // Reduce over the time dimension.
     const timeTransform = oscillator.transformAudio(arr => {
       for (let i = 0; i < arr.length - 1; i++) {
