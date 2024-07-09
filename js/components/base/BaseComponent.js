@@ -1,3 +1,4 @@
+import { ComponentInput } from "../../io/input/ComponentInput.js";
 import { BaseConnectable } from "../../shared/base/BaseConnectable.js";
 import constants from "../../shared/constants.js";
 import { AudioRateOutput } from "../../io/output/AudioRateOutput.js";
@@ -160,7 +161,7 @@ export class BaseComponent extends BaseConnectable {
     }
     connect(destination) {
         let { component, input } = this.getDestinationInfo(destination);
-        if (!input) {
+        if (!input || (input instanceof ComponentInput && !input.defaultInput)) {
             throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${Object.keys(component.inputs)}]`);
         }
         component && this.outputAdded(input);
@@ -172,9 +173,9 @@ export class BaseComponent extends BaseConnectable {
         return component;
     }
     withInputs(argDict) {
-        var _a;
+        var _a, _b;
         for (const name in argDict) {
-            const thisInput = (_a = this.inputs[name]) !== null && _a !== void 0 ? _a : this.inputs["$" + name];
+            const thisInput = (_b = (_a = this.inputs[name]) !== null && _a !== void 0 ? _a : this.inputs["" + name]) !== null && _b !== void 0 ? _b : this.inputs["$" + name];
             if (!thisInput) {
                 throw new Error(`No input found named '${name}'. Valid inputs: [${Object.keys(this.inputs)}]`);
             }

@@ -3,8 +3,10 @@ import { AudioRateInput } from "../io/input/AudioRateInput.js";
 import { AudioRateOutput } from "../io/output/AudioRateOutput.js";
 import constants from "../shared/constants.js";
 import { MultiChannelArray, toMultiChannelArray } from "../shared/multichannel.js";
+import describeFunction from 'function-descriptor'
 import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
+import { createScriptProcessorNode, range } from "../shared/util.js";
 
 export type AudioDimension = "all" | "none" | "channels" | "time"
 
@@ -143,8 +145,10 @@ function getProcessingFunction(dimension: AudioDimension): (fn: Function, inputs
 }
 
 export class AudioTransformComponent extends BaseComponent {
-  readonly input: AudioRateInput
+  [idx: number]: AudioRateInput
   readonly output: AudioRateOutput
+  numInputs: number
+  numChannelsPerInput: number
 
   protected applyToChunk: (fn: Function, inputs: Float32Array[][], output: Float32Array[]) => number
   protected processor: ScriptProcessorNode
@@ -153,27 +157,49 @@ export class AudioTransformComponent extends BaseComponent {
     public fn: Function,
     { dimension,
       windowSize = undefined,
+      inputNames = undefined,
+      numInputs = undefined,
       numChannelsPerInput = 2,
       numOutputChannels = undefined
     }: {
       dimension: AudioDimension,
       windowSize?: number,
-      numChannelsPerInput: number,
+      inputNames?: ((string | number))[],
+      numInputs?: number,
+      numChannelsPerInput?: number,
       numOutputChannels?: number
     }
   ) {
     super()
+    // Properties.
     this.applyToChunk = getProcessingFunction(dimension)
+    if (inputNames != undefined) {
+      if (numInputs != undefined && numInputs != inputNames.length) {
+        throw new Error(`If both numInputs and inputNames are provided, they must match. Given numInputs=${numInputs}, inputNames=[${inputNames}]`)
+      }
+    } else {
+      inputNames = this.inferParamNames(fn, numChannelsPerInput, numInputs)
+    }
+    numInputs ??= inputNames.length
     numOutputChannels ??= this.inferNumOutputChannels(numChannelsPerInput, windowSize)
-    this.processor = this.audioContext.createScriptProcessor(windowSize, numChannelsPerInput, numOutputChannels)
-    // Store true values because the constructor settings are not persisted on 
-    // the WebAudio object.
-    this.processor['__numInputChannels'] = numChannelsPerInput
-    this.processor['__numOutputChannels'] = numOutputChannels
+    this.numInputs = numInputs
+    this.numChannelsPerInput = numChannelsPerInput
 
-    this.input = this.defineAudioInput('input', this.processor)
-    this.output = this.defineAudioOutput('output', this.processor)
-    this.defineAudioProcessHandler(this.processor)
+    // Audio nodes.
+    const { processor, inputs } = AudioTransformComponent.defineAudioGraph({
+      numInputs,
+      numChannelsPerInput,
+      windowSize,
+      numOutputChannels
+    })
+    this.defineAudioProcessHandler(processor)
+
+    // I/O.
+    for (const i of range(numInputs)) {
+      this[inputNames[i]] = this.defineAudioInput(inputNames[i], inputs[i])
+      this[i] = this[inputNames[i]]  // Numbered alias.
+    }
+    this.output = this.defineAudioOutput('output', processor)
   }
   /**
    * Guess the number of output channels by applying the function to a fake input.
@@ -203,6 +229,77 @@ export class AudioTransformComponent extends BaseComponent {
     // different from the provided buffer size, otherwise undefined.
     const numOutputChannels = this.processAudioFrame(fillerEvet)
     return numOutputChannels ?? numInputChannels
+  }
+  private inferParamNames(
+    fn: Function,
+    numChannelsPerInput: number,
+    numInputs?: number,
+  ): (string | number)[] {
+    const maxSafeInputs = Math.floor(constants.MAX_CHANNELS / numChannelsPerInput)
+    let descriptor;
+    try {
+      descriptor = describeFunction(fn)
+    } catch (e) {
+      numInputs ??= maxSafeInputs
+      console.warn(`Unable to infer the input signature from the given function. Pass inputNames directly in the ${this._className} constructor instead. Defaulting to ${numInputs} inputs, named by their index.\nOriginal error: ${e.message}`)
+      return range(numInputs)
+    }
+
+    // The node only supports a limited number of channels, so we can only 
+    // use the first few.
+    if (numInputs == undefined) {
+      if (descriptor.maxArgs > maxSafeInputs) {
+        console.warn(`Given a function that takes up to ${descriptor.maxArgs} inputs.\nBecause only ${constants.MAX_CHANNELS} channels can be processed by each WebAudio node and each input has ${numChannelsPerInput} channels, only values for the first ${maxSafeInputs} inputs will be used. To suppress this warning, pass numInputs directly in the ${this._className} constructor.`)
+        numInputs = maxSafeInputs
+      } else {
+        numInputs = descriptor.maxArgs
+      }
+    } else if (numInputs < descriptor.minArgs) {
+      throw new Error(`Given a function with ${descriptor.minArgs} required parameters, but expected no more than the supplied value of numInputs (${numInputs}) to ensure inputs are not undefined during signal processing.`)
+    }
+    return range(numInputs).map(i => {
+      const paramDescriptor = descriptor.parameters[i]
+      // Parameters may be unnamed if they are object- or array-destructured.
+      return paramDescriptor?.name ?? i
+    })
+  }
+  private static defineAudioGraph({
+    numInputs,
+    numChannelsPerInput,
+    windowSize,
+    numOutputChannels
+  }: {
+    [k: string]: number
+  }): { inputs: AudioNode[], processor: ScriptProcessorNode } {
+    const totalNumChannels = numInputs * numChannelsPerInput
+    if (totalNumChannels > constants.MAX_CHANNELS) {
+      throw new Error(`The total number of input channels must be less than ${constants.MAX_CHANNELS}. Given numInputs=${numInputs} and numChannelsPerInput=${numChannelsPerInput}.`)
+    }
+    const inputNodes = []
+    const merger = this.audioContext.createChannelMerger(totalNumChannels)
+    const processor = createScriptProcessorNode(
+      this.audioContext,
+      windowSize,
+      numChannelsPerInput,
+      numOutputChannels
+    )
+    // Merger -> Processor
+    merger.connect(processor)
+    for (let i = 0; i < numInputs; i++) {
+      const input = new GainNode(this.audioContext, { channelCount: numChannelsPerInput })
+      // Flattened channel arrangement:
+      // [0_left, 0_right, 1_left, 1_right, 2_left, 2_right] 
+      for (let j = 0; j < numChannelsPerInput; j++) {
+        // Input -> Merger
+        const destinationChannel = i * numChannelsPerInput + j
+        input.connect(merger, 0, destinationChannel)
+      }
+      inputNodes.push(input)
+    }
+    return {
+      inputs: inputNodes,
+      processor
+    }
   }
   private defineAudioProcessHandler(processor: ScriptProcessorNode) {
     const handler = (event: AudioProcessingEvent) => {

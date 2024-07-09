@@ -12,7 +12,7 @@ export class AudioRateInput extends AbstractInput<number> implements MultiChanne
   }
 
   constructor(
-    public name: string,
+    public name: string | number,
     public parent: Component,
     public audioSink: WebAudioConnectable
   ) {

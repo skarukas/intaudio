@@ -5,7 +5,7 @@ import constants from "../../shared/constants.js"
 export class ControlInput<T> extends AbstractInput<T> {
   _value: T
   constructor(
-    public name: string, 
+    public name: string | number, 
     parent: Component,
     defaultValue: T = constants.UNSET_VALUE,
     isRequired: boolean = false

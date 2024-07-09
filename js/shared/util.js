@@ -1,4 +1,24 @@
 import { TimeMeasure } from "./types.js";
+export function tryWithFailureMessage(fn, message) {
+    try {
+        return fn();
+    }
+    catch (e) {
+        e.message = `${message}\nOriginal error: [${e.message}]`;
+        throw e;
+    }
+}
+export function createScriptProcessorNode(context, windowSize, numInputChannels, numOutputChannels) {
+    const processor = context.createScriptProcessor(windowSize, numInputChannels, numOutputChannels);
+    // Store true values because the constructor settings are not persisted on 
+    // the WebAudio object.
+    processor['__numInputChannels'] = numInputChannels;
+    processor['__numOutputChannels'] = numOutputChannels;
+    return processor;
+}
+export function range(n) {
+    return Array(n).fill(0).map((v, i) => i);
+}
 export function createConstantSource(audioContext) {
     let src = audioContext.createConstantSource();
     src.offset.setValueAtTime(0, audioContext.currentTime);

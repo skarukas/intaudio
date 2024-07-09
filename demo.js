@@ -411,7 +411,7 @@ const tests = {
     left.connect(ia.out.left)
     right.connect(ia.out.right)
   },
-  mapOverDimensions($root) {
+  transformAudio($root) {
     let oscillator = new ia.AudioComponent(createOscillator(440))
     const monitor = new ia.ScrollingAudioMonitor()
     monitor.addToDom($root)
@@ -441,6 +441,7 @@ const tests = {
     const sampleTransform = oscillator.transformAudio(x => {
       return x * 0.5
     }, "none")
+    console.log(sampleTransform)
 
     assertEqual(sampleTransform.numOutputChannels, 2)
     assertNonzeroSignal(sampleTransform.output.channels[0])
@@ -476,7 +477,7 @@ const tests = {
 
 ia.run(() => {
   //return tests.midiInput()
-  for (let test in { mapOverDimensions: tests.mapOverDimensions }) {
+  for (let test in { transformAudio: tests.transformAudio }) {
     const $testRoot = $(document.createElement('div'))
     tests[test]($testRoot)
     ia.util.afterRender(() => {

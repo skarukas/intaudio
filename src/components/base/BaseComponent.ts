@@ -96,14 +96,14 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     return this.defineInputOrOutput(name, input, this.inputs)
   }
   protected defineAudioInput(
-    name: string,
+    name: string | number,
     destinationNode: WebAudioConnectable
   ): AudioRateInput {
     let input = new this._.AudioRateInput(name, this, destinationNode)
     return this.defineInputOrOutput(name, input, this.inputs)
   }
   protected defineHybridInput<T>(
-    name: string,
+    name: string | number,
     destinationNode: WebAudioConnectable,
     defaultValue: T = constants.UNSET_VALUE,
     isRequired: boolean = false
@@ -111,15 +111,15 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     let input = new this._.HybridInput(name, this, destinationNode, defaultValue, isRequired)
     return this.defineInputOrOutput(name, input, this.inputs)
   }
-  protected defineControlOutput(name: string): ControlOutput<any> {
+  protected defineControlOutput(name: string | number): ControlOutput<any> {
     let output = new this._.ControlOutput(name)
     return this.defineInputOrOutput(name, output, this.outputs)
   }
-  protected defineAudioOutput(name: string, audioNode: AudioNode): AudioRateOutput {
+  protected defineAudioOutput(name: string | number, audioNode: AudioNode): AudioRateOutput {
     let output = new this._.AudioRateOutput(name, audioNode)
     return this.defineInputOrOutput(name, output, this.outputs)
   }
-  protected defineHybridOutput(name: string, audioNode: AudioNode): HybridOutput {
+  protected defineHybridOutput(name: string | number, audioNode: AudioNode): HybridOutput {
     let output = new this._.HybridOutput(name, audioNode)
     return this.defineInputOrOutput(name, output, this.outputs)
   }
@@ -204,7 +204,7 @@ export abstract class BaseComponent extends BaseConnectable implements Component
 
   connect<T extends CanBeConnectedTo>(destination: T): Component {
     let { component, input } = this.getDestinationInfo(destination)
-    if (!input) {
+    if (!input || (input instanceof ComponentInput && !input.defaultInput)) {
       throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${Object.keys(component.inputs)}]`)
     }
     component && this.outputAdded(input)
@@ -217,7 +217,7 @@ export abstract class BaseComponent extends BaseConnectable implements Component
   }
   withInputs(argDict: { [name: string | number]: Connectable | unknown }): this {
     for (const name in argDict) {
-      const thisInput = this.inputs[name] ?? this.inputs["$" + name]
+      const thisInput = this.inputs[name] ?? this.inputs[""+name] ?? this.inputs["$" + name]
       if (!thisInput) {
         throw new Error(`No input found named '${name}'. Valid inputs: [${Object.keys(this.inputs)}]`)
       }

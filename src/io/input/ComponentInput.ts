@@ -10,7 +10,7 @@ import { HybridInput } from "./HybridInput.js"
 export class ComponentInput<T> extends AudioRateInput {
   private _value: T
   constructor(
-    public name: string, 
+    public name: string | number, 
     parent: BaseComponent,
     public defaultInput?: AbstractInput<T>
   ) {

@@ -1,5 +1,6 @@
 import { connectWebAudioChannels, createMultiChannelView, getNumInputChannels, getNumOutputChannels } from "../../shared/multichannel.js";
 import { AudioRateInput } from "../input/AudioRateInput.js";
+import { ComponentInput } from "../input/ComponentInput.js";
 import { HybridInput } from "../input/HybridInput.js";
 import { AbstractOutput } from "./AbstractOutput.js";
 // TODO: Add a GainNode here to allow muting and mastergain of the component.
@@ -30,6 +31,9 @@ export class AudioRateOutput extends AbstractOutput {
     }
     connect(destination) {
         let { component, input } = this.getDestinationInfo(destination);
+        if (!input || (input instanceof ComponentInput && !input.defaultInput)) {
+            throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${Object.keys(component.inputs)}]`);
+        }
         if (!(input instanceof AudioRateInput || input instanceof HybridInput)) {
             throw new Error(`Can only connect audio-rate outputs to inputs that support audio-rate signals. Given: ${input}. Use 'AudioRateSignalSampler' to force a conversion.`);
         }
@@ -62,9 +66,10 @@ export class AudioRateOutput extends AbstractOutput {
         const options = {
             dimension,
             windowSize,
-            numChannelsPerInput: this.numInputChannels
+            numChannelsPerInput: this.numInputChannels,
+            numInputs: 1
         };
         const transformer = new this._.AudioTransformComponent(fn, options);
-        return this.connect(transformer);
+        return this.connect(transformer[0]); // First input of the function.
     }
 }

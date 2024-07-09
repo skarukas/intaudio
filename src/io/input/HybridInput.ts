@@ -12,7 +12,7 @@ export class HybridInput<T> extends AbstractInput<T> implements MultiChannel<Hyb
   // Hybrid input can connect an audio input to a sink, but it also can
   // receive control inputs.
   constructor(
-    public name: string, 
+    public name: string | number, 
     public parent: Component,
     public audioSink: WebAudioConnectable,
     defaultValue: T = constants.UNSET_VALUE,

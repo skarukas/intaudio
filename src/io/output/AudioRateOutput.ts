@@ -4,6 +4,7 @@ import { AudioSignalStream } from "../../shared/AudioSignalStream.js"
 import { MultiChannel, MultiChannelArray, connectWebAudioChannels, createMultiChannelView, getNumInputChannels, getNumOutputChannels } from "../../shared/multichannel.js"
 import { CanBeConnectedTo } from "../../shared/types.js"
 import { AudioRateInput } from "../input/AudioRateInput.js"
+import { ComponentInput } from "../input/ComponentInput.js"
 import { HybridInput } from "../input/HybridInput.js"
 import { AbstractOutput } from "./AbstractOutput.js"
 
@@ -12,7 +13,7 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
   private _channels: this[] = undefined
   activeChannel = undefined
 
-  constructor(public name: string, public audioNode: AudioNode) {
+  constructor(public name: string | number, public audioNode: AudioNode) {
     super(name)
   }
   get channels(): this[] {
@@ -34,6 +35,9 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
   connect<T extends CanBeConnectedTo>(destination: T): Component;
   connect(destination) {
     let { component, input } = this.getDestinationInfo(destination)
+    if (!input || (input instanceof ComponentInput && !input.defaultInput)) {
+      throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${Object.keys(component.inputs)}]`)
+    }
     if (!(input instanceof AudioRateInput || input instanceof HybridInput)) {
       throw new Error(`Can only connect audio-rate outputs to inputs that support audio-rate signals. Given: ${input}. Use 'AudioRateSignalSampler' to force a conversion.`)
     }
@@ -76,9 +80,10 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
     const options = {
       dimension,
       windowSize,
-      numChannelsPerInput: this.numInputChannels
+      numChannelsPerInput: this.numInputChannels,
+      numInputs: 1
     }
     const transformer = new this._.AudioTransformComponent(fn, options)
-    return this.connect(transformer)
+    return this.connect(transformer[0])  // First input of the function.
   }
 }
