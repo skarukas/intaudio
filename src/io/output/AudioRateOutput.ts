@@ -73,7 +73,12 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
   transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", windowSize?: number): Component;
   transformAudio(fn: (x: number) => number, dimension?: "none"): Component;
   transformAudio(fn: Function, dimension?: AudioDimension, windowSize?: number): Component {
-    const transformer = new this._.AudioTransformComponent(fn, dimension, windowSize, this.numInputChannels)
+    const options = {
+      dimension,
+      windowSize,
+      numChannelsPerInput: this.numInputChannels
+    }
+    const transformer = new this._.AudioTransformComponent(fn, options)
     return this.connect(transformer)
   }
 }

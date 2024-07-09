@@ -59,7 +59,12 @@ export class AudioRateOutput extends AbstractOutput {
         return this.connect(new this._.ChannelSplitter(...inputChannelGroups));
     }
     transformAudio(fn, dimension, windowSize) {
-        const transformer = new this._.AudioTransformComponent(fn, dimension, windowSize, this.numInputChannels);
+        const options = {
+            dimension,
+            windowSize,
+            numChannelsPerInput: this.numInputChannels
+        };
+        const transformer = new this._.AudioTransformComponent(fn, options);
         return this.connect(transformer);
     }
 }
