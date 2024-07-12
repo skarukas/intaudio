@@ -14,7 +14,7 @@ const assertTrue = (pred, msg) => {
   console.log("Passed assertion")
 }
 
-const ASSERT_SAMPLING_PERIOD_MS = 200
+const ASSERT_SAMPLING_PERIOD_MS = 50
 
 function assertSilentSignal(output) {
   const trace = Error().stack
@@ -419,7 +419,8 @@ const tests = {
     // Apply to each sample, across channels.
     const channelTransform = oscillator.transformAudio(({ left, right }) => {
       return [left, undefined, right, undefined]
-    }, "channels")
+    }, "channels", { useWorklet: true })
+    channelTransform.connect(monitor.input.channels[0])
     assertEqual(channelTransform.numOutputChannels, 4)
     assertNonzeroSignal(channelTransform.output.channels[0])
     assertSilentSignal(channelTransform.output.channels[1])
@@ -432,8 +433,8 @@ const tests = {
         left[i] = (left[i] + right[(left.length - i) - 1]) / 2
       }
       return [left]
-    }, "all")
-
+    }, "all", { useWorklet: true })
+    ctTransform.connect(monitor.input.channels[1])
     assertEqual(ctTransform.numOutputChannels, 1)
     assertNonzeroSignal(ctTransform.output.left)
 
@@ -441,7 +442,7 @@ const tests = {
     const sampleTransform = oscillator.transformAudio(x => {
       return x * 0.5
     }, "none")
-    console.log(sampleTransform)
+    sampleTransform.connect(monitor.input.channels[2])
 
     assertEqual(sampleTransform.numOutputChannels, 2)
     assertNonzeroSignal(sampleTransform.output.channels[0])
@@ -449,9 +450,9 @@ const tests = {
 
     // The AudioProcessingEvent is bound to `this`.
     const thisSampleTransform = oscillator.transformAudio(function(x) {
-      return this.playbackTime
+      return this.currentTime
     }, "none")
-    thisSampleTransform.connect(monitor)
+
     assertEqual(thisSampleTransform.numOutputChannels, 2)
     assertNonzeroSignal(thisSampleTransform.output.channels[0])
     assertNonzeroSignal(thisSampleTransform.output.channels[1])
@@ -462,7 +463,8 @@ const tests = {
         arr[i] = (arr[i] + arr[i + 1]) / 2
       }
       return arr
-    }, "time")
+    }, "time", { useWorklet: true })
+    timeTransform.connect(monitor.input.channels[3])
     assertNonzeroSignal(timeTransform.output.channels[0])
     assertNonzeroSignal(timeTransform.output.channels[1])
 

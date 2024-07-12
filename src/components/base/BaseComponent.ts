@@ -258,11 +258,11 @@ export abstract class BaseComponent extends BaseConnectable implements Component
   splitChannels(...inputChannelGroups: number[][]): Iterable<AudioRateOutput> {
     return this.getAudioOutputProperty('splitChannels')(...inputChannelGroups)
   }
-  transformAudio(fn: (channels: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], dimension: "all", windowSize?: number): Component;
-  transformAudio(fn: (channels: MultiChannelArray<number>) => number[], dimension: "channels"): Component;
-  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", windowSize?: number): Component;
-  transformAudio(fn: (x: number) => number, dimension?: "none"): Component;
-  transformAudio(fn: unknown, dimension?: unknown, windowSize?: number): Component {
-    return this.getAudioOutputProperty('transformAudio')(fn, dimension, windowSize)
+  transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], dimension: "all", { windowSize, useWorklet}?: { windowSize?: number, useWorklet?: boolean }): Component;
+  transformAudio(fn: (input: MultiChannelArray<number>) => number[], dimension: "channels", { useWorklet }?: { useWorklet?: boolean }): Component;
+  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", { windowSize, useWorklet}?: { windowSize?: number, useWorklet?: boolean }): Component;
+  transformAudio(fn: (x: number) => number, dimension?: "none", { useWorklet }?: { useWorklet?: boolean }): Component;
+  transformAudio(fn: unknown, dimension?: unknown, { windowSize, useWorklet }: { windowSize?: number, useWorklet?: boolean } = {}): Component {
+    return this.getAudioOutputProperty('transformAudio')(fn, dimension, { windowSize, useWorklet })
   }
 }

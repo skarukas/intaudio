@@ -62,10 +62,11 @@ export class AudioRateOutput extends AbstractOutput {
         }
         return this.connect(new this._.ChannelSplitter(...inputChannelGroups));
     }
-    transformAudio(fn, dimension, windowSize) {
+    transformAudio(fn, dimension, { windowSize, useWorklet } = {}) {
         const options = {
             dimension,
             windowSize,
+            useWorklet,
             numChannelsPerInput: this.numInputChannels,
             numInputs: 1
         };

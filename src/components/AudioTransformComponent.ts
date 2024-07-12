@@ -2,13 +2,12 @@
 import { AudioRateInput } from "../io/input/AudioRateInput.js";
 import { AudioRateOutput } from "../io/output/AudioRateOutput.js";
 import constants from "../shared/constants.js";
-import { MultiChannelArray, toMultiChannelArray } from "../shared/multichannel.js";
 import describeFunction from 'function-descriptor'
 import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 import { createScriptProcessorNode, range } from "../shared/util.js";
-
-export type AudioDimension = "all" | "none" | "channels" | "time"
+import { AudioDimension, AudioFrameContext as AudioFrameContext, WORKLET_NAME, getProcessingFunction, serializeFunction } from "../shared/audio_worklet/worklet.js";
+import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
 
 function enumValues(Enum: object) {
   const nonNumericKeys = Object.keys(Enum).filter((item) => {
@@ -17,130 +16,203 @@ function enumValues(Enum: object) {
   return nonNumericKeys.map(k => Enum[k])
 }
 
+abstract class AudioExecutionContext extends ToStringAndUUID {
+  inputs: AudioNode[]
+  output: AudioNode
+  protected applyToChunk: (fn: Function, inputs: Float32Array[][], output: Float32Array[]) => number
 
-type ArrayLike<T> = { length: number, [idx: number]: T }
-
-function getColumn<T>(arr: ArrayLike<ArrayLike<T>>, col: number): T[] {
-  const result = []
-  for (let i = 0; i < arr.length; i++) {
-    result.push(arr[i][col])
+  constructor(public fn: Function, public dimension: AudioDimension) {
+    super()
+    this.applyToChunk = getProcessingFunction(dimension)
   }
-  return result
-}
 
-function writeColumn<T>(arr: ArrayLike<ArrayLike<T>>, col: number, values: T[]) {
-  for (let i = 0; i < arr.length; i++) {
-    arr[i][col] = values[i]
+  protected processAudioFrame(
+    inputChunks: Float32Array[][],
+    outputChunk: Float32Array[],
+    context: AudioFrameContext
+  ): number {
+    return this.applyToChunk(this.fn.bind(context), inputChunks, outputChunk)
   }
-}
 
-function assertValidReturnType(fn, result) {
-  if (result === undefined) {
-    throw new Error("Expected mapping function to return valid value(s), but got undefined.")
+  /**
+   * Guess the number of output channels by applying the function to a fake input.
+   */
+  protected inferNumOutputChannels(
+    numInputs: number,
+    numChannelsPerInput: number,
+    windowSize: number = 128
+  ): number {
+    const createChunk = numChannels => range(numChannels).map(
+      _ => new Float32Array(windowSize)
+    )
+    const inputChunks = range(numInputs).map(
+      () => createChunk(numChannelsPerInput)
+    )
+    // The output may have more channels than the input, so be flexible when 
+    // testing it so as to not break the implementation.
+    const outputChunk = createChunk(constants.MAX_CHANNELS)
+    const context: AudioFrameContext = {
+      sampleRate: this.audioContext.sampleRate,
+      currentFrame: 0,
+      currentTime: 0
+    }
+    // The returned value will be the number of new output channels, if it's 
+    // different from the provided buffer size, otherwise undefined.
+    const numOutputChannels = this.processAudioFrame(inputChunks, outputChunk, context)
+    return numOutputChannels ?? numChannelsPerInput
   }
-}
-
-function processSamples(
-  fn: (...inputs: number[]) => number,
-  inputChunks: Float32Array[][],
-  outputChunk: Float32Array[]
-): number {
-  const numChannels = inputChunks[0].length
-  const numSamples = inputChunks[0][0].length
-  for (let c = 0; c < numChannels; c++) {
-    for (let i = 0; i < numSamples; i++) {
-      const inputs = inputChunks.map(input => input[c][i])
-      const result = fn(...inputs)
-      assertValidReturnType(fn, result)
-      outputChunk[c][i] = result
+  protected static defineAudioGraph(processorNode: AudioNode, {
+    numInputs,
+    numChannelsPerInput
+  }: {
+    [k: string]: number
+  }): AudioNode[] {
+    const totalNumChannels = numInputs * numChannelsPerInput
+    const inputNodes = []
+    const merger = this.audioContext.createChannelMerger(totalNumChannels)
+    // Merger -> Processor
+    merger.connect(processorNode)
+    for (let i = 0; i < numInputs; i++) {
+      const input = new GainNode(this.audioContext, { channelCount: numChannelsPerInput })
+      // Flattened channel arrangement:
+      // [0_left, 0_right, 1_left, 1_right, 2_left, 2_right] 
+      for (let j = 0; j < numChannelsPerInput; j++) {
+        // Input -> Merger
+        const destinationChannel = i * numChannelsPerInput + j
+        input.connect(merger, 0, destinationChannel)
+      }
+      inputNodes.push(input)
+    }
+    return inputNodes
+  }
+  static create(fn: Function, {
+    useWorklet,
+    dimension,
+    numInputs,
+    numChannelsPerInput,
+    windowSize,
+    numOutputChannels
+  }): AudioExecutionContext {
+    const totalNumChannels = numInputs * numChannelsPerInput
+    if (totalNumChannels > constants.MAX_CHANNELS) {
+      throw new Error(`The total number of input channels must be less than ${constants.MAX_CHANNELS}. Given numInputs=${numInputs} and numChannelsPerInput=${numChannelsPerInput}.`)
+    }
+    if (useWorklet) {
+      return new WorkletExecutionContext(fn, {
+        dimension,
+        numInputs,
+        numChannelsPerInput,
+        numOutputChannels,
+      })
+    } else {
+      return new ScriptProcessorExecutionContext(fn, {
+        dimension,
+        numInputs,
+        numChannelsPerInput,
+        windowSize,
+        numOutputChannels
+      })
     }
   }
-  return undefined
 }
 
-
-function processTime(
-  fn: (...inputs: Float32Array[]) => (Float32Array | number[]),
-  inputChunks: Float32Array[][],
-  outputChunk: Float32Array[]
-): number {
-  const numChannels = inputChunks[0].length
-  for (let c = 0; c < numChannels; c++) {
-    const inputs = inputChunks.map(input => input[c])
-    const output = fn(...inputs)
-    assertValidReturnType(fn, output)
-    outputChunk[c].set(output)
-  }
-  return undefined
-}
-
-/**
- * Apply a fuction across the audio chunk (channels and time).
- * 
- * @param fn 
- * @param inputChunks 
- * @param outputChunk 
- * @returns The number of channels output by the function.
- */
-function processTimeAndChannels(
-  fn: (...inputs: MultiChannelArray<Float32Array>[]) => (Float32Array | number[])[],
-  inputChunks: Float32Array[][],
-  outputChunk: Float32Array[]
-): number {
-  const inputs = inputChunks.map(toMultiChannelArray)
-  const result = fn(...inputs)
-  assertValidReturnType(fn, result)
-  for (let c = 0; c < result.length; c++) {
-    if (result[c] == undefined) {
-      continue  // This signifies that the channel should be empty.
-    }
-    outputChunk[c].set(result[c])
-  }
-  return result.length
-}
-
-/**
- * Apply a fuction to each sample, across channels.
- * 
- * @param fn 
- * @param inputChunks 
- * @param outputChunk 
- * @returns The number of channels output by the function.
- */
-function processChannels(
-  fn: (...inputs: MultiChannelArray<number>[]) => number[],
-  inputChunks: Float32Array[][],
-  outputChunk: Float32Array[]
-): number {
-  let numOutputChannels;
-  const numSamples = inputChunks[0][0].length
-  for (let i = 0; i < numSamples; i++) {
-    // Get the i'th sample, across all channels and inputs.
-    const inputs = inputChunks.map(input => {
-      const inputChannels = getColumn(input, i)
-      return toMultiChannelArray(inputChannels)
+class WorkletExecutionContext extends AudioExecutionContext {
+  constructor(fn, {
+    dimension,
+    numInputs,
+    numChannelsPerInput,
+    numOutputChannels,
+  }) {
+    super(fn, dimension)
+    numOutputChannels ??= this.inferNumOutputChannels(numInputs, numChannelsPerInput)
+    const worklet = new AudioWorkletNode(this.audioContext, WORKLET_NAME, {
+      outputChannelCount: [numOutputChannels],
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
     })
-    const outputChannels = fn(...inputs).map(v => isFinite(v) ? v : 0)
-    assertValidReturnType(fn, outputChannels)
-    writeColumn(outputChunk, i, outputChannels)
-    numOutputChannels = outputChannels.length
-  }
+    worklet['__numInputChannels'] = numChannelsPerInput
+    worklet['__numOutputChannels'] = numOutputChannels
 
-  return numOutputChannels
+    const inputs = AudioExecutionContext.defineAudioGraph(worklet, {
+      numInputs,
+      numChannelsPerInput,
+    })
+    // NOTE: beginning execution of the user-supplied function must be
+    // performed *after* the AudioWorkletNode has all its inputs 
+    // connected, otherwise the processor may run process() with an
+    // empty input array.
+    // https://bugzilla.mozilla.org/show_bug.cgi?id=1629478
+    const serializedFunction = serializeFunction(fn, dimension)
+    worklet.port.postMessage(serializedFunction)
+
+    this.inputs = inputs
+    this.output = worklet
+  }
 }
 
-function getProcessingFunction(dimension: AudioDimension): (fn: Function, inputs: Float32Array[][], output: Float32Array[]) => number {
-  switch (dimension) {
-    case "all":
-      return processTimeAndChannels
-    case "channels":
-      return processChannels
-    case "time":
-      return processTime
-    case "none":
-      return processSamples
-    default:
-      throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`)
+class ScriptProcessorExecutionContext extends AudioExecutionContext {
+
+  protected processor: ScriptProcessorNode
+
+  constructor(public fn: Function, {
+    dimension,
+    numInputs,
+    numChannelsPerInput,
+    windowSize,
+    numOutputChannels
+  }) {
+    super(fn, dimension)
+    numOutputChannels ??= this.inferNumOutputChannels(numInputs, numChannelsPerInput)
+    const processor = createScriptProcessorNode(
+      this.audioContext,
+      windowSize,
+      numChannelsPerInput,
+      numOutputChannels
+    )
+    const inputs = AudioExecutionContext.defineAudioGraph(processor, {
+      numInputs,
+      numChannelsPerInput,
+    })
+    this.defineAudioProcessHandler(processor)
+
+    this.inputs = inputs
+    this.output = processor
+  }
+
+  private defineAudioProcessHandler(processor: ScriptProcessorNode) {
+    let frameIndex = 0
+    const handler = (event: AudioProcessingEvent) => {
+      try {
+        this.processAudioEvent(event, frameIndex++)
+      } catch (e) {
+        processor.removeEventListener(constants.EVENT_AUDIOPROCESS, handler)
+        e instanceof Disconnect || console.error(e)
+      }
+    }
+    processor.addEventListener(constants.EVENT_AUDIOPROCESS, handler)
+  }
+  /**
+   * Split out a flattened array of channels into separate inputs.
+   */
+  protected deinterleaveInputs(flatInputs: Float32Array[]): Float32Array[][] {
+    return [flatInputs]  // TODO: implement for multi-input case.
+  }
+  private processAudioEvent(event: AudioProcessingEvent, frameIndex: number): number {
+    const inputChunk: Float32Array[] = []
+    const outputChunk: Float32Array[] = []
+    for (let c = 0; c < event.inputBuffer.numberOfChannels; c++) {
+      inputChunk.push(event.inputBuffer.getChannelData(c))
+    }
+    for (let c = 0; c < event.outputBuffer.numberOfChannels; c++) {
+      outputChunk.push(event.outputBuffer.getChannelData(c))
+    }
+    const context: AudioFrameContext = {
+      sampleRate: this.audioContext.sampleRate,
+      currentTime: this.audioContext.currentTime,
+      currentFrame: frameIndex
+    }
+    const inputChunks = this.deinterleaveInputs(inputChunk)
+    return this.processAudioFrame(inputChunks, outputChunk, context)
   }
 }
 
@@ -150,9 +222,6 @@ export class AudioTransformComponent extends BaseComponent {
   numInputs: number
   numChannelsPerInput: number
 
-  protected applyToChunk: (fn: Function, inputs: Float32Array[][], output: Float32Array[]) => number
-  protected processor: ScriptProcessorNode
-
   constructor(
     public fn: Function,
     { dimension,
@@ -160,19 +229,20 @@ export class AudioTransformComponent extends BaseComponent {
       inputNames = undefined,
       numInputs = undefined,
       numChannelsPerInput = 2,
-      numOutputChannels = undefined
+      numOutputChannels = undefined,
+      useWorklet = false
     }: {
       dimension: AudioDimension,
       windowSize?: number,
       inputNames?: ((string | number))[],
       numInputs?: number,
       numChannelsPerInput?: number,
-      numOutputChannels?: number
+      numOutputChannels?: number,
+      useWorklet?: boolean
     }
   ) {
     super()
     // Properties.
-    this.applyToChunk = getProcessingFunction(dimension)
     if (inputNames != undefined) {
       if (numInputs != undefined && numInputs != inputNames.length) {
         throw new Error(`If both numInputs and inputNames are provided, they must match. Given numInputs=${numInputs}, inputNames=[${inputNames}]`)
@@ -181,55 +251,29 @@ export class AudioTransformComponent extends BaseComponent {
       inputNames = this.inferParamNames(fn, numChannelsPerInput, numInputs)
     }
     numInputs ??= inputNames.length
-    numOutputChannels ??= this.inferNumOutputChannels(numChannelsPerInput, windowSize)
     this.numInputs = numInputs
     this.numChannelsPerInput = numChannelsPerInput
-
-    // Audio nodes.
-    const { processor, inputs } = AudioTransformComponent.defineAudioGraph({
+    // Handles audio graph creation.
+    const executionContext = AudioExecutionContext.create(fn, {
+      dimension,
+      windowSize,
       numInputs,
       numChannelsPerInput,
-      windowSize,
-      numOutputChannels
+      numOutputChannels,
+      useWorklet,
     })
-    this.defineAudioProcessHandler(processor)
 
     // I/O.
     for (const i of range(numInputs)) {
-      this[inputNames[i]] = this.defineAudioInput(inputNames[i], inputs[i])
+      this[inputNames[i]] = this.defineAudioInput(
+        inputNames[i],
+        executionContext.inputs[i]
+      )
       this[i] = this[inputNames[i]]  // Numbered alias.
     }
-    this.output = this.defineAudioOutput('output', processor)
+    this.output = this.defineAudioOutput('output', executionContext.output)
   }
-  /**
-   * Guess the number of output channels by applying the function to a fake input.
-   */
-  private inferNumOutputChannels(
-    numInputChannels: number,
-    windowSize: number
-  ): number {
-    const sampleRate = this.audioContext.sampleRate
-    function createBuffer(numberOfChannels: number) {
-      return new AudioBuffer({
-        length: windowSize || 256,
-        numberOfChannels,
-        sampleRate
-      })
-    }
-    const inputBuffer = createBuffer(numInputChannels)
-    // The output may have more channels than the input, so be flexible when 
-    // testing it so as to not break the implementation.
-    const outputBuffer = createBuffer(constants.MAX_CHANNELS)
-    const fillerEvet = new AudioProcessingEvent(constants.EVENT_AUDIOPROCESS, {
-      playbackTime: 0,
-      inputBuffer,
-      outputBuffer
-    })
-    // The returned value will be the number of new output channels, if it's 
-    // different from the provided buffer size, otherwise undefined.
-    const numOutputChannels = this.processAudioFrame(fillerEvet)
-    return numOutputChannels ?? numInputChannels
-  }
+
   private inferParamNames(
     fn: Function,
     numChannelsPerInput: number,
@@ -262,72 +306,5 @@ export class AudioTransformComponent extends BaseComponent {
       // Parameters may be unnamed if they are object- or array-destructured.
       return paramDescriptor?.name ?? i
     })
-  }
-  private static defineAudioGraph({
-    numInputs,
-    numChannelsPerInput,
-    windowSize,
-    numOutputChannels
-  }: {
-    [k: string]: number
-  }): { inputs: AudioNode[], processor: ScriptProcessorNode } {
-    const totalNumChannels = numInputs * numChannelsPerInput
-    if (totalNumChannels > constants.MAX_CHANNELS) {
-      throw new Error(`The total number of input channels must be less than ${constants.MAX_CHANNELS}. Given numInputs=${numInputs} and numChannelsPerInput=${numChannelsPerInput}.`)
-    }
-    const inputNodes = []
-    const merger = this.audioContext.createChannelMerger(totalNumChannels)
-    const processor = createScriptProcessorNode(
-      this.audioContext,
-      windowSize,
-      numChannelsPerInput,
-      numOutputChannels
-    )
-    // Merger -> Processor
-    merger.connect(processor)
-    for (let i = 0; i < numInputs; i++) {
-      const input = new GainNode(this.audioContext, { channelCount: numChannelsPerInput })
-      // Flattened channel arrangement:
-      // [0_left, 0_right, 1_left, 1_right, 2_left, 2_right] 
-      for (let j = 0; j < numChannelsPerInput; j++) {
-        // Input -> Merger
-        const destinationChannel = i * numChannelsPerInput + j
-        input.connect(merger, 0, destinationChannel)
-      }
-      inputNodes.push(input)
-    }
-    return {
-      inputs: inputNodes,
-      processor
-    }
-  }
-  private defineAudioProcessHandler(processor: ScriptProcessorNode) {
-    const handler = (event: AudioProcessingEvent) => {
-      try {
-        this.processAudioFrame(event)
-      } catch (e) {
-        processor.removeEventListener(constants.EVENT_AUDIOPROCESS, handler)
-        e instanceof Disconnect || console.error(e)
-      }
-    }
-    processor.addEventListener(constants.EVENT_AUDIOPROCESS, handler)
-  }
-  /**
-   * Split out a flattened array of channels into separate inputs.
-   */
-  protected deinterleaveInputs(flatInputs: Float32Array[]): Float32Array[][] {
-    return [flatInputs]  // TODO: implement for multi-input case.
-  }
-  private processAudioFrame(event: AudioProcessingEvent): number {
-    const inputChunk: Float32Array[] = []
-    const outputChunk: Float32Array[] = []
-    for (let c = 0; c < event.inputBuffer.numberOfChannels; c++) {
-      inputChunk.push(event.inputBuffer.getChannelData(c))
-    }
-    for (let c = 0; c < event.outputBuffer.numberOfChannels; c++) {
-      outputChunk.push(event.outputBuffer.getChannelData(c))
-    }
-    const inputChunks = this.deinterleaveInputs(inputChunk)
-    return this.applyToChunk(this.fn.bind(event), inputChunks, outputChunk)
   }
 }

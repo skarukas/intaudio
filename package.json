@@ -14,6 +14,7 @@
   "author": "Stephen Karukas <stephen.karukas@gmail.com>",
   "license": "ISC",
   "dependencies": {
+    "@types/audioworklet": "^0.0.57",
     "function-descriptor": "^1.1.1",
     "jquery-contextmenu": "^3.0.0-beta.2",
     "rollup-plugin-node-externals": "^7.1.2",

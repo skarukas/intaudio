@@ -1,6 +1,6 @@
-import { AudioConfig, TypedConfigurable } from "../config.js"
+import { TypedConfigurable } from "../config.js"
 
-export class ToStringAndUUID extends TypedConfigurable<AudioConfig> {
+export class ToStringAndUUID extends TypedConfigurable {
   _uuid: string
   constructor() {
     super()

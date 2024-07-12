@@ -1,6 +1,7 @@
 import { AbstractInput } from "../io/input/AbstractInput.js"
 import { AbstractOutput } from "../io/output/AbstractOutput.js"
 import { WebAudioConnectable } from "./types.js"
+export * from "./audio_worklet/worklet.js"
 
 // TODO: this doesn't seem to work. Make sure we're connecting to the right *channel* and not just the *input*.
 
@@ -16,19 +17,16 @@ export interface MultiChannel<T extends (AbstractInput | AbstractOutput) = any> 
 export function getNumInputChannels(node: WebAudioConnectable) {
   if (node instanceof ChannelMergerNode) {
     return node.numberOfInputs
-  } else if (node instanceof ScriptProcessorNode) {
-    return node['__numInputChannels'] ?? node.channelCount
   }
-  return node instanceof AudioNode ? node.channelCount : 1
+  return node['__numInputChannels'] ?? (node instanceof AudioNode ? node.channelCount : 1)
 }
 
 export function getNumOutputChannels(node: WebAudioConnectable) {
   if (node instanceof ChannelSplitterNode) {
     return node.numberOfOutputs
-  } else if (node instanceof ScriptProcessorNode) {
-    return node['__numOutputChannels'] ?? node.channelCount
   }
-  return node instanceof AudioNode ? node.channelCount : 1
+  return node['__numOutputChannels'] 
+  ?? (node instanceof AudioNode ? node.channelCount : 1)
 }
 
 export function createMultiChannelView<T extends MultiChannel>(
@@ -110,66 +108,3 @@ export function connectWebAudioChannels(
   }
   return simpleConnect(source, destination, fromChannel, toChannel)
 }
-
-class OldMultiChannelView<T> extends Array<T> {
-  get left(): T {
-    return this[0]
-  }
-  get right(): T {
-    return this[1]
-  }
-}
-
-export type MultiChannelArray<T> = T[] & { get left(): T, get right(): T }
-export function toMultiChannelArray<T>(array: T[]): MultiChannelArray<T> {
-  Object.defineProperties(array, {
-    left: {
-      get: function() {
-        return this[0]
-      }
-    },
-    right: {
-      get: function() {
-        return this[1]
-      }
-    }
-  })
-  return <MultiChannelArray<T>>array
-}
-/* 
-export function connectIO(
-  output: AudioRateOutput | HybridOutput,
-  input: AudioRateInput | HybridInput<number>,
-) {
-  if (output.activeChannels) {
-    if (input.activeChannels.length == 1) {
-      for (const c of output.activeChannels) {
-        output.splitter.connect(input.merger, c, c)
-      }
-    } else if (input.activeChannels.length > 1) {
-      // Connect as many as we can.
-      const numChannels = Math.min(input.activeChannels.length, output.activeChannels.length)
-      for (let i = 0; i < numChannels; i++) {
-        output.splitter.connect(
-          input.merger,
-          input.activeChannels[i],
-          output.activeChannels[i]
-        )
-      }
-    } else {
-      for (const c of output.activeChannels) {
-        output.splitter.connect(input.audioSink, c, 0)
-      }
-    }
-  } else {
-    if (input.activeChannels) {
-      for (const c of input.activeChannels) {
-        output.audioNode.connect(input.merger, c, c)
-      }
-    } else {
-      for (const c of output.activeChannels) {
-        output.splitter.connect(input.audioSink, c, 0)
-      }
-    }
-  }
-} */

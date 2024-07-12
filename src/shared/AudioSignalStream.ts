@@ -11,8 +11,8 @@ export interface AudioSignalStream extends Connectable {
   splitChannels(...inputChannelGroups: number[][]): Iterable<AudioSignalStream>;
 
   // Lots of overloads.
-  transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], dimension: "all", windowSize?: number): Component;
-  transformAudio(fn: (input: MultiChannelArray<number>) => number[], dimension: "channels"): Component;
-  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", windowSize?: number): Component;
-  transformAudio(fn: (x: number) => number, dimension?: "none"): Component;
+  transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], dimension: "all", { windowSize, useWorklet}?: { windowSize?: number, useWorklet?: boolean }): Component;
+  transformAudio(fn: (input: MultiChannelArray<number>) => number[], dimension: "channels", { useWorklet }?: { useWorklet?: boolean }): Component;
+  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", { windowSize, useWorklet}?: { windowSize?: number, useWorklet?: boolean }): Component;
+  transformAudio(fn: (x: number) => number, dimension?: "none", { useWorklet }?: { useWorklet?: boolean }): Component;
 }

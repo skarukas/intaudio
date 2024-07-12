@@ -380,25 +380,172 @@ class AbstractInput extends ToStringAndUUID {
     }
 }
 
+/* Define generic audio-rate utility functions. */
+function toMultiChannelArray(array) {
+    const proxy = new Proxy(array, {
+        get(target, p, receiver) {
+            if (p == "left")
+                return target[0];
+            if (p == "right")
+                return target[1];
+            return target[p];
+        }
+    });
+    return proxy;
+}
+function getColumn(arr, col) {
+    const result = [];
+    for (let i = 0; i < arr.length; i++) {
+        result.push(arr[i][col]);
+    }
+    return result;
+}
+function writeColumn(arr, col, values) {
+    for (let i = 0; i < arr.length; i++) {
+        arr[i][col] = values[i];
+    }
+}
+function assertValidReturnType(result) {
+    if (result === undefined) {
+        throw new Error("Expected mapping function to return valid value(s), but got undefined.");
+    }
+}
+function processSamples(fn, inputChunks, outputChunk) {
+    var _a, _b;
+    const numChannels = (_a = inputChunks[0]) === null || _a === void 0 ? void 0 : _a.length;
+    const numSamples = (_b = inputChunks[0][0]) === null || _b === void 0 ? void 0 : _b.length;
+    for (let c = 0; c < numChannels; c++) {
+        for (let i = 0; i < numSamples; i++) {
+            const inputs = inputChunks.map(input => input[c][i]);
+            const result = fn(...inputs);
+            assertValidReturnType(result);
+            outputChunk[c][i] = result;
+        }
+    }
+    return undefined;
+}
+function processTime(fn, inputChunks, outputChunk) {
+    var _a;
+    const numChannels = (_a = inputChunks[0]) === null || _a === void 0 ? void 0 : _a.length;
+    for (let c = 0; c < numChannels; c++) {
+        const inputs = inputChunks.map(input => input[c]);
+        const output = fn(...inputs);
+        assertValidReturnType(output);
+        outputChunk[c].set(output);
+    }
+    return undefined;
+}
+/**
+ * Apply a fuction across the audio chunk (channels and time).
+ *
+ * @param fn
+ * @param inputChunks
+ * @param outputChunk
+ * @returns The number of channels output by the function.
+ */
+function processTimeAndChannels(fn, inputChunks, outputChunk) {
+    const inputs = inputChunks.map(toMultiChannelArray);
+    const result = fn(...inputs);
+    assertValidReturnType(result);
+    for (let c = 0; c < result.length; c++) {
+        if (result[c] == undefined) {
+            continue; // This signifies that the channel should be empty.
+        }
+        outputChunk[c].set(result[c]);
+    }
+    return result.length;
+}
+/**
+ * Apply a fuction to each sample, across channels.
+ *
+ * @param fn
+ * @param inputChunks
+ * @param outputChunk
+ * @returns The number of channels output by the function.
+ */
+function processChannels(fn, inputChunks, outputChunk) {
+    var _a;
+    let numOutputChannels;
+    const numSamples = (_a = inputChunks[0][0]) === null || _a === void 0 ? void 0 : _a.length;
+    for (let i = 0; i < numSamples; i++) {
+        // Get the i'th sample, across all channels and inputs.
+        const inputs = inputChunks.map(input => {
+            const inputChannels = getColumn(input, i);
+            return toMultiChannelArray(inputChannels);
+        });
+        const outputChannels = fn(...inputs).map(v => isFinite(v) ? v : 0);
+        assertValidReturnType(outputChannels);
+        writeColumn(outputChunk, i, outputChannels);
+        numOutputChannels = outputChannels.length;
+    }
+    return numOutputChannels;
+}
+function getProcessingFunction(dimension) {
+    switch (dimension) {
+        case "all":
+            return processTimeAndChannels;
+        case "channels":
+            return processChannels;
+        case "time":
+            return processTime;
+        case "none":
+            return processSamples;
+        default:
+            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
+    }
+}
+function serializeFunction(f, dimension) {
+    return {
+        fnString: f.toString(),
+        dimension
+    };
+}
+/********** Worklet-specific code ************/
+const WORKLET_NAME = "function-worklet";
+/* Define AudioWorkletProcessor (if in Worklet) */
+if (typeof AudioWorkletProcessor != 'undefined') {
+    function deserializeFunction(data) {
+        const { fnString, dimension } = data;
+        const innerFunction = new Function('return ' + fnString)();
+        const applyToChunk = getProcessingFunction(dimension);
+        return function processFn(inputs, outputs, __parameters) {
+            // Bind to current state.
+            const context = { sampleRate, currentTime, currentFrame };
+            // Apply across dimensions.
+            return applyToChunk(innerFunction.bind(context), inputs, outputs[0]);
+        };
+    }
+    class OperationWorklet extends AudioWorkletProcessor {
+        constructor() {
+            super();
+            // Receives serialized input sent from postMessage() calls.
+            // This is used to change the processing function at runtime.
+            this.port.onmessage = (event) => {
+                this.processImpl = deserializeFunction(event.data);
+            };
+        }
+        process(inputs, outputs, parameters) {
+            this.processImpl && this.processImpl(inputs, outputs, parameters);
+            return true;
+        }
+    }
+    // Register the AudioWorkletProcessor.
+    registerProcessor(WORKLET_NAME, OperationWorklet);
+}
+
 function getNumInputChannels(node) {
     var _a;
     if (node instanceof ChannelMergerNode) {
         return node.numberOfInputs;
     }
-    else if (node instanceof ScriptProcessorNode) {
-        return (_a = node['__numInputChannels']) !== null && _a !== void 0 ? _a : node.channelCount;
-    }
-    return node instanceof AudioNode ? node.channelCount : 1;
+    return (_a = node['__numInputChannels']) !== null && _a !== void 0 ? _a : (node instanceof AudioNode ? node.channelCount : 1);
 }
 function getNumOutputChannels(node) {
     var _a;
     if (node instanceof ChannelSplitterNode) {
         return node.numberOfOutputs;
     }
-    else if (node instanceof ScriptProcessorNode) {
-        return (_a = node['__numOutputChannels']) !== null && _a !== void 0 ? _a : node.channelCount;
-    }
-    return node instanceof AudioNode ? node.channelCount : 1;
+    return (_a = node['__numOutputChannels']) !== null && _a !== void 0 ? _a : (node instanceof AudioNode ? node.channelCount : 1);
 }
 function createMultiChannelView(multiChannelIO, node) {
     let channels = [];
@@ -462,58 +609,6 @@ function connectWebAudioChannels(audioContext, source, destination, fromChannel 
     }
     return simpleConnect(source, destination, fromChannel, toChannel);
 }
-function toMultiChannelArray(array) {
-    Object.defineProperties(array, {
-        left: {
-            get: function () {
-                return this[0];
-            }
-        },
-        right: {
-            get: function () {
-                return this[1];
-            }
-        }
-    });
-    return array;
-}
-/*
-export function connectIO(
-  output: AudioRateOutput | HybridOutput,
-  input: AudioRateInput | HybridInput<number>,
-) {
-  if (output.activeChannels) {
-    if (input.activeChannels.length == 1) {
-      for (const c of output.activeChannels) {
-        output.splitter.connect(input.merger, c, c)
-      }
-    } else if (input.activeChannels.length > 1) {
-      // Connect as many as we can.
-      const numChannels = Math.min(input.activeChannels.length, output.activeChannels.length)
-      for (let i = 0; i < numChannels; i++) {
-        output.splitter.connect(
-          input.merger,
-          input.activeChannels[i],
-          output.activeChannels[i]
-        )
-      }
-    } else {
-      for (const c of output.activeChannels) {
-        output.splitter.connect(input.audioSink, c, 0)
-      }
-    }
-  } else {
-    if (input.activeChannels) {
-      for (const c of input.activeChannels) {
-        output.audioNode.connect(input.merger, c, c)
-      }
-    } else {
-      for (const c of output.activeChannels) {
-        output.splitter.connect(input.audioSink, c, 0)
-      }
-    }
-  }
-} */
 
 class AudioRateInput extends AbstractInput {
     get numInputChannels() {
@@ -919,10 +1014,11 @@ class AudioRateOutput extends AbstractOutput {
         }
         return this.connect(new this._.ChannelSplitter(...inputChannelGroups));
     }
-    transformAudio(fn, dimension, windowSize) {
+    transformAudio(fn, dimension, { windowSize, useWorklet } = {}) {
         const options = {
             dimension,
             windowSize,
+            useWorklet,
             numChannelsPerInput: this.numInputChannels,
             numInputs: 1
         };
@@ -1147,8 +1243,8 @@ class BaseComponent extends BaseConnectable {
     splitChannels(...inputChannelGroups) {
         return this.getAudioOutputProperty('splitChannels')(...inputChannelGroups);
     }
-    transformAudio(fn, dimension, windowSize) {
-        return this.getAudioOutputProperty('transformAudio')(fn, dimension, windowSize);
+    transformAudio(fn, dimension, { windowSize, useWorklet } = {}) {
+        return this.getAudioOutputProperty('transformAudio')(fn, dimension, { windowSize, useWorklet });
     }
 }
 BaseComponent.instanceExists = false;
@@ -8959,110 +9055,160 @@ function describeFunction(f) {
 describeFunction.FunctionDescriptor = FunctionDescriptor;
 describeFunction.ParamDescriptor = ParamDescriptor;
 
-function getColumn(arr, col) {
-    const result = [];
-    for (let i = 0; i < arr.length; i++) {
-        result.push(arr[i][col]);
+class AudioExecutionContext extends ToStringAndUUID {
+    constructor(fn, dimension) {
+        super();
+        this.fn = fn;
+        this.dimension = dimension;
+        this.applyToChunk = getProcessingFunction(dimension);
     }
-    return result;
-}
-function writeColumn(arr, col, values) {
-    for (let i = 0; i < arr.length; i++) {
-        arr[i][col] = values[i];
+    processAudioFrame(inputChunks, outputChunk, context) {
+        return this.applyToChunk(this.fn.bind(context), inputChunks, outputChunk);
     }
-}
-function assertValidReturnType(fn, result) {
-    if (result === undefined) {
-        throw new Error("Expected mapping function to return valid value(s), but got undefined.");
+    /**
+     * Guess the number of output channels by applying the function to a fake input.
+     */
+    inferNumOutputChannels(numInputs, numChannelsPerInput, windowSize = 128) {
+        const createChunk = numChannels => range(numChannels).map(_ => new Float32Array(windowSize));
+        const inputChunks = range(numInputs).map(() => createChunk(numChannelsPerInput));
+        // The output may have more channels than the input, so be flexible when 
+        // testing it so as to not break the implementation.
+        const outputChunk = createChunk(constants.MAX_CHANNELS);
+        const context = {
+            sampleRate: this.audioContext.sampleRate,
+            currentFrame: 0,
+            currentTime: 0
+        };
+        // The returned value will be the number of new output channels, if it's 
+        // different from the provided buffer size, otherwise undefined.
+        const numOutputChannels = this.processAudioFrame(inputChunks, outputChunk, context);
+        return numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : numChannelsPerInput;
     }
-}
-function processSamples(fn, inputChunks, outputChunk) {
-    const numChannels = inputChunks[0].length;
-    const numSamples = inputChunks[0][0].length;
-    for (let c = 0; c < numChannels; c++) {
-        for (let i = 0; i < numSamples; i++) {
-            const inputs = inputChunks.map(input => input[c][i]);
-            const result = fn(...inputs);
-            assertValidReturnType(fn, result);
-            outputChunk[c][i] = result;
+    static defineAudioGraph(processorNode, { numInputs, numChannelsPerInput }) {
+        const totalNumChannels = numInputs * numChannelsPerInput;
+        const inputNodes = [];
+        const merger = this.audioContext.createChannelMerger(totalNumChannels);
+        // Merger -> Processor
+        merger.connect(processorNode);
+        for (let i = 0; i < numInputs; i++) {
+            const input = new GainNode(this.audioContext, { channelCount: numChannelsPerInput });
+            // Flattened channel arrangement:
+            // [0_left, 0_right, 1_left, 1_right, 2_left, 2_right] 
+            for (let j = 0; j < numChannelsPerInput; j++) {
+                // Input -> Merger
+                const destinationChannel = i * numChannelsPerInput + j;
+                input.connect(merger, 0, destinationChannel);
+            }
+            inputNodes.push(input);
+        }
+        return inputNodes;
+    }
+    static create(fn, { useWorklet, dimension, numInputs, numChannelsPerInput, windowSize, numOutputChannels }) {
+        const totalNumChannels = numInputs * numChannelsPerInput;
+        if (totalNumChannels > constants.MAX_CHANNELS) {
+            throw new Error(`The total number of input channels must be less than ${constants.MAX_CHANNELS}. Given numInputs=${numInputs} and numChannelsPerInput=${numChannelsPerInput}.`);
+        }
+        if (useWorklet) {
+            return new WorkletExecutionContext(fn, {
+                dimension,
+                numInputs,
+                numChannelsPerInput,
+                numOutputChannels,
+            });
+        }
+        else {
+            return new ScriptProcessorExecutionContext(fn, {
+                dimension,
+                numInputs,
+                numChannelsPerInput,
+                windowSize,
+                numOutputChannels
+            });
         }
     }
-    return undefined;
 }
-function processTime(fn, inputChunks, outputChunk) {
-    const numChannels = inputChunks[0].length;
-    for (let c = 0; c < numChannels; c++) {
-        const inputs = inputChunks.map(input => input[c]);
-        const output = fn(...inputs);
-        assertValidReturnType(fn, output);
-        outputChunk[c].set(output);
-    }
-    return undefined;
-}
-/**
- * Apply a fuction across the audio chunk (channels and time).
- *
- * @param fn
- * @param inputChunks
- * @param outputChunk
- * @returns The number of channels output by the function.
- */
-function processTimeAndChannels(fn, inputChunks, outputChunk) {
-    const inputs = inputChunks.map(toMultiChannelArray);
-    const result = fn(...inputs);
-    assertValidReturnType(fn, result);
-    for (let c = 0; c < result.length; c++) {
-        if (result[c] == undefined) {
-            continue; // This signifies that the channel should be empty.
-        }
-        outputChunk[c].set(result[c]);
-    }
-    return result.length;
-}
-/**
- * Apply a fuction to each sample, across channels.
- *
- * @param fn
- * @param inputChunks
- * @param outputChunk
- * @returns The number of channels output by the function.
- */
-function processChannels(fn, inputChunks, outputChunk) {
-    let numOutputChannels;
-    const numSamples = inputChunks[0][0].length;
-    for (let i = 0; i < numSamples; i++) {
-        // Get the i'th sample, across all channels and inputs.
-        const inputs = inputChunks.map(input => {
-            const inputChannels = getColumn(input, i);
-            return toMultiChannelArray(inputChannels);
+class WorkletExecutionContext extends AudioExecutionContext {
+    constructor(fn, { dimension, numInputs, numChannelsPerInput, numOutputChannels, }) {
+        super(fn, dimension);
+        numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : (numOutputChannels = this.inferNumOutputChannels(numInputs, numChannelsPerInput));
+        const worklet = new AudioWorkletNode(this.audioContext, WORKLET_NAME, {
+            outputChannelCount: [numOutputChannels],
+            numberOfInputs: 1,
+            numberOfOutputs: 1,
         });
-        const outputChannels = fn(...inputs).map(v => isFinite(v) ? v : 0);
-        assertValidReturnType(fn, outputChannels);
-        writeColumn(outputChunk, i, outputChannels);
-        numOutputChannels = outputChannels.length;
+        worklet['__numInputChannels'] = numChannelsPerInput;
+        worklet['__numOutputChannels'] = numOutputChannels;
+        const inputs = AudioExecutionContext.defineAudioGraph(worklet, {
+            numInputs,
+            numChannelsPerInput,
+        });
+        // NOTE: beginning execution of the user-supplied function must be
+        // performed *after* the AudioWorkletNode has all its inputs 
+        // connected, otherwise the processor may run process() with an
+        // empty input array.
+        // https://bugzilla.mozilla.org/show_bug.cgi?id=1629478
+        const serializedFunction = serializeFunction(fn, dimension);
+        worklet.port.postMessage(serializedFunction);
+        this.inputs = inputs;
+        this.output = worklet;
     }
-    return numOutputChannels;
 }
-function getProcessingFunction(dimension) {
-    switch (dimension) {
-        case "all":
-            return processTimeAndChannels;
-        case "channels":
-            return processChannels;
-        case "time":
-            return processTime;
-        case "none":
-            return processSamples;
-        default:
-            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
+class ScriptProcessorExecutionContext extends AudioExecutionContext {
+    constructor(fn, { dimension, numInputs, numChannelsPerInput, windowSize, numOutputChannels }) {
+        super(fn, dimension);
+        this.fn = fn;
+        numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : (numOutputChannels = this.inferNumOutputChannels(numInputs, numChannelsPerInput));
+        const processor = createScriptProcessorNode(this.audioContext, windowSize, numChannelsPerInput, numOutputChannels);
+        const inputs = AudioExecutionContext.defineAudioGraph(processor, {
+            numInputs,
+            numChannelsPerInput,
+        });
+        this.defineAudioProcessHandler(processor);
+        this.inputs = inputs;
+        this.output = processor;
+    }
+    defineAudioProcessHandler(processor) {
+        let frameIndex = 0;
+        const handler = (event) => {
+            try {
+                this.processAudioEvent(event, frameIndex++);
+            }
+            catch (e) {
+                processor.removeEventListener(constants.EVENT_AUDIOPROCESS, handler);
+                e instanceof Disconnect || console.error(e);
+            }
+        };
+        processor.addEventListener(constants.EVENT_AUDIOPROCESS, handler);
+    }
+    /**
+     * Split out a flattened array of channels into separate inputs.
+     */
+    deinterleaveInputs(flatInputs) {
+        return [flatInputs]; // TODO: implement for multi-input case.
+    }
+    processAudioEvent(event, frameIndex) {
+        const inputChunk = [];
+        const outputChunk = [];
+        for (let c = 0; c < event.inputBuffer.numberOfChannels; c++) {
+            inputChunk.push(event.inputBuffer.getChannelData(c));
+        }
+        for (let c = 0; c < event.outputBuffer.numberOfChannels; c++) {
+            outputChunk.push(event.outputBuffer.getChannelData(c));
+        }
+        const context = {
+            sampleRate: this.audioContext.sampleRate,
+            currentTime: this.audioContext.currentTime,
+            currentFrame: frameIndex
+        };
+        const inputChunks = this.deinterleaveInputs(inputChunk);
+        return this.processAudioFrame(inputChunks, outputChunk, context);
     }
 }
 class AudioTransformComponent extends BaseComponent {
-    constructor(fn, { dimension, windowSize = undefined, inputNames = undefined, numInputs = undefined, numChannelsPerInput = 2, numOutputChannels = undefined }) {
+    constructor(fn, { dimension, windowSize = undefined, inputNames = undefined, numInputs = undefined, numChannelsPerInput = 2, numOutputChannels = undefined, useWorklet = false }) {
         super();
         this.fn = fn;
         // Properties.
-        this.applyToChunk = getProcessingFunction(dimension);
         if (inputNames != undefined) {
             if (numInputs != undefined && numInputs != inputNames.length) {
                 throw new Error(`If both numInputs and inputNames are provided, they must match. Given numInputs=${numInputs}, inputNames=[${inputNames}]`);
@@ -9072,49 +9218,23 @@ class AudioTransformComponent extends BaseComponent {
             inputNames = this.inferParamNames(fn, numChannelsPerInput, numInputs);
         }
         numInputs !== null && numInputs !== void 0 ? numInputs : (numInputs = inputNames.length);
-        numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : (numOutputChannels = this.inferNumOutputChannels(numChannelsPerInput, windowSize));
         this.numInputs = numInputs;
         this.numChannelsPerInput = numChannelsPerInput;
-        // Audio nodes.
-        const { processor, inputs } = AudioTransformComponent.defineAudioGraph({
+        // Handles audio graph creation.
+        const executionContext = AudioExecutionContext.create(fn, {
+            dimension,
+            windowSize,
             numInputs,
             numChannelsPerInput,
-            windowSize,
-            numOutputChannels
+            numOutputChannels,
+            useWorklet,
         });
-        this.defineAudioProcessHandler(processor);
         // I/O.
         for (const i of range(numInputs)) {
-            this[inputNames[i]] = this.defineAudioInput(inputNames[i], inputs[i]);
+            this[inputNames[i]] = this.defineAudioInput(inputNames[i], executionContext.inputs[i]);
             this[i] = this[inputNames[i]]; // Numbered alias.
         }
-        this.output = this.defineAudioOutput('output', processor);
-    }
-    /**
-     * Guess the number of output channels by applying the function to a fake input.
-     */
-    inferNumOutputChannels(numInputChannels, windowSize) {
-        const sampleRate = this.audioContext.sampleRate;
-        function createBuffer(numberOfChannels) {
-            return new AudioBuffer({
-                length: windowSize || 256,
-                numberOfChannels,
-                sampleRate
-            });
-        }
-        const inputBuffer = createBuffer(numInputChannels);
-        // The output may have more channels than the input, so be flexible when 
-        // testing it so as to not break the implementation.
-        const outputBuffer = createBuffer(constants.MAX_CHANNELS);
-        const fillerEvet = new AudioProcessingEvent(constants.EVENT_AUDIOPROCESS, {
-            playbackTime: 0,
-            inputBuffer,
-            outputBuffer
-        });
-        // The returned value will be the number of new output channels, if it's 
-        // different from the provided buffer size, otherwise undefined.
-        const numOutputChannels = this.processAudioFrame(fillerEvet);
-        return numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : numInputChannels;
+        this.output = this.defineAudioOutput('output', executionContext.output);
     }
     inferParamNames(fn, numChannelsPerInput, numInputs) {
         const maxSafeInputs = Math.floor(constants.MAX_CHANNELS / numChannelsPerInput);
@@ -9147,62 +9267,6 @@ class AudioTransformComponent extends BaseComponent {
             // Parameters may be unnamed if they are object- or array-destructured.
             return (_a = paramDescriptor === null || paramDescriptor === void 0 ? void 0 : paramDescriptor.name) !== null && _a !== void 0 ? _a : i;
         });
-    }
-    static defineAudioGraph({ numInputs, numChannelsPerInput, windowSize, numOutputChannels }) {
-        const totalNumChannels = numInputs * numChannelsPerInput;
-        if (totalNumChannels > constants.MAX_CHANNELS) {
-            throw new Error(`The total number of input channels must be less than ${constants.MAX_CHANNELS}. Given numInputs=${numInputs} and numChannelsPerInput=${numChannelsPerInput}.`);
-        }
-        const inputNodes = [];
-        const merger = this.audioContext.createChannelMerger(totalNumChannels);
-        const processor = createScriptProcessorNode(this.audioContext, windowSize, numChannelsPerInput, numOutputChannels);
-        // Merger -> Processor
-        merger.connect(processor);
-        for (let i = 0; i < numInputs; i++) {
-            const input = new GainNode(this.audioContext, { channelCount: numChannelsPerInput });
-            // Flattened channel arrangement:
-            // [0_left, 0_right, 1_left, 1_right, 2_left, 2_right] 
-            for (let j = 0; j < numChannelsPerInput; j++) {
-                // Input -> Merger
-                const destinationChannel = i * numChannelsPerInput + j;
-                input.connect(merger, 0, destinationChannel);
-            }
-            inputNodes.push(input);
-        }
-        return {
-            inputs: inputNodes,
-            processor
-        };
-    }
-    defineAudioProcessHandler(processor) {
-        const handler = (event) => {
-            try {
-                this.processAudioFrame(event);
-            }
-            catch (e) {
-                processor.removeEventListener(constants.EVENT_AUDIOPROCESS, handler);
-                e instanceof Disconnect || console.error(e);
-            }
-        };
-        processor.addEventListener(constants.EVENT_AUDIOPROCESS, handler);
-    }
-    /**
-     * Split out a flattened array of channels into separate inputs.
-     */
-    deinterleaveInputs(flatInputs) {
-        return [flatInputs]; // TODO: implement for multi-input case.
-    }
-    processAudioFrame(event) {
-        const inputChunk = [];
-        const outputChunk = [];
-        for (let c = 0; c < event.inputBuffer.numberOfChannels; c++) {
-            inputChunk.push(event.inputBuffer.getChannelData(c));
-        }
-        for (let c = 0; c < event.outputBuffer.numberOfChannels; c++) {
-            outputChunk.push(event.outputBuffer.getChannelData(c));
-        }
-        const inputChunks = this.deinterleaveInputs(inputChunk);
-        return this.applyToChunk(this.fn.bind(event), inputChunks, outputChunk);
     }
 }
 
@@ -11689,9 +11753,11 @@ const GLOBAL_AUDIO_CONTEXT = new AudioContext();
 const defaultConfig = {
     audioContext: GLOBAL_AUDIO_CONTEXT,
     state: { isInitialized: false },
-    defaultSamplePeriodMs: 10
+    defaultSamplePeriodMs: 10,
+    workletPath: "js/shared/audio_worklet/worklet.js"
 };
 const _GLOBAL_STATE = defaultConfig.state;
+let _runCalled = false;
 let gestureListeners = [];
 /**
  * Register a function to be called once the audio engine is ready and a user gesture has been performed.
@@ -11699,6 +11765,9 @@ let gestureListeners = [];
  * @param callback A function to run once the audio engine is ready.
  */
 function run(callback) {
+    if (!_runCalled)
+        createInitListeners();
+    _runCalled = true;
     if (_GLOBAL_STATE.isInitialized) {
         callback(GLOBAL_AUDIO_CONTEXT);
     }
@@ -11715,9 +11784,15 @@ function init() {
         listener(GLOBAL_AUDIO_CONTEXT);
     }
 }
-const USER_GESTURES = ["change", "click", "contextmenu", "dblclick", "mouseup", "pointerup", "reset", "submit", "touchend"];
-for (const gesture of USER_GESTURES) {
-    document.addEventListener(gesture, init, { once: true });
+function createInitListeners() {
+    const workletPromise = GLOBAL_AUDIO_CONTEXT.audioWorklet.addModule(defaultConfig.workletPath);
+    const USER_GESTURES = ["change", "click", "contextmenu", "dblclick", "mouseup", "pointerup", "reset", "submit", "touchend"];
+    for (const gesture of USER_GESTURES) {
+        document.addEventListener(gesture, initAfterAsyncOperations, { once: true });
+    }
+    function initAfterAsyncOperations() {
+        workletPromise.then(init);
+    }
 }
 
 // TODO: Fix all the displays to work with BaseDisplay.
@@ -13130,6 +13205,7 @@ var internals = /*#__PURE__*/Object.freeze({
   TypedConfigurable: TypedConfigurable,
   TypingKeyboardMIDI: TypingKeyboardMIDI,
   VisualComponent: VisualComponent,
+  WORKLET_NAME: WORKLET_NAME,
   Wave: Wave,
   get WaveType () { return WaveType; },
   connectWebAudioChannels: connectWebAudioChannels,
@@ -13139,6 +13215,8 @@ var internals = /*#__PURE__*/Object.freeze({
   events: events,
   getNumInputChannels: getNumInputChannels,
   getNumOutputChannels: getNumOutputChannels,
+  getProcessingFunction: getProcessingFunction,
+  serializeFunction: serializeFunction,
   stackChannels: stackChannels,
   toMultiChannelArray: toMultiChannelArray,
   util: util
