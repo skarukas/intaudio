@@ -15,7 +15,7 @@ import { AudioRateOutput } from "../../io/output/AudioRateOutput.js";
 import { HybridInput } from "../../io/input/HybridInput.js";
 import { HybridOutput } from "../../io/output/HybridOutput.js";
 import { AudioRateInput } from "../../io/input/AudioRateInput.js";
-import { MultiChannelArray } from "../../shared/multichannel.js";
+import { MultiChannelArray } from "../../worklet/lib/types.js";
 
 export abstract class BaseComponent extends BaseConnectable implements Component, AudioSignalStream {
   readonly isComponent = true

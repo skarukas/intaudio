@@ -1,7 +1,8 @@
 import { Component } from "../../components/base/Component.js"
 import { AudioSignalStream } from "../../shared/AudioSignalStream.js"
-import { AudioDimension, MultiChannel, MultiChannelArray, connectWebAudioChannels, createMultiChannelView, getNumInputChannels, getNumOutputChannels } from "../../shared/multichannel.js"
+import { MultiChannel, connectWebAudioChannels, createMultiChannelView, getNumInputChannels, getNumOutputChannels } from "../../shared/multichannel.js"
 import { CanBeConnectedTo } from "../../shared/types.js"
+import { AudioDimension, MultiChannelArray } from "../../worklet/lib/types.js"
 import { AudioRateInput } from "../input/AudioRateInput.js"
 import { ComponentInput } from "../input/ComponentInput.js"
 import { HybridInput } from "../input/HybridInput.js"
@@ -71,9 +72,9 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
     }
     return this.connect(new this._.ChannelSplitter(...inputChannelGroups))
   }
-  transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], dimension: "all", { windowSize, useWorklet}?: { windowSize?: number, useWorklet?: boolean }): Component;
+  transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], dimension: "all", { windowSize, useWorklet }?: { windowSize?: number, useWorklet?: boolean }): Component;
   transformAudio(fn: (input: MultiChannelArray<number>) => number[], dimension: "channels", { useWorklet }?: { useWorklet?: boolean }): Component;
-  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", { windowSize, useWorklet}?: { windowSize?: number, useWorklet?: boolean }): Component;
+  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", { windowSize, useWorklet }?: { windowSize?: number, useWorklet?: boolean }): Component;
   transformAudio(fn: (x: number) => number, dimension?: "none", { useWorklet }?: { useWorklet?: boolean }): Component;
   transformAudio(
     fn: Function,

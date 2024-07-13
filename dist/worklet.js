@@ -1,7 +1,137 @@
 (function (exports) {
     'use strict';
 
-    // TODO: split up this file into many modules and generate the worklet file with rollup instead.
+    /**
+     * A data structure storing the last N values in a time series.
+     *
+     * It is implemented as a circular array to avoid processing when the time step
+     * is incremented.
+     *
+     * Here's a demonstration with eaach t[n] being an absolute time, | showing
+     * the position of the offset, and _ being the default value.
+     *
+     * "Initial" state storing the first 4 values:
+     * - circularBuffer: [|v3 v2 v1 v0]
+     * - offset: 0
+     *
+     * > get(0) = v3
+     * > get(1) = v2
+     * > get(4) = _
+     *
+     * After add(v4):
+     * - circularBuffer: [v3 v2 v1 | v4]
+     * - offset: 3
+     *
+     * > get(0) = v4
+     * > get(1) = v3
+     *
+     * After setSize(8):
+     * - circularBuffer: [|v4 v3 v2 v1 _ _ _ _]
+     * - offset: 0
+     *
+     */
+    class MemoryBuffer {
+        constructor(defaultValueFn) {
+            this.defaultValueFn = defaultValueFn;
+            this.circularBuffer = [];
+            // offset will always be within range, and circularBuffer[offset] is the 
+            // most recent value (circularBuffer[offset+1] is the one before that, etc.)
+            this.offset = 0;
+        }
+        get length() {
+            return this.circularBuffer.length;
+        }
+        toInnerIndex(i) {
+            return (i + this.offset) % this.length;
+        }
+        /**
+         * Get the ith value of the memory. Note that index 0 is the previous value, not 1.
+         */
+        get(i) {
+            if (i >= this.length) {
+                return this.defaultValueFn();
+            }
+            else {
+                const innerIdx = this.toInnerIndex(i);
+                return this.circularBuffer[innerIdx];
+            }
+        }
+        /**
+         * Add `val` to the array of memory, incrementing the time step. If `length` is zero, this is a no-op.
+         *
+         * NOTE: to add without discarding old values, always call setSize first.
+         */
+        add(val) {
+            if (this.length) {
+                const clone = JSON.parse(JSON.stringify(val)); // TODO: need this?
+                // Modular subtraction by 1.
+                this.offset = (this.offset + this.length - 1) % this.length;
+                this.circularBuffer[this.offset] = clone;
+            }
+        }
+        setSize(size) {
+            const newBuffer = [];
+            for (let i = 0; i < size; i++) {
+                newBuffer.push(this.get(i));
+            }
+            this.circularBuffer = newBuffer;
+            this.offset = 0;
+        }
+    }
+
+    class SignalProcessingContext {
+        constructor(inputMemory, outputMemory, { windowSize, currentTime, frameIndex, sampleRate, channelIndex = undefined, sampleIndex = undefined }) {
+            this.inputMemory = inputMemory;
+            this.outputMemory = outputMemory;
+            this.maxInputLookback = 0;
+            this.maxOutputLookback = 0;
+            this.fixedInputLookback = undefined;
+            this.fixedOutputLookback = undefined;
+            this.currentTime = currentTime + (sampleIndex / sampleRate);
+            this.windowSize = windowSize;
+            this.sampleIndex = sampleIndex;
+            this.channelIndex = channelIndex;
+            this.frameIndex = frameIndex;
+            this.sampleRate = sampleRate;
+        }
+        // TODO: consider making this 1-based to make previousInputs(0) be the current.
+        previousInputs(t = 0) {
+            this.maxInputLookback = Math.max(t + 1, this.maxInputLookback);
+            return this.inputMemory.get(t);
+        }
+        previousOutput(t = 0) {
+            this.maxOutputLookback = Math.max(t + 1, this.maxOutputLookback);
+            return this.outputMemory.get(t);
+        }
+        setOutputMemorySize(n) {
+            this.fixedOutputLookback = n;
+        }
+        setInputMemorySize(n) {
+            this.fixedInputLookback = n;
+        }
+        execute(fn, inputs) {
+            // Execute the function, making the Context properties and methods available
+            // within the user-supplied function.
+            const output = fn.bind(this)(...inputs);
+            // If the function tried to access past inputs or force-rezised the memory, 
+            // resize.
+            SignalProcessingContext.resizeMemory(this.inputMemory, this.maxInputLookback, this.fixedInputLookback);
+            SignalProcessingContext.resizeMemory(this.outputMemory, this.maxOutputLookback, this.fixedOutputLookback);
+            // Update memory after resizing.
+            this.inputMemory.add(inputs);
+            this.outputMemory.add(output);
+            return output;
+        }
+        static resizeMemory(memory, maxLookback, lookbackOverride) {
+            if (lookbackOverride != undefined) {
+                memory.setSize(lookbackOverride);
+            }
+            else if (maxLookback > memory.length) {
+                memory.setSize(maxLookback);
+            }
+        }
+    }
+
     function toMultiChannelArray(array) {
         const proxy = new Proxy(array, {
             get(target, p, receiver) {
@@ -14,6 +144,7 @@
         });
         return proxy;
     }
+
     function getColumn(arr, col) {
         const result = [];
         for (let i = 0; i < arr.length; i++) {
@@ -140,144 +271,7 @@
                 throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
         }
     }
-    function serializeWorkletMessage(f, { dimension, numInputs, numChannelsPerInput, numOutputChannels, windowSize }) {
-        return {
-            fnString: f.toString(),
-            dimension,
-            numInputs,
-            numChannelsPerInput,
-            numOutputChannels,
-            windowSize
-        };
-    }
-    /**
-     * A data structure storing the last N values in a time series.
-     *
-     * It is implemented as a circular array to avoid processing when the time step
-     * is incremented.
-     *
-     * Here's a demonstration with eaach t[n] being an absolute time, | showing
-     * the position of the offset, and _ being the default value.
-     *
-     * "Initial" state storing the first 4 values:
-     * - circularBuffer: [|v3 v2 v1 v0]
-     * - offset: 0
-     *
-     * > get(0) = v3
-     * > get(1) = v2
-     * > get(4) = _
-     *
-     * After add(v4):
-     * - circularBuffer: [v3 v2 v1 | v4]
-     * - offset: 3
-     *
-     * > get(0) = v4
-     * > get(1) = v3
-     *
-     * After setSize(8):
-     * - circularBuffer: [|v4 v3 v2 v1 _ _ _ _]
-     * - offset: 0
-     *
-     */
-    class MemoryBuffer {
-        constructor(defaultValueFn) {
-            this.defaultValueFn = defaultValueFn;
-            this.circularBuffer = [];
-            // offset will always be within range, and circularBuffer[offset] is the 
-            // most recent value (circularBuffer[offset+1] is the one before that, etc.)
-            this.offset = 0;
-        }
-        get length() {
-            return this.circularBuffer.length;
-        }
-        toInnerIndex(i) {
-            return (i + this.offset) % this.length;
-        }
-        /**
-         * Get the ith value of the memory. Note that index 0 is the previous value, not 1.
-         */
-        get(i) {
-            if (i >= this.length) {
-                return this.defaultValueFn();
-            }
-            else {
-                const innerIdx = this.toInnerIndex(i);
-                return this.circularBuffer[innerIdx];
-            }
-        }
-        /**
-         * Add `val` to the array of memory, incrementing the time step. If `length` is zero, this is a no-op.
-         *
-         * NOTE: to add without discarding old values, always call setSize first.
-         */
-        add(val) {
-            if (this.length) {
-                const clone = JSON.parse(JSON.stringify(val)); // TODO: need this?
-                // Modular subtraction by 1.
-                this.offset = (this.offset + this.length - 1) % this.length;
-                this.circularBuffer[this.offset] = clone;
-            }
-        }
-        setSize(size) {
-            const newBuffer = [];
-            for (let i = 0; i < size; i++) {
-                newBuffer.push(this.get(i));
-            }
-            this.circularBuffer = newBuffer;
-            this.offset = 0;
-        }
-    }
-    class SignalProcessingContext {
-        constructor(inputMemory, outputMemory, { windowSize, currentTime, frameIndex, sampleRate, channelIndex = undefined, sampleIndex = undefined }) {
-            this.inputMemory = inputMemory;
-            this.outputMemory = outputMemory;
-            this.maxInputLookback = 0;
-            this.maxOutputLookback = 0;
-            this.fixedInputLookback = undefined;
-            this.fixedOutputLookback = undefined;
-            this.currentTime = currentTime + (sampleIndex / sampleRate);
-            this.windowSize = windowSize;
-            this.sampleIndex = sampleIndex;
-            this.channelIndex = channelIndex;
-            this.frameIndex = frameIndex;
-            this.sampleRate = sampleRate;
-        }
-        previousInputs(t = 0) {
-            this.maxInputLookback = Math.max(t + 1, this.maxInputLookback);
-            return this.inputMemory.get(t);
-        }
-        previousOutput(t = 0) {
-            this.maxOutputLookback = Math.max(t + 1, this.maxOutputLookback);
-            return this.outputMemory.get(t);
-        }
-        setOutputMemorySize(n) {
-            this.fixedOutputLookback = n;
-        }
-        setInputMemorySize(n) {
-            this.fixedInputLookback = n;
-        }
-        execute(fn, inputs) {
-            // Execute the function, making the Context properties and methods available
-            // within the user-supplied function.
-            const output = fn.bind(this)(...inputs);
-            // If the function tried to access past inputs or force-rezised the memory, 
-            // resize.
-            SignalProcessingContext.resizeMemory(this.inputMemory, this.maxInputLookback, this.fixedInputLookback);
-            SignalProcessingContext.resizeMemory(this.outputMemory, this.maxOutputLookback, this.fixedOutputLookback);
-            // Update memory after resizing.
-            this.inputMemory.add(inputs);
-            this.outputMemory.add(output);
-            return output;
-        }
-        static resizeMemory(memory, maxLookback, lookbackOverride) {
-            if (lookbackOverride != undefined) {
-                memory.setSize(lookbackOverride);
-            }
-            else if (maxLookback > memory.length) {
-                memory.setSize(maxLookback);
-            }
-        }
-    }
+
     const ALL_CHANNELS = -1;
     /**
      * A class collecting all current ongoing memory streams. Because some `dimension` settings process channels in parallel (`"none"` and `"time"`), memory streams are indexed by channel.
@@ -334,28 +328,34 @@
             });
         }
     }
-    /********** Worklet-specific code ************/
+
+    /* Serialization */
+    function deserializeWorkletMessage(message, sampleRate, getCurrentTime, getFrameIndex) {
+        const innerFunction = new Function('return ' + message.fnString)();
+        const applyToChunk = getProcessingFunction(message.dimension);
+        const contextFactory = new SignalProcessingContextFactory(Object.assign(Object.assign({}, message), { 
+            // Each environment may get this information from different places.
+            sampleRate,
+            getCurrentTime,
+            getFrameIndex }));
+        return function processFn(inputs, outputs, __parameters) {
+            // Apply across dimensions.
+            applyToChunk(innerFunction, inputs, outputs[0], contextFactory);
+        };
+    }
+
+    // Entry point for the worklet.
     const WORKLET_NAME = "function-worklet";
-    /* Define AudioWorkletProcessor (if in Worklet) */
+    // Define AudioWorkletProcessor (if in Worklet)
     if (typeof AudioWorkletProcessor != 'undefined') {
-        function deserializeWorkletMessage(message) {
-            const innerFunction = new Function('return ' + message.fnString)();
-            const applyToChunk = getProcessingFunction(message.dimension);
-            const contextFactory = new SignalProcessingContextFactory(Object.assign(Object.assign({}, message), { 
-                // Reference global variables.
-                sampleRate, getCurrentTime: () => currentTime, getFrameIndex: () => Math.floor(currentFrame / message.windowSize) }));
-            return function processFn(inputs, outputs, __parameters) {
-                // Apply across dimensions.
-                applyToChunk(innerFunction, inputs, outputs[0], contextFactory);
-            };
-        }
         class OperationWorklet extends AudioWorkletProcessor {
             constructor() {
                 super();
                 // Receives serialized input sent from postMessage() calls.
                 // This is used to change the processing function at runtime.
                 this.port.onmessage = (event) => {
-                    this.processImpl = deserializeWorkletMessage(event.data);
+                    const windowSize = event.data.windowSize;
+                    this.processImpl = deserializeWorkletMessage(event.data, sampleRate, () => currentTime, () => Math.floor(currentFrame / windowSize));
                 };
             }
             process(inputs, outputs, parameters) {
@@ -367,12 +367,7 @@
         registerProcessor(WORKLET_NAME, OperationWorklet);
     }
 
-    exports.SignalProcessingContextFactory = SignalProcessingContextFactory;
     exports.WORKLET_NAME = WORKLET_NAME;
-    exports.generateZeroInput = generateZeroInput;
-    exports.getProcessingFunction = getProcessingFunction;
-    exports.serializeWorkletMessage = serializeWorkletMessage;
-    exports.toMultiChannelArray = toMultiChannelArray;
 
     return exports;
 

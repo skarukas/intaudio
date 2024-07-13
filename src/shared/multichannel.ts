@@ -1,7 +1,6 @@
 import { AbstractInput } from "../io/input/AbstractInput.js"
 import { AbstractOutput } from "../io/output/AbstractOutput.js"
 import { WebAudioConnectable } from "./types.js"
-export * from "../worklet/worklet.js"
 
 // TODO: this doesn't seem to work. Make sure we're connecting to the right *channel* and not just the *input*.
 

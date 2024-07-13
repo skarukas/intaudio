@@ -6,9 +6,13 @@ import describeFunction from 'function-descriptor'
 import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 import { createScriptProcessorNode, range } from "../shared/util.js";
-import { AudioDimension, MappingFn, SignalProcessingContextFactory, WORKLET_NAME, getProcessingFunction, serializeWorkletMessage } from "../worklet/worklet.js";
 import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
 import { Connectable } from "../shared/base/Connectable.js";
+import { SignalProcessingContextFactory } from "../worklet/lib/SignalProcessingContextFactory.js";
+import { MappingFn, getProcessingFunction } from "../worklet/lib/utils.js";
+import { WORKLET_NAME } from "../worklet/worklet.js";
+import { AudioDimension } from "../worklet/lib/types.js";
+import { serializeWorkletMessage } from "../worklet/lib/serialization.js";
 
 function enumValues(Enum: object) {
   const nonNumericKeys = Object.keys(Enum).filter((item) => {

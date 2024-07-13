@@ -3,8 +3,11 @@ import describeFunction from 'function-descriptor';
 import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 import { createScriptProcessorNode, range } from "../shared/util.js";
-import { SignalProcessingContextFactory, WORKLET_NAME, getProcessingFunction, serializeWorkletMessage } from "../worklet/worklet.js";
 import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
+import { SignalProcessingContextFactory } from "../worklet/lib/SignalProcessingContextFactory.js";
+import { getProcessingFunction } from "../worklet/lib/utils.js";
+import { WORKLET_NAME } from "../worklet/worklet.js";
+import { serializeWorkletMessage } from "../worklet/lib/serialization.js";
 function enumValues(Enum) {
     const nonNumericKeys = Object.keys(Enum).filter((item) => {
         return isNaN(Number(item));
