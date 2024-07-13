@@ -3,13 +3,13 @@ import { RangeType } from "../shared/types.js";
 import { scaleRange } from "../shared/util.js";
 import { VisualComponent } from "./base/VisualComponent.js";
 export class RangeInputComponent extends VisualComponent {
-    constructor(minValue = -1, maxValue = 1, step, defaultValue, displayType = RangeType.SLIDER) {
+    constructor(minValue = 0, maxValue = 1, step, defaultValue, displayType = RangeType.SLIDER) {
         super();
         this.display = (displayType == RangeType.SLIDER)
             ? new this._.SliderDisplay(this)
             : new this._.KnobDisplay(this);
         if (defaultValue == undefined) {
-            defaultValue = (minValue + maxValue) / 2;
+            defaultValue = minValue;
         }
         // Inputs
         this.minValue = this.defineControlInput('minValue', minValue);

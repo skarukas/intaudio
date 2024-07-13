@@ -853,6 +853,78 @@ class AudioRateInput extends AbstractInput {
     }
 }
 
+class HybridInput extends AbstractInput {
+    // Hybrid input can connect an audio input to a sink, but it also can
+    // receive control inputs.
+    constructor(name, parent, audioSink, defaultValue = constants.UNSET_VALUE, isRequired = false) {
+        super(name, parent, isRequired);
+        this.name = name;
+        this.parent = parent;
+        this.audioSink = audioSink;
+        this.isRequired = isRequired;
+        this.activeChannel = undefined;
+        this._value = defaultValue;
+        this.channels = createMultiChannelView(this, audioSink);
+    }
+    get left() {
+        return this.channels[0];
+    }
+    get right() {
+        var _a;
+        return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
+    }
+    get value() {
+        return this._value;
+    }
+    setValue(value) {
+        var _a;
+        if (value == constants.TRIGGER && this.value != undefined) {
+            value = this.value;
+        }
+        this._value = value;
+        if (isFinite(+value)) {
+            this.audioSink["value"] = +value;
+        }
+        (_a = this.parent) === null || _a === void 0 ? void 0 : _a.propagateUpdatedInput(this, value);
+    }
+}
+
+// A special wrapper for a symbolic input that maps object signals to property assignments.
+// let i = new ComponentInput(parent)
+// i.setValue({ input1: "val1", input2: "val2" })  // sets vals on parent.
+class ComponentInput extends AudioRateInput {
+    constructor(name, parent, defaultInput) {
+        const audioNode = (defaultInput instanceof AudioRateInput || defaultInput instanceof HybridInput) ? defaultInput.audioSink : undefined;
+        super(name, parent, audioNode);
+        this.name = name;
+        this.defaultInput = defaultInput;
+        this.defaultInput = defaultInput;
+        this._value = defaultInput === null || defaultInput === void 0 ? void 0 : defaultInput.value;
+    }
+    setValue(value) {
+        // JS objects represent collections of parameter names and values
+        const isPlainObject = (value === null || value === void 0 ? void 0 : value.constructor) === Object;
+        if (isPlainObject && !value["_raw"]) {
+            // Validate each param is defined in the target.
+            for (let key in value) {
+                if (!(key in this.parent.inputs)) {
+                    throw new Error(`Given parameter object ${JSON.stringify(value)} but destination ${this.parent} has no input named '${key}'. To pass a raw object without changing properties, set _raw: true on the object.`);
+                }
+            }
+            for (let key in value) {
+                this.parent.inputs[key].setValue(value[key]);
+            }
+        }
+        else if (this.defaultInput == undefined) {
+            throw new Error(`Component ${this.parent} unable to receive input because it has no default input configured. Either connect to one of its named inputs [${Object.keys(this.parent.inputs)}], or send a message as a plain JS object, with one or more input names as keys. Given ${JSON.stringify(value)}`);
+        }
+        else {
+            isPlainObject && delete value["_raw"];
+            this.defaultInput.setValue(value);
+        }
+    }
+}
+
 class Disconnect extends Error {
 }
 /**
@@ -1013,6 +1085,12 @@ class ControlOutput extends AbstractOutput {
         let { component, input } = this.getDestinationInfo(destination);
         // TODO: fix... should be "destination" but won't work for non-connectables like Function.
         /* const connectable = destination instanceof AbstractInput ? destination : component */
+        // Conversion. TODO: figure out how to treat ComponentInput.
+        if (input instanceof AudioRateInput && !(input instanceof ComponentInput)) {
+            const converter = new this._.ControlToAudioConverter();
+            converter.connect(input);
+            input = converter.input;
+        }
         this.connections.push(input);
         return component;
     }
@@ -1095,78 +1173,6 @@ var events = /*#__PURE__*/Object.freeze({
   get KeyEventType () { return KeyEventType; },
   MuteEvent: MuteEvent
 });
-
-class HybridInput extends AbstractInput {
-    // Hybrid input can connect an audio input to a sink, but it also can
-    // receive control inputs.
-    constructor(name, parent, audioSink, defaultValue = constants.UNSET_VALUE, isRequired = false) {
-        super(name, parent, isRequired);
-        this.name = name;
-        this.parent = parent;
-        this.audioSink = audioSink;
-        this.isRequired = isRequired;
-        this.activeChannel = undefined;
-        this._value = defaultValue;
-        this.channels = createMultiChannelView(this, audioSink);
-    }
-    get left() {
-        return this.channels[0];
-    }
-    get right() {
-        var _a;
-        return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
-    }
-    get value() {
-        return this._value;
-    }
-    setValue(value) {
-        var _a;
-        if (value == constants.TRIGGER && this.value != undefined) {
-            value = this.value;
-        }
-        this._value = value;
-        if (isFinite(+value)) {
-            this.audioSink["value"] = +value;
-        }
-        (_a = this.parent) === null || _a === void 0 ? void 0 : _a.propagateUpdatedInput(this, value);
-    }
-}
-
-// A special wrapper for a symbolic input that maps object signals to property assignments.
-// let i = new ComponentInput(parent)
-// i.setValue({ input1: "val1", input2: "val2" })  // sets vals on parent.
-class ComponentInput extends AudioRateInput {
-    constructor(name, parent, defaultInput) {
-        const audioNode = (defaultInput instanceof AudioRateInput || defaultInput instanceof HybridInput) ? defaultInput.audioSink : undefined;
-        super(name, parent, audioNode);
-        this.name = name;
-        this.defaultInput = defaultInput;
-        this.defaultInput = defaultInput;
-        this._value = defaultInput === null || defaultInput === void 0 ? void 0 : defaultInput.value;
-    }
-    setValue(value) {
-        // JS objects represent collections of parameter names and values
-        const isPlainObject = (value === null || value === void 0 ? void 0 : value.constructor) === Object;
-        if (isPlainObject && !value["_raw"]) {
-            // Validate each param is defined in the target.
-            for (let key in value) {
-                if (!(key in this.parent.inputs)) {
-                    throw new Error(`Given parameter object ${JSON.stringify(value)} but destination ${this.parent} has no input named '${key}'. To pass a raw object without changing properties, set _raw: true on the object.`);
-                }
-            }
-            for (let key in value) {
-                this.parent.inputs[key].setValue(value[key]);
-            }
-        }
-        else if (this.defaultInput == undefined) {
-            throw new Error(`Component ${this.parent} unable to receive input because it has no default input configured. Either connect to one of its named inputs [${Object.keys(this.parent.inputs)}], or send a message as a plain JS object, with one or more input names as keys. Given ${JSON.stringify(value)}`);
-        }
-        else {
-            isPlainObject && delete value["_raw"];
-            this.defaultInput.setValue(value);
-        }
-    }
-}
 
 // TODO: Add a GainNode here to allow muting and mastergain of the component.
 class AudioRateOutput extends AbstractOutput {
@@ -9487,7 +9493,8 @@ class AudioTransformComponent extends BaseComponent {
         // I/O.
         for (const i of range(numInputs)) {
             this[inputNames[i]] = this.defineAudioInput(inputNames[i], executionContext.inputs[i]);
-            this[i] = this[inputNames[i]]; // Numbered alias.
+            // Numbered alias.
+            this[i] = this.defineInputAlias(i, this[inputNames[i]]);
         }
         this.output = this.defineAudioOutput('output', executionContext.output);
     }
@@ -9522,6 +9529,24 @@ class AudioTransformComponent extends BaseComponent {
             // Parameters may be unnamed if they are object- or array-destructured.
             return (_a = paramDescriptor === null || paramDescriptor === void 0 ? void 0 : paramDescriptor.name) !== null && _a !== void 0 ? _a : i;
         });
+    }
+    withInputs(...inputs) {
+        var _a;
+        console.log(this);
+        let inputDict = {};
+        if ((_a = inputs[0]) === null || _a === void 0 ? void 0 : _a.connect) { // instanceof Connectable
+            if (inputs.length > this.inputs.length) {
+                throw new Error(`Too many inputs for the call() method on ${this}. Expected ${this.inputs.length} but got ${inputs.length}.`);
+            }
+            for (let i = 0; i < inputs.length; i++) {
+                inputDict[i] = inputs[i];
+            }
+        }
+        else {
+            inputDict = inputs[0];
+        }
+        super.withInputs(inputDict);
+        return this;
     }
 }
 
@@ -12317,6 +12342,20 @@ function stackChannels(inputs) {
     return ChannelStacker.fromInputs(inputs);
 }
 
+class ControlToAudioConverter extends BaseComponent {
+    constructor() {
+        super();
+        this.input = this.defineControlInput('input');
+        this.node = createConstantSource(this.audioContext);
+        this.output = this.defineAudioOutput('output', this.node);
+    }
+    inputDidUpdate(input, newValue) {
+        if (input == this.input) {
+            this.node.offset.setValueAtTime(newValue, 0);
+        }
+    }
+}
+
 var __classPrivateFieldGet$7 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -12419,7 +12458,7 @@ class FunctionComponent extends BaseComponent {
     }
     withInputs(...inputs) {
         var _a;
-        let inputDict;
+        let inputDict = {};
         if ((_a = inputs[0]) === null || _a === void 0 ? void 0 : _a.connect) { // instanceof Connectable
             if (inputs.length > this._orderedFunctionInputs.length) {
                 throw new Error(`Too many inputs for the call() method on ${this}. Expected ${this._orderedFunctionInputs.length} but got ${inputs.length}.`);
@@ -12706,13 +12745,13 @@ class MidiInputDevice extends VisualComponent {
 }
 
 class RangeInputComponent extends VisualComponent {
-    constructor(minValue = -1, maxValue = 1, step, defaultValue, displayType = RangeType.SLIDER) {
+    constructor(minValue = 0, maxValue = 1, step, defaultValue, displayType = RangeType.SLIDER) {
         super();
         this.display = (displayType == RangeType.SLIDER)
             ? new this._.SliderDisplay(this)
             : new this._.KnobDisplay(this);
         if (defaultValue == undefined) {
-            defaultValue = (minValue + maxValue) / 2;
+            defaultValue = minValue;
         }
         // Inputs
         this.minValue = this.defineControlInput('minValue', minValue);
@@ -13440,6 +13479,7 @@ var internals = /*#__PURE__*/Object.freeze({
   ComponentInput: ComponentInput,
   ControlInput: ControlInput,
   ControlOutput: ControlOutput,
+  ControlToAudioConverter: ControlToAudioConverter,
   get DefaultDeviceBehavior () { return DefaultDeviceBehavior; },
   Disconnect: Disconnect,
   FunctionComponent: FunctionComponent,

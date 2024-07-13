@@ -105,7 +105,7 @@ export class FunctionComponent extends BaseComponent {
     }
     withInputs(...inputs) {
         var _a;
-        let inputDict;
+        let inputDict = {};
         if ((_a = inputs[0]) === null || _a === void 0 ? void 0 : _a.connect) { // instanceof Connectable
             if (inputs.length > this._orderedFunctionInputs.length) {
                 throw new Error(`Too many inputs for the call() method on ${this}. Expected ${this._orderedFunctionInputs.length} but got ${inputs.length}.`);

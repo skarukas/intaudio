@@ -8,6 +8,7 @@ import { BaseComponent } from "./base/BaseComponent.js";
 import { createScriptProcessorNode, range } from "../shared/util.js";
 import { AudioDimension, MappingFn, SignalProcessingContextFactory, WORKLET_NAME, getProcessingFunction, serializeWorkletMessage } from "../worklet/worklet.js";
 import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
+import { Connectable } from "../shared/base/Connectable.js";
 
 function enumValues(Enum: object) {
   const nonNumericKeys = Object.keys(Enum).filter((item) => {
@@ -331,7 +332,8 @@ export class AudioTransformComponent extends BaseComponent {
         inputNames[i],
         executionContext.inputs[i]
       )
-      this[i] = this[inputNames[i]]  // Numbered alias.
+      // Numbered alias.
+      this[i] = this.defineInputAlias(i, this[inputNames[i]])
     }
     this.output = this.defineAudioOutput('output', executionContext.output)
   }
@@ -368,5 +370,23 @@ export class AudioTransformComponent extends BaseComponent {
       // Parameters may be unnamed if they are object- or array-destructured.
       return paramDescriptor?.name ?? i
     })
+  }
+  // TODO: turn this into a single array arg here and FunctionComponent
+  withInputs(...inputs: Array<Connectable | unknown>): this;
+  withInputs(inputDict: { [name: string]: Connectable | unknown }): this;
+  override withInputs(...inputs: any): this {
+    let inputDict: { [name: string]: Connectable | unknown } = {}
+    if (inputs[0]?.connect) {  // instanceof Connectable
+      if (inputs.length > this.inputs.length) {
+        throw new Error(`Too many inputs for the call() method on ${this}. Expected ${this.inputs.length} but got ${inputs.length}.`)
+      }
+      for (let i = 0; i < inputs.length; i++) {
+        inputDict[i] = inputs[i]
+      }
+    } else {
+      inputDict = inputs[0]
+    }
+    super.withInputs(inputDict)
+    return this
   }
 }

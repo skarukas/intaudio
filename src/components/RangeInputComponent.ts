@@ -18,7 +18,7 @@ export class RangeInputComponent extends VisualComponent<RangeInputDisplay> {
 
   static Type = RangeType
   constructor(
-    minValue: number = -1,
+    minValue: number = 0,
     maxValue: number = 1,
     step?: number,
     defaultValue?: number,
@@ -29,7 +29,7 @@ export class RangeInputComponent extends VisualComponent<RangeInputDisplay> {
       ? new this._.SliderDisplay(this)
       : new this._.KnobDisplay(this)
     if (defaultValue == undefined) {
-      defaultValue = (minValue + maxValue) / 2
+      defaultValue = minValue
     }
     // Inputs
     this.minValue = this.defineControlInput('minValue', minValue)
@@ -52,7 +52,7 @@ export class RangeInputComponent extends VisualComponent<RangeInputDisplay> {
   protected handleMidiUpdate(event: MIDIMessageEvent) {
     const uInt8Value = event.data[2]  // Velocity / value.
     const scaledValue = scaleRange(
-      uInt8Value, 
+      uInt8Value,
       [0, 127],
       [this.minValue.value, this.maxValue.value]
     )

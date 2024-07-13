@@ -230,7 +230,8 @@ export class AudioTransformComponent extends BaseComponent {
         // I/O.
         for (const i of range(numInputs)) {
             this[inputNames[i]] = this.defineAudioInput(inputNames[i], executionContext.inputs[i]);
-            this[i] = this[inputNames[i]]; // Numbered alias.
+            // Numbered alias.
+            this[i] = this.defineInputAlias(i, this[inputNames[i]]);
         }
         this.output = this.defineAudioOutput('output', executionContext.output);
     }
@@ -265,5 +266,23 @@ export class AudioTransformComponent extends BaseComponent {
             // Parameters may be unnamed if they are object- or array-destructured.
             return (_a = paramDescriptor === null || paramDescriptor === void 0 ? void 0 : paramDescriptor.name) !== null && _a !== void 0 ? _a : i;
         });
+    }
+    withInputs(...inputs) {
+        var _a;
+        console.log(this);
+        let inputDict = {};
+        if ((_a = inputs[0]) === null || _a === void 0 ? void 0 : _a.connect) { // instanceof Connectable
+            if (inputs.length > this.inputs.length) {
+                throw new Error(`Too many inputs for the call() method on ${this}. Expected ${this.inputs.length} but got ${inputs.length}.`);
+            }
+            for (let i = 0; i < inputs.length; i++) {
+                inputDict[i] = inputs[i];
+            }
+        }
+        else {
+            inputDict = inputs[0];
+        }
+        super.withInputs(inputDict);
+        return this;
     }
 }

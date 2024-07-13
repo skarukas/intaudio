@@ -475,17 +475,16 @@ const tests = {
 
     assertEqual(timeTransform.numOutputChannels, 2)
   },
-  multipleInputTransform($root) {
+  multipleInputTransformGainSlider($root) {
     let slider = new ia.RangeInputComponent()
     slider.addToDom($root)
     let oscillator = new ia.AudioComponent(createOscillator(440))
     const monitor = new ia.ScrollingAudioMonitor()
-    monitor.addToDom($root)
+    monitor.addToDom($root, { top: 40 })
+
     const transform = new ia.AudioTransformComponent((v, vol) => {
-      return v + vol
-    }, { dimension: "none", useWorklet: true })
-    oscillator.connect(transform[0])
-    slider.connect(transform[1])
+      return v * vol
+    }, { dimension: "none", useWorklet: true }).withInputs(oscillator, slider)
     transform.connect(monitor).connect(ia.out)
   }
   /* periodicWaveTest() { 
@@ -497,7 +496,7 @@ const tests = {
 
 ia.run(() => {
   //return tests.midiInput()
-  for (let test in { multipleInputTransform: tests.multipleInputTransform }) {
+  for (let test in { multipleInputTransformGainSlider: tests.multipleInputTransformGainSlider }) {
     const $testRoot = $(document.createElement('div'))
     tests[test]($testRoot)
     ia.util.afterRender(() => {

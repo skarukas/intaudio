@@ -143,7 +143,7 @@ export class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any,
   withInputs(...inputs: Array<Connectable | unknown>): this;
   withInputs(inputDict: { [name: string]: Connectable | unknown }): this;
   override withInputs(...inputs: any): this {
-    let inputDict: { [name: string]: Connectable | unknown };
+    let inputDict: { [name: string]: Connectable | unknown } = {};
     if (inputs[0]?.connect) {  // instanceof Connectable
       if (inputs.length > this._orderedFunctionInputs.length) {
         throw new Error(`Too many inputs for the call() method on ${this}. Expected ${this._orderedFunctionInputs.length} but got ${inputs.length}.`)

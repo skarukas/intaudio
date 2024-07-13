@@ -84,11 +84,11 @@ export abstract class BaseComponent extends BaseConnectable implements Component
   protected defineOutputAlias<T>(name: string, output: AbstractOutput<T>): AbstractOutput<T> {
     return this.defineInputOrOutput(name, output, this.outputs)
   }
-  protected defineInputAlias<T>(name: string, input: AbstractInput<T>): AbstractInput<T> {
+  protected defineInputAlias<T>(name: string | number, input: T): T {
     return this.defineInputOrOutput(name, input, this.inputs)
   }
   protected defineControlInput<T>(
-    name: string,
+    name: string | number,
     defaultValue: T = constants.UNSET_VALUE,
     isRequired: boolean = false
   ): ControlInput<T> {
@@ -217,7 +217,7 @@ export abstract class BaseComponent extends BaseConnectable implements Component
   }
   withInputs(argDict: { [name: string | number]: Connectable | unknown }): this {
     for (const name in argDict) {
-      const thisInput = this.inputs[name] ?? this.inputs[""+name] ?? this.inputs["$" + name]
+      const thisInput = this.inputs[name] ?? this.inputs["" + name] ?? this.inputs["$" + name]
       if (!thisInput) {
         throw new Error(`No input found named '${name}'. Valid inputs: [${Object.keys(this.inputs)}]`)
       }
@@ -258,9 +258,9 @@ export abstract class BaseComponent extends BaseConnectable implements Component
   splitChannels(...inputChannelGroups: number[][]): Iterable<AudioRateOutput> {
     return this.getAudioOutputProperty('splitChannels')(...inputChannelGroups)
   }
-  transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], dimension: "all", { windowSize, useWorklet}?: { windowSize?: number, useWorklet?: boolean }): Component;
+  transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], dimension: "all", { windowSize, useWorklet }?: { windowSize?: number, useWorklet?: boolean }): Component;
   transformAudio(fn: (input: MultiChannelArray<number>) => number[], dimension: "channels", { useWorklet }?: { useWorklet?: boolean }): Component;
-  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", { windowSize, useWorklet}?: { windowSize?: number, useWorklet?: boolean }): Component;
+  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", { windowSize, useWorklet }?: { windowSize?: number, useWorklet?: boolean }): Component;
   transformAudio(fn: (x: number) => number, dimension?: "none", { useWorklet }?: { useWorklet?: boolean }): Component;
   transformAudio(
     fn: unknown,
