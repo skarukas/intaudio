@@ -190,19 +190,12 @@ const tests = {
     let oscillator = new ia.AudioComponent(createOscillator(440))
     let oscillator2 = new ia.AudioComponent(createOscillator(220))
 
-    // withInputs supports constant and varying values!
-    const compoundEnvelope = new ia.FunctionComponent((e1, e2, w, w2, v) => {
-      return (e1 + e2) * (w * 0.03 + w2 * 0.2 + Math.random() * 0.01) * v
-    }).withInputs({
-      e1: envelope1,
-      e2: envelope2,
-      w: oscillator,
-      w2: oscillator2,
-      v: 0.5
-    })
+    const compoundEnvelope = ia.combine(
+      { e1: envelope1, e2: envelope2, w: oscillator, w2: oscillator2, v: 0.5 }, (e1, e2, w, w2, v) => {
+        // Apply complex operation at signal-rate.
+        return (e1 + e2) * (w * 0.03 + w2 * 0.2 + Math.random() * 0.01) * v
+      })
     compoundEnvelope.connect(ia.out.right)
-    const [a, b, c] = compoundEnvelope.splitChannels([0, 1], [2, 3], [4])
-    console.log([a, b, c])
 
     attackBang.connect(envelope1.attackEvent)
     attackBang.connect(envelope2.attackEvent)
@@ -213,7 +206,6 @@ const tests = {
       setTimeout(() => releaseBang.trigger(), 2000)
     })
     attackBang.trigger()
-
 
     let monitor = new ia.ScrollingAudioMonitor(20, 128, 'auto', 'auto')
     monitor.addToDom($root, { width: 256, height: 48, left: 48 })
@@ -525,7 +517,7 @@ const tests = {
 
 ia.run(() => {
   //return tests.midiInput()
-  for (let test in { variableDelayWithSlider: tests.variableDelayWithSlider }) {
+  for (let test in { adsrSummingEnvelopes: tests.adsrSummingEnvelopes }) {
     const $testRoot = $(document.createElement('div'))
     tests[test]($testRoot)
     ia.util.afterRender(() => {

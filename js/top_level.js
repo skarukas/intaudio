@@ -12,5 +12,11 @@ export function generate(arg) {
     }
 }
 export function combine(inputs, fn, options = {}) {
-    return new AudioTransformComponent(fn, options).withInputs(...inputs);
+    if (inputs instanceof Array) {
+        return new AudioTransformComponent(fn, options).withInputs(...inputs);
+    }
+    else {
+        // Needs to learn to handle float input I think.
+        return new FunctionComponent(fn).withInputs(inputs);
+    }
 }

@@ -15,6 +15,11 @@ export function generate(arg: any): Component {
   }
 }
 
-export function combine(inputs: AbstractInput[], fn: Function, options = {}): AudioTransformComponent {
-  return new AudioTransformComponent(fn, options).withInputs(...inputs)
+export function combine(inputs: AbstractInput[] | object, fn: Function, options = {}): Component {
+  if (inputs instanceof Array) {
+    return new AudioTransformComponent(fn, options).withInputs(...inputs)
+  } else {
+    // Needs to learn to handle float input I think.
+    return new FunctionComponent(fn).withInputs(inputs)
+  }
 }
