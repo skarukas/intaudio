@@ -474,6 +474,19 @@ const tests = {
     assertNonzeroSignal(timeTransform.output.channels[1])
 
     assertEqual(timeTransform.numOutputChannels, 2)
+  },
+  multipleInputTransform($root) {
+    let slider = new ia.RangeInputComponent()
+    slider.addToDom($root)
+    let oscillator = new ia.AudioComponent(createOscillator(440))
+    const monitor = new ia.ScrollingAudioMonitor()
+    monitor.addToDom($root)
+    const transform = new ia.AudioTransformComponent((v, vol) => {
+      return v + vol
+    }, { dimension: "none", useWorklet: true })
+    oscillator.connect(transform[0])
+    slider.connect(transform[1])
+    transform.connect(monitor).connect(ia.out)
   }
   /* periodicWaveTest() { 
     const w = new Wave(Wave.Type.SINE)
@@ -484,7 +497,7 @@ const tests = {
 
 ia.run(() => {
   //return tests.midiInput()
-  for (let test in { transformAudio: tests.transformAudio }) {
+  for (let test in { multipleInputTransform: tests.multipleInputTransform }) {
     const $testRoot = $(document.createElement('div'))
     tests[test]($testRoot)
     ia.util.afterRender(() => {

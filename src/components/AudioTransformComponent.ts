@@ -66,30 +66,6 @@ abstract class AudioExecutionContext<D extends AudioDimension> extends ToStringA
     const numOutputChannels = this.processAudioFrame(inputChunks, outputChunk, contextFactory)
     return numOutputChannels ?? numChannelsPerInput
   }
-  protected static defineAudioGraph(processorNode: AudioNode, {
-    numInputs,
-    numChannelsPerInput
-  }: {
-    [k: string]: number
-  }): AudioNode[] {
-    const totalNumChannels = numInputs * numChannelsPerInput
-    const inputNodes = []
-    const merger = this.audioContext.createChannelMerger(totalNumChannels)
-    // Merger -> Processor
-    merger.connect(processorNode)
-    for (let i = 0; i < numInputs; i++) {
-      const input = new GainNode(this.audioContext, { channelCount: numChannelsPerInput })
-      // Flattened channel arrangement:
-      // [0_left, 0_right, 1_left, 1_right, 2_left, 2_right] 
-      for (let j = 0; j < numChannelsPerInput; j++) {
-        // Input -> Merger
-        const destinationChannel = i * numChannelsPerInput + j
-        input.connect(merger, 0, destinationChannel)
-      }
-      inputNodes.push(input)
-    }
-    return inputNodes
-  }
   static create<D extends AudioDimension>(fn: Function, {
     useWorklet,
     dimension,
@@ -141,14 +117,14 @@ class WorkletExecutionContext<D extends AudioDimension> extends AudioExecutionCo
     super(fn, dimension)
     numOutputChannels ??= this.inferNumOutputChannels(numInputs, numChannelsPerInput)
     const worklet = new AudioWorkletNode(this.audioContext, WORKLET_NAME, {
+      numberOfInputs: numInputs,
       outputChannelCount: [numOutputChannels],
-      numberOfInputs: 1,
-      numberOfOutputs: 1,
+      numberOfOutputs: 1
     })
     worklet['__numInputChannels'] = numChannelsPerInput
     worklet['__numOutputChannels'] = numOutputChannels
 
-    const inputs = AudioExecutionContext.defineAudioGraph(worklet, {
+    const inputs = WorkletExecutionContext.defineAudioGraph(worklet, {
       numInputs,
       numChannelsPerInput,
     })
@@ -168,6 +144,20 @@ class WorkletExecutionContext<D extends AudioDimension> extends AudioExecutionCo
 
     this.inputs = inputs
     this.output = worklet
+  }
+  protected static defineAudioGraph(workletNode: AudioNode, {
+    numInputs,
+    numChannelsPerInput,
+  }: {
+    [k: string]: number
+  }): AudioNode[] {
+    const inputNodes = []
+    for (let i = 0; i < numInputs; i++) {
+      const input = new GainNode(this.audioContext, { channelCount: numChannelsPerInput })
+      input.connect(workletNode, 0, i)
+      inputNodes.push(input)
+    }
+    return inputNodes
   }
 }
 
@@ -196,10 +186,10 @@ class ScriptProcessorExecutionContext<D extends AudioDimension> extends AudioExe
     const processor = createScriptProcessorNode(
       this.audioContext,
       windowSize,
-      numChannelsPerInput,
+      numChannelsPerInput * numInputs,
       numOutputChannels
     )
-    const inputs = AudioExecutionContext.defineAudioGraph(processor, {
+    const inputs = ScriptProcessorExecutionContext.defineAudioGraph(processor, {
       numInputs,
       numChannelsPerInput,
     })
@@ -207,6 +197,30 @@ class ScriptProcessorExecutionContext<D extends AudioDimension> extends AudioExe
 
     this.inputs = inputs
     this.output = processor
+  }
+  protected static defineAudioGraph(processorNode: AudioNode, {
+    numInputs,
+    numChannelsPerInput,
+  }: {
+    [k: string]: number
+  }): AudioNode[] {
+    const totalNumChannels = numInputs * numChannelsPerInput
+    const inputNodes = []
+    const merger = this.audioContext.createChannelMerger(totalNumChannels)
+    // Merger -> Processor
+    merger.connect(processorNode)
+    for (let i = 0; i < numInputs; i++) {
+      const input = new GainNode(this.audioContext, { channelCount: numChannelsPerInput })
+      // Flattened channel arrangement:
+      // [0_left, 0_right, 1_left, 1_right, 2_left, 2_right] 
+      for (let j = 0; j < numChannelsPerInput; j++) {
+        // Input -> Merger
+        const destinationChannel = i * numChannelsPerInput + j
+        input.connect(merger, 0, destinationChannel)
+      }
+      inputNodes.push(input)
+    }
+    return inputNodes
   }
 
   private defineAudioProcessHandler(processor: ScriptProcessorNode) {
