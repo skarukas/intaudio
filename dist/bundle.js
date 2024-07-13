@@ -9423,7 +9423,16 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
      * Split out a flattened array of channels into separate inputs.
      */
     deinterleaveInputs(flatInputs) {
-        return [flatInputs]; // TODO: implement for multi-input case.
+        const inputs = [];
+        for (let i = 0; i < this.numInputs; i++) {
+            const input = [];
+            for (let c = 0; c < this.numChannelsPerInput; c++) {
+                const flatIndex = i * this.numChannelsPerInput + c;
+                input.push(flatInputs[flatIndex]);
+            }
+            inputs.push(input);
+        }
+        return inputs;
     }
     processAudioEvent(event, contextFactory) {
         const inputChunk = [];
@@ -13247,8 +13256,14 @@ class ScrollingAudioMonitorDisplay extends BaseDisplay {
     updateWaveformDisplay() {
         if (this.$container) {
             const { minValue, maxValue } = this.component.getCurrentValueRange();
-            this.$minValueDisplay.text(__classPrivateFieldGet$1(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, minValue));
-            this.$maxValueDisplay.text(__classPrivateFieldGet$1(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, maxValue));
+            if (minValue != this.currMinValue) {
+                this.$minValueDisplay.text(__classPrivateFieldGet$1(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, minValue));
+                this.currMinValue = minValue;
+            }
+            if (maxValue != this.currMaxValue) {
+                this.$maxValueDisplay.text(__classPrivateFieldGet$1(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, maxValue));
+                this.currMaxValue = maxValue;
+            }
             __classPrivateFieldGet$1(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_displayWaveform).call(this, minValue, maxValue);
         }
     }

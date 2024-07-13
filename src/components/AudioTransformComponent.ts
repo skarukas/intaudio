@@ -233,7 +233,16 @@ class ScriptProcessorExecutionContext<D extends AudioDimension> extends AudioExe
    * Split out a flattened array of channels into separate inputs.
    */
   protected deinterleaveInputs(flatInputs: Float32Array[]): Float32Array[][] {
-    return [flatInputs]  // TODO: implement for multi-input case.
+    const inputs = []
+    for (let i = 0; i < this.numInputs; i++) {
+      const input = []
+      for (let c = 0; c < this.numChannelsPerInput; c++) {
+        const flatIndex = i * this.numChannelsPerInput + c
+        input.push(flatInputs[flatIndex])
+      }
+      inputs.push(input)
+    }
+    return inputs
   }
   private processAudioEvent(
     event: AudioProcessingEvent,

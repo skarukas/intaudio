@@ -31,8 +31,14 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay {
     updateWaveformDisplay() {
         if (this.$container) {
             const { minValue, maxValue } = this.component.getCurrentValueRange();
-            this.$minValueDisplay.text(__classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, minValue));
-            this.$maxValueDisplay.text(__classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, maxValue));
+            if (minValue != this.currMinValue) {
+                this.$minValueDisplay.text(__classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, minValue));
+                this.currMinValue = minValue;
+            }
+            if (maxValue != this.currMaxValue) {
+                this.$maxValueDisplay.text(__classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, maxValue));
+                this.currMaxValue = maxValue;
+            }
             __classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_displayWaveform).call(this, minValue, maxValue);
         }
     }

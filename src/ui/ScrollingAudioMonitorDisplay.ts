@@ -9,6 +9,8 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay<ScrollingAudioMoni
   private $maxValueDisplay: JQuery<HTMLSpanElement>
   private $minValueDisplay: JQuery<HTMLSpanElement>
   private $container: JQuery<HTMLDivElement>
+  private currMaxValue: number
+  private currMinValue: number
 
   _display($container: JQuery<HTMLDivElement>, width: number, height: number) {
     let size = {
@@ -29,8 +31,14 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay<ScrollingAudioMoni
   updateWaveformDisplay() {
     if (this.$container) {
       const { minValue, maxValue } = this.component.getCurrentValueRange()
-      this.$minValueDisplay.text(this.#valueToDisplayableText(minValue))
-      this.$maxValueDisplay.text(this.#valueToDisplayableText(maxValue))
+      if (minValue != this.currMinValue) {
+        this.$minValueDisplay.text(this.#valueToDisplayableText(minValue))
+        this.currMinValue = minValue
+      }
+      if (maxValue != this.currMaxValue) {
+        this.$maxValueDisplay.text(this.#valueToDisplayableText(maxValue))
+        this.currMaxValue = maxValue
+      }
       this.#displayWaveform(minValue, maxValue)
     }
   }
@@ -69,7 +77,7 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay<ScrollingAudioMoni
       ctx.stroke();
     }
     for (let i = memory.length - 1; i >= 0; i--) {
-      const whiteVal = (i / memory.length)**0.5 * 255
+      const whiteVal = (i / memory.length) ** 0.5 * 255
       this.drawSingleWaveform(ctx, memory[i], `rgb(${whiteVal}, ${whiteVal}, ${whiteVal})`, toX, toY)
     }
 
