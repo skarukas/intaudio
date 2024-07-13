@@ -269,7 +269,6 @@ export class AudioTransformComponent extends BaseComponent {
     }
     withInputs(...inputs) {
         var _a;
-        console.log(this);
         let inputDict = {};
         if ((_a = inputs[0]) === null || _a === void 0 ? void 0 : _a.connect) { // instanceof Connectable
             if (inputs.length > this.inputs.length) {
