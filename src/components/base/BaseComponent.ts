@@ -262,7 +262,10 @@ export abstract class BaseComponent extends BaseConnectable implements Component
   transformAudio(fn: (input: MultiChannelArray<number>) => number[], dimension: "channels", { useWorklet }?: { useWorklet?: boolean }): Component;
   transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", { windowSize, useWorklet}?: { windowSize?: number, useWorklet?: boolean }): Component;
   transformAudio(fn: (x: number) => number, dimension?: "none", { useWorklet }?: { useWorklet?: boolean }): Component;
-  transformAudio(fn: unknown, dimension?: unknown, { windowSize, useWorklet }: { windowSize?: number, useWorklet?: boolean } = {}): Component {
+  transformAudio(
+    fn: unknown,
+    dimension: unknown = "none",
+    { windowSize, useWorklet }: { windowSize?: number, useWorklet?: boolean } = {}): Component {
     return this.getAudioOutputProperty('transformAudio')(fn, dimension, { windowSize, useWorklet })
   }
 }

@@ -75,7 +75,10 @@ export class AudioRateOutput extends AbstractOutput<number> implements MultiChan
   transformAudio(fn: (input: MultiChannelArray<number>) => number[], dimension: "channels", { useWorklet }?: { useWorklet?: boolean }): Component;
   transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", { windowSize, useWorklet}?: { windowSize?: number, useWorklet?: boolean }): Component;
   transformAudio(fn: (x: number) => number, dimension?: "none", { useWorklet }?: { useWorklet?: boolean }): Component;
-  transformAudio(fn: Function, dimension?: AudioDimension, { windowSize, useWorklet }: { windowSize?: number, useWorklet?: boolean } = {}): Component {
+  transformAudio(
+    fn: Function,
+    dimension: AudioDimension = "none",
+    { windowSize, useWorklet }: { windowSize?: number, useWorklet?: boolean } = {}): Component {
     const options = {
       dimension,
       windowSize,

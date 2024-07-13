@@ -420,7 +420,7 @@ const tests = {
     const channelTransform = oscillator.transformAudio(({ left, right }) => {
       return [left, undefined, right, undefined]
     }, "channels", { useWorklet: true })
-    channelTransform.connect(monitor.input.channels[0])
+    channelTransform.connect(monitor.input.channels[2])
     assertEqual(channelTransform.numOutputChannels, 4)
     assertNonzeroSignal(channelTransform.output.channels[0])
     assertSilentSignal(channelTransform.output.channels[1])
@@ -428,7 +428,7 @@ const tests = {
     assertSilentSignal(channelTransform.output.channels[3])
 
     // Apply across channels and time.
-    const ctTransform = oscillator.transformAudio(({ left, right }) => {
+    const ctTransform = oscillator.transformAudio(function ({ left, right }) {
       for (let i = 0; i < left.length; i++) {
         left[i] = (left[i] + right[(left.length - i) - 1]) / 2
       }
@@ -439,17 +439,22 @@ const tests = {
     assertNonzeroSignal(ctTransform.output.left)
 
     // Apply to each sample in each channel.
-    const sampleTransform = oscillator.transformAudio(x => {
-      return x * 0.5
-    }, "none")
-    sampleTransform.connect(monitor.input.channels[2])
+    const sampleTransform = oscillator.transformAudio(function (x) {
+      const windowSize = 256
+      let avg = x + this.previousInputs()[0]
+      for (let t = 0; t < windowSize; t++) {
+        avg += this.previousOutput(t) / windowSize
+      }
+      return -avg
+    }, "none", { useWorklet: true })
+    sampleTransform.connect(monitor.input.channels[0])
 
     assertEqual(sampleTransform.numOutputChannels, 2)
     assertNonzeroSignal(sampleTransform.output.channels[0])
     assertNonzeroSignal(sampleTransform.output.channels[1])
 
     // The AudioProcessingEvent is bound to `this`.
-    const thisSampleTransform = oscillator.transformAudio(function(x) {
+    const thisSampleTransform = oscillator.transformAudio(function (x) {
       return this.currentTime
     }, "none")
 

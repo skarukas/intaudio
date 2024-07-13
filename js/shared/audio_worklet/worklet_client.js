@@ -2,7 +2,6 @@
  * Dead code left over from trying to polyfill / llifylop ScriptProcessorNode.
  **/
 import { ToStringAndUUID } from "../base/ToStringAndUUID.js";
-import { serializeFunction } from "./worklet.js";
 export class ScriptProcessorNode {
     set onaudioprocess(fn) {
         this.fn = fn;
@@ -71,7 +70,7 @@ export class WorkletClient extends ToStringAndUUID {
     }
     setFunction(fn) {
         this.nodePromise.then(node => {
-            node.port.postMessage(serializeFunction(fn, 'none'));
+            //node.port.postMessage(serializeWorkletMessage(fn, 'none'))
         });
     }
 }

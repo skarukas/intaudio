@@ -6,7 +6,7 @@ import describeFunction from 'function-descriptor'
 import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 import { createScriptProcessorNode, range } from "../shared/util.js";
-import { AudioDimension, AudioFrameContext as AudioFrameContext, WORKLET_NAME, getProcessingFunction, serializeFunction } from "../shared/audio_worklet/worklet.js";
+import { AudioDimension, AudioFrameContext as AudioFrameContext, MappingFn, SignalProcessingContextFactory, WORKLET_NAME, getProcessingFunction, serializeWorkletMessage } from "../shared/audio_worklet/worklet.js";
 import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
 
 function enumValues(Enum: object) {
@@ -16,12 +16,12 @@ function enumValues(Enum: object) {
   return nonNumericKeys.map(k => Enum[k])
 }
 
-abstract class AudioExecutionContext extends ToStringAndUUID {
+abstract class AudioExecutionContext<D extends AudioDimension> extends ToStringAndUUID {
   inputs: AudioNode[]
   output: AudioNode
-  protected applyToChunk: (fn: Function, inputs: Float32Array[][], output: Float32Array[]) => number
+  protected applyToChunk: MappingFn<D>
 
-  constructor(public fn: Function, public dimension: AudioDimension) {
+  constructor(public fn: Function, public dimension: D) {
     super()
     this.applyToChunk = getProcessingFunction(dimension)
   }
@@ -29,9 +29,9 @@ abstract class AudioExecutionContext extends ToStringAndUUID {
   protected processAudioFrame(
     inputChunks: Float32Array[][],
     outputChunk: Float32Array[],
-    context: AudioFrameContext
+    contextFactory: SignalProcessingContextFactory<D>
   ): number {
-    return this.applyToChunk(this.fn.bind(context), inputChunks, outputChunk)
+    return this.applyToChunk(this.fn, inputChunks, outputChunk, contextFactory)
   }
 
   /**
@@ -51,14 +51,19 @@ abstract class AudioExecutionContext extends ToStringAndUUID {
     // The output may have more channels than the input, so be flexible when 
     // testing it so as to not break the implementation.
     const outputChunk = createChunk(constants.MAX_CHANNELS)
-    const context: AudioFrameContext = {
+    const contextFactory = new SignalProcessingContextFactory({
       sampleRate: this.audioContext.sampleRate,
-      currentFrame: 0,
-      currentTime: 0
-    }
+      getCurrentTime: () => this.audioContext.currentTime,
+      getFrameIndex: () => 0,
+      numInputs,
+      numChannelsPerInput,
+      numOutputChannels: constants.MAX_CHANNELS,
+      windowSize,
+      dimension: this.dimension
+    })
     // The returned value will be the number of new output channels, if it's 
     // different from the provided buffer size, otherwise undefined.
-    const numOutputChannels = this.processAudioFrame(inputChunks, outputChunk, context)
+    const numOutputChannels = this.processAudioFrame(inputChunks, outputChunk, contextFactory)
     return numOutputChannels ?? numChannelsPerInput
   }
   protected static defineAudioGraph(processorNode: AudioNode, {
@@ -85,14 +90,21 @@ abstract class AudioExecutionContext extends ToStringAndUUID {
     }
     return inputNodes
   }
-  static create(fn: Function, {
+  static create<D extends AudioDimension>(fn: Function, {
     useWorklet,
     dimension,
     numInputs,
     numChannelsPerInput,
     windowSize,
     numOutputChannels
-  }): AudioExecutionContext {
+  }: {
+    useWorklet: boolean,
+    dimension: D,
+    numInputs: number,
+    numChannelsPerInput: number,
+    windowSize: number,
+    numOutputChannels: number
+  }): AudioExecutionContext<D> {
     const totalNumChannels = numInputs * numChannelsPerInput
     if (totalNumChannels > constants.MAX_CHANNELS) {
       throw new Error(`The total number of input channels must be less than ${constants.MAX_CHANNELS}. Given numInputs=${numInputs} and numChannelsPerInput=${numChannelsPerInput}.`)
@@ -116,8 +128,8 @@ abstract class AudioExecutionContext extends ToStringAndUUID {
   }
 }
 
-class WorkletExecutionContext extends AudioExecutionContext {
-  constructor(fn, {
+class WorkletExecutionContext<D extends AudioDimension> extends AudioExecutionContext<D> {
+  constructor(fn: Function, {
     dimension,
     numInputs,
     numChannelsPerInput,
@@ -142,7 +154,13 @@ class WorkletExecutionContext extends AudioExecutionContext {
     // connected, otherwise the processor may run process() with an
     // empty input array.
     // https://bugzilla.mozilla.org/show_bug.cgi?id=1629478
-    const serializedFunction = serializeFunction(fn, dimension)
+    const serializedFunction = serializeWorkletMessage(fn, {
+      dimension,
+      numInputs,
+      numChannelsPerInput,
+      numOutputChannels,
+      windowSize: 128
+    })
     worklet.port.postMessage(serializedFunction)
 
     this.inputs = inputs
@@ -150,7 +168,11 @@ class WorkletExecutionContext extends AudioExecutionContext {
   }
 }
 
-class ScriptProcessorExecutionContext extends AudioExecutionContext {
+class ScriptProcessorExecutionContext<D extends AudioDimension> extends AudioExecutionContext<D> {
+  numInputs: number
+  numChannelsPerInput: number
+  numOutputChannels: number
+  windowSize: number
 
   protected processor: ScriptProcessorNode
 
@@ -163,6 +185,11 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
   }) {
     super(fn, dimension)
     numOutputChannels ??= this.inferNumOutputChannels(numInputs, numChannelsPerInput)
+    this.numInputs = numInputs
+    this.numChannelsPerInput = numChannelsPerInput
+    this.numOutputChannels = numOutputChannels
+    this.windowSize = windowSize
+
     const processor = createScriptProcessorNode(
       this.audioContext,
       windowSize,
@@ -181,9 +208,20 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
 
   private defineAudioProcessHandler(processor: ScriptProcessorNode) {
     let frameIndex = 0
+    const contextFactory = new SignalProcessingContextFactory({
+      sampleRate: this.audioContext.sampleRate,
+      getCurrentTime: () => this.audioContext.currentTime,
+      getFrameIndex: () => frameIndex,
+      numInputs: this.numInputs,
+      numChannelsPerInput: this.numChannelsPerInput,
+      numOutputChannels: this.numOutputChannels,
+      windowSize: this.windowSize,
+      dimension: this.dimension
+    })
     const handler = (event: AudioProcessingEvent) => {
       try {
-        this.processAudioEvent(event, frameIndex++)
+        this.processAudioEvent(event, contextFactory)
+        frameIndex++
       } catch (e) {
         processor.removeEventListener(constants.EVENT_AUDIOPROCESS, handler)
         e instanceof Disconnect || console.error(e)
@@ -197,7 +235,10 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
   protected deinterleaveInputs(flatInputs: Float32Array[]): Float32Array[][] {
     return [flatInputs]  // TODO: implement for multi-input case.
   }
-  private processAudioEvent(event: AudioProcessingEvent, frameIndex: number): number {
+  private processAudioEvent(
+    event: AudioProcessingEvent,
+    contextFactory: SignalProcessingContextFactory<D>
+  ): number {
     const inputChunk: Float32Array[] = []
     const outputChunk: Float32Array[] = []
     for (let c = 0; c < event.inputBuffer.numberOfChannels; c++) {
@@ -206,13 +247,8 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
     for (let c = 0; c < event.outputBuffer.numberOfChannels; c++) {
       outputChunk.push(event.outputBuffer.getChannelData(c))
     }
-    const context: AudioFrameContext = {
-      sampleRate: this.audioContext.sampleRate,
-      currentTime: this.audioContext.currentTime,
-      currentFrame: frameIndex
-    }
     const inputChunks = this.deinterleaveInputs(inputChunk)
-    return this.processAudioFrame(inputChunks, outputChunk, context)
+    return this.processAudioFrame(inputChunks, outputChunk, contextFactory)
   }
 }
 

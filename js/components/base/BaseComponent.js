@@ -218,7 +218,7 @@ export class BaseComponent extends BaseConnectable {
     splitChannels(...inputChannelGroups) {
         return this.getAudioOutputProperty('splitChannels')(...inputChannelGroups);
     }
-    transformAudio(fn, dimension, { windowSize, useWorklet } = {}) {
+    transformAudio(fn, dimension = "none", { windowSize, useWorklet } = {}) {
         return this.getAudioOutputProperty('transformAudio')(fn, dimension, { windowSize, useWorklet });
     }
 }

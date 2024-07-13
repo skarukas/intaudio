@@ -3,7 +3,7 @@ import describeFunction from 'function-descriptor';
 import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 import { createScriptProcessorNode, range } from "../shared/util.js";
-import { WORKLET_NAME, getProcessingFunction, serializeFunction } from "../shared/audio_worklet/worklet.js";
+import { SignalProcessingContextFactory, WORKLET_NAME, getProcessingFunction, serializeWorkletMessage } from "../shared/audio_worklet/worklet.js";
 import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
 function enumValues(Enum) {
     const nonNumericKeys = Object.keys(Enum).filter((item) => {
@@ -18,8 +18,8 @@ class AudioExecutionContext extends ToStringAndUUID {
         this.dimension = dimension;
         this.applyToChunk = getProcessingFunction(dimension);
     }
-    processAudioFrame(inputChunks, outputChunk, context) {
-        return this.applyToChunk(this.fn.bind(context), inputChunks, outputChunk);
+    processAudioFrame(inputChunks, outputChunk, contextFactory) {
+        return this.applyToChunk(this.fn, inputChunks, outputChunk, contextFactory);
     }
     /**
      * Guess the number of output channels by applying the function to a fake input.
@@ -30,14 +30,19 @@ class AudioExecutionContext extends ToStringAndUUID {
         // The output may have more channels than the input, so be flexible when 
         // testing it so as to not break the implementation.
         const outputChunk = createChunk(constants.MAX_CHANNELS);
-        const context = {
+        const contextFactory = new SignalProcessingContextFactory({
             sampleRate: this.audioContext.sampleRate,
-            currentFrame: 0,
-            currentTime: 0
-        };
+            getCurrentTime: () => this.audioContext.currentTime,
+            getFrameIndex: () => 0,
+            numInputs,
+            numChannelsPerInput,
+            numOutputChannels: constants.MAX_CHANNELS,
+            windowSize,
+            dimension: this.dimension
+        });
         // The returned value will be the number of new output channels, if it's 
         // different from the provided buffer size, otherwise undefined.
-        const numOutputChannels = this.processAudioFrame(inputChunks, outputChunk, context);
+        const numOutputChannels = this.processAudioFrame(inputChunks, outputChunk, contextFactory);
         return numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : numChannelsPerInput;
     }
     static defineAudioGraph(processorNode, { numInputs, numChannelsPerInput }) {
@@ -103,7 +108,13 @@ class WorkletExecutionContext extends AudioExecutionContext {
         // connected, otherwise the processor may run process() with an
         // empty input array.
         // https://bugzilla.mozilla.org/show_bug.cgi?id=1629478
-        const serializedFunction = serializeFunction(fn, dimension);
+        const serializedFunction = serializeWorkletMessage(fn, {
+            dimension,
+            numInputs,
+            numChannelsPerInput,
+            numOutputChannels,
+            windowSize: 128
+        });
         worklet.port.postMessage(serializedFunction);
         this.inputs = inputs;
         this.output = worklet;
@@ -114,6 +125,10 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
         super(fn, dimension);
         this.fn = fn;
         numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : (numOutputChannels = this.inferNumOutputChannels(numInputs, numChannelsPerInput));
+        this.numInputs = numInputs;
+        this.numChannelsPerInput = numChannelsPerInput;
+        this.numOutputChannels = numOutputChannels;
+        this.windowSize = windowSize;
         const processor = createScriptProcessorNode(this.audioContext, windowSize, numChannelsPerInput, numOutputChannels);
         const inputs = AudioExecutionContext.defineAudioGraph(processor, {
             numInputs,
@@ -125,9 +140,20 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
     }
     defineAudioProcessHandler(processor) {
         let frameIndex = 0;
+        const contextFactory = new SignalProcessingContextFactory({
+            sampleRate: this.audioContext.sampleRate,
+            getCurrentTime: () => this.audioContext.currentTime,
+            getFrameIndex: () => frameIndex,
+            numInputs: this.numInputs,
+            numChannelsPerInput: this.numChannelsPerInput,
+            numOutputChannels: this.numOutputChannels,
+            windowSize: this.windowSize,
+            dimension: this.dimension
+        });
         const handler = (event) => {
             try {
-                this.processAudioEvent(event, frameIndex++);
+                this.processAudioEvent(event, contextFactory);
+                frameIndex++;
             }
             catch (e) {
                 processor.removeEventListener(constants.EVENT_AUDIOPROCESS, handler);
@@ -142,7 +168,7 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
     deinterleaveInputs(flatInputs) {
         return [flatInputs]; // TODO: implement for multi-input case.
     }
-    processAudioEvent(event, frameIndex) {
+    processAudioEvent(event, contextFactory) {
         const inputChunk = [];
         const outputChunk = [];
         for (let c = 0; c < event.inputBuffer.numberOfChannels; c++) {
@@ -151,13 +177,8 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
         for (let c = 0; c < event.outputBuffer.numberOfChannels; c++) {
             outputChunk.push(event.outputBuffer.getChannelData(c));
         }
-        const context = {
-            sampleRate: this.audioContext.sampleRate,
-            currentTime: this.audioContext.currentTime,
-            currentFrame: frameIndex
-        };
         const inputChunks = this.deinterleaveInputs(inputChunk);
-        return this.processAudioFrame(inputChunks, outputChunk, context);
+        return this.processAudioFrame(inputChunks, outputChunk, contextFactory);
     }
 }
 export class AudioTransformComponent extends BaseComponent {

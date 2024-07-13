@@ -380,7 +380,7 @@ class AbstractInput extends ToStringAndUUID {
     }
 }
 
-/* Define generic audio-rate utility functions. */
+// TODO: split up this file into many modules and generate the worklet file with rollup instead.
 function toMultiChannelArray(array) {
     const proxy = new Proxy(array, {
         get(target, p, receiver) {
@@ -410,26 +410,28 @@ function assertValidReturnType(result) {
         throw new Error("Expected mapping function to return valid value(s), but got undefined.");
     }
 }
-function processSamples(fn, inputChunks, outputChunk) {
+function processSamples(fn, inputChunks, outputChunk, contextFactory) {
     var _a, _b;
     const numChannels = (_a = inputChunks[0]) === null || _a === void 0 ? void 0 : _a.length;
     const numSamples = (_b = inputChunks[0][0]) === null || _b === void 0 ? void 0 : _b.length;
     for (let c = 0; c < numChannels; c++) {
         for (let i = 0; i < numSamples; i++) {
             const inputs = inputChunks.map(input => input[c][i]);
-            const result = fn(...inputs);
+            const context = contextFactory.getContext({ channelIndex: c, sampleIndex: i });
+            const result = context.execute(fn, inputs);
             assertValidReturnType(result);
             outputChunk[c][i] = result;
         }
     }
     return undefined;
 }
-function processTime(fn, inputChunks, outputChunk) {
+function processTime(fn, inputChunks, outputChunk, contextFactory) {
     var _a;
     const numChannels = (_a = inputChunks[0]) === null || _a === void 0 ? void 0 : _a.length;
     for (let c = 0; c < numChannels; c++) {
         const inputs = inputChunks.map(input => input[c]);
-        const output = fn(...inputs);
+        const context = contextFactory.getContext({ channelIndex: c });
+        const output = context.execute(fn, inputs);
         assertValidReturnType(output);
         outputChunk[c].set(output);
     }
@@ -443,9 +445,10 @@ function processTime(fn, inputChunks, outputChunk) {
  * @param outputChunk
  * @returns The number of channels output by the function.
  */
-function processTimeAndChannels(fn, inputChunks, outputChunk) {
+function processTimeAndChannels(fn, inputChunks, outputChunk, contextFactory) {
     const inputs = inputChunks.map(toMultiChannelArray);
-    const result = fn(...inputs);
+    const context = contextFactory.getContext();
+    const result = context.execute(fn, inputs);
     assertValidReturnType(result);
     for (let c = 0; c < result.length; c++) {
         if (result[c] == undefined) {
@@ -463,7 +466,7 @@ function processTimeAndChannels(fn, inputChunks, outputChunk) {
  * @param outputChunk
  * @returns The number of channels output by the function.
  */
-function processChannels(fn, inputChunks, outputChunk) {
+function processChannels(fn, inputChunks, outputChunk, contextFactory) {
     var _a;
     let numOutputChannels;
     const numSamples = (_a = inputChunks[0][0]) === null || _a === void 0 ? void 0 : _a.length;
@@ -494,25 +497,235 @@ function getProcessingFunction(dimension) {
             throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
     }
 }
-function serializeFunction(f, dimension) {
+/**
+ * Returns a structure filled with zeroes that represents the shape of a single input or the output.
+ */
+function generateZeroInput(dimension, windowSize, numChannels) {
+    switch (dimension) {
+        case "all":
+            const frame = [];
+            for (let i = 0; i < numChannels; i++) {
+                frame.push(new Float32Array(windowSize));
+            }
+            return toMultiChannelArray(frame);
+        case "channels":
+            const channels = Array(windowSize).fill(0);
+            return toMultiChannelArray(channels);
+        case "time":
+            return new Float32Array(windowSize);
+        case "none":
+            return 0;
+        default:
+            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
+    }
+}
+function serializeWorkletMessage(f, { dimension, numInputs, numChannelsPerInput, numOutputChannels, windowSize }) {
     return {
         fnString: f.toString(),
-        dimension
+        dimension,
+        numInputs,
+        numChannelsPerInput,
+        numOutputChannels,
+        windowSize
     };
+}
+/**
+ * A data structure storing the last N values in a time series.
+ *
+ * It is implemented as a circular array to avoid processing when the time step
+ * is incremented.
+ *
+ * Here's a demonstration with eaach t[n] being an absolute time, | showing
+ * the position of the offset, and _ being the default value.
+ *
+ * "Initial" state storing the first 4 values:
+ * - circularBuffer: [|v3 v2 v1 v0]
+ * - offset: 0
+ *
+ * > get(0) = v3
+ * > get(1) = v2
+ * > get(4) = _
+ *
+ * After add(v4):
+ * - circularBuffer: [v3 v2 v1 | v4]
+ * - offset: 3
+ *
+ * > get(0) = v4
+ * > get(1) = v3
+ *
+ * After setSize(8):
+ * - circularBuffer: [|v4 v3 v2 v1 _ _ _ _]
+ * - offset: 0
+ *
+ */
+class MemoryBuffer {
+    constructor(defaultValueFn) {
+        this.defaultValueFn = defaultValueFn;
+        this.circularBuffer = [];
+        // offset will always be within range, and circularBuffer[offset] is the 
+        // most recent value (circularBuffer[offset+1] is the one before that, etc.)
+        this.offset = 0;
+    }
+    get length() {
+        return this.circularBuffer.length;
+    }
+    toInnerIndex(i) {
+        return (i + this.offset) % this.length;
+    }
+    /**
+     * Get the ith value of the memory. Note that index 0 is the previous value, not 1.
+     */
+    get(i) {
+        if (i >= this.length) {
+            return this.defaultValueFn();
+        }
+        else {
+            const innerIdx = this.toInnerIndex(i);
+            return this.circularBuffer[innerIdx];
+        }
+    }
+    /**
+     * Add `val` to the array of memory, incrementing the time step. If `length` is zero, this is a no-op.
+     *
+     * NOTE: to add without discarding old values, always call setSize first.
+     */
+    add(val) {
+        if (this.length) {
+            const clone = JSON.parse(JSON.stringify(val)); // TODO: need this?
+            // Modular subtraction by 1.
+            this.offset = (this.offset + this.length - 1) % this.length;
+            this.circularBuffer[this.offset] = clone;
+        }
+    }
+    setSize(size) {
+        const newBuffer = [];
+        for (let i = 0; i < size; i++) {
+            newBuffer.push(this.get(i));
+        }
+        this.circularBuffer = newBuffer;
+        this.offset = 0;
+    }
+}
+class SignalProcessingContext {
+    constructor(inputMemory, outputMemory, { windowSize, currentTime, frameIndex, sampleRate, channelIndex = undefined, sampleIndex = undefined }) {
+        this.inputMemory = inputMemory;
+        this.outputMemory = outputMemory;
+        this.maxInputLookback = 0;
+        this.maxOutputLookback = 0;
+        this.fixedInputLookback = undefined;
+        this.fixedOutputLookback = undefined;
+        this.currentTime = currentTime + (sampleIndex / sampleRate);
+        this.windowSize = windowSize;
+        this.sampleIndex = sampleIndex;
+        this.channelIndex = channelIndex;
+        this.frameIndex = frameIndex;
+        this.sampleRate = sampleRate;
+    }
+    previousInputs(t = 0) {
+        this.maxInputLookback = Math.max(t + 1, this.maxInputLookback);
+        return this.inputMemory.get(t);
+    }
+    previousOutput(t = 0) {
+        this.maxOutputLookback = Math.max(t + 1, this.maxOutputLookback);
+        return this.outputMemory.get(t);
+    }
+    setOutputMemorySize(n) {
+        this.fixedOutputLookback = n;
+    }
+    setInputMemorySize(n) {
+        this.fixedInputLookback = n;
+    }
+    execute(fn, inputs) {
+        // Execute the function, making the Context properties and methods available
+        // within the user-supplied function.
+        const output = fn.bind(this)(...inputs);
+        // If the function tried to access past inputs or force-rezised the memory, 
+        // resize.
+        SignalProcessingContext.resizeMemory(this.inputMemory, this.maxInputLookback, this.fixedInputLookback);
+        SignalProcessingContext.resizeMemory(this.outputMemory, this.maxOutputLookback, this.fixedOutputLookback);
+        // Update memory after resizing.
+        this.inputMemory.add(inputs);
+        this.outputMemory.add(output);
+        return output;
+    }
+    static resizeMemory(memory, maxLookback, lookbackOverride) {
+        if (lookbackOverride != undefined) {
+            memory.setSize(lookbackOverride);
+        }
+        else if (maxLookback > memory.length) {
+            memory.setSize(maxLookback);
+        }
+    }
+}
+const ALL_CHANNELS = -1;
+/**
+ * A class collecting all current ongoing memory streams. Because some `dimension` settings process channels in parallel (`"none"` and `"time"`), memory streams are indexed by channel.
+ */
+class SignalProcessingContextFactory {
+    constructor({ numInputs, numChannelsPerInput, numOutputChannels, windowSize, dimension, sampleRate = undefined, getFrameIndex = undefined, getCurrentTime = undefined, }) {
+        this.inputHistory = {};
+        this.outputHistory = {};
+        this.windowSize = windowSize;
+        this.sampleRate = sampleRate;
+        this.getCurrentTime = getCurrentTime;
+        this.getFrameIndex = getFrameIndex;
+        const genInput = this.getDefaultInputValueFn({ dimension, numInputs, windowSize, numChannelsPerInput });
+        const genOutput = this.getDefaultOutputValueFn({ dimension, windowSize, numOutputChannels });
+        const hasChannelSpecificProcessing = ["all", "channels"].includes(dimension);
+        if (hasChannelSpecificProcessing) {
+            this.inputHistory[ALL_CHANNELS] = new MemoryBuffer(genInput);
+            this.outputHistory[ALL_CHANNELS] = new MemoryBuffer(genOutput);
+        }
+        else {
+            // Each channel is processed the same.
+            for (let c = 0; c < numChannelsPerInput; c++) {
+                this.inputHistory[c] = new MemoryBuffer(genInput);
+            }
+            for (let c = 0; c < numOutputChannels; c++) {
+                this.outputHistory[c] = new MemoryBuffer(genOutput);
+            }
+        }
+    }
+    getDefaultInputValueFn({ dimension, numInputs, windowSize, numChannelsPerInput }) {
+        return function genInput() {
+            const defaultInput = [];
+            for (let i = 0; i < numInputs; i++) {
+                defaultInput.push(generateZeroInput(dimension, windowSize, numChannelsPerInput));
+            }
+            return defaultInput;
+        };
+    }
+    getDefaultOutputValueFn({ dimension, windowSize, numOutputChannels }) {
+        return function genOutput() {
+            return generateZeroInput(dimension, windowSize, numOutputChannels);
+        };
+    }
+    getContext({ channelIndex = ALL_CHANNELS, sampleIndex = undefined } = {}) {
+        const inputMemory = this.inputHistory[channelIndex];
+        const outputMemory = this.outputHistory[channelIndex];
+        return new SignalProcessingContext(inputMemory, outputMemory, {
+            windowSize: this.windowSize,
+            channelIndex,
+            sampleIndex,
+            sampleRate: this.sampleRate,
+            frameIndex: this.getFrameIndex(),
+            currentTime: this.getCurrentTime()
+        });
+    }
 }
 /********** Worklet-specific code ************/
 const WORKLET_NAME = "function-worklet";
 /* Define AudioWorkletProcessor (if in Worklet) */
 if (typeof AudioWorkletProcessor != 'undefined') {
-    function deserializeFunction(data) {
-        const { fnString, dimension } = data;
-        const innerFunction = new Function('return ' + fnString)();
-        const applyToChunk = getProcessingFunction(dimension);
+    function deserializeWorkletMessage(message) {
+        const innerFunction = new Function('return ' + message.fnString)();
+        const applyToChunk = getProcessingFunction(message.dimension);
+        const contextFactory = new SignalProcessingContextFactory(Object.assign(Object.assign({}, message), { 
+            // Reference global variables.
+            sampleRate, getCurrentTime: () => currentTime, getFrameIndex: () => Math.floor(currentFrame / message.windowSize) }));
         return function processFn(inputs, outputs, __parameters) {
-            // Bind to current state.
-            const context = { sampleRate, currentTime, currentFrame };
             // Apply across dimensions.
-            return applyToChunk(innerFunction.bind(context), inputs, outputs[0]);
+            applyToChunk(innerFunction, inputs, outputs[0], contextFactory);
         };
     }
     class OperationWorklet extends AudioWorkletProcessor {
@@ -521,7 +734,7 @@ if (typeof AudioWorkletProcessor != 'undefined') {
             // Receives serialized input sent from postMessage() calls.
             // This is used to change the processing function at runtime.
             this.port.onmessage = (event) => {
-                this.processImpl = deserializeFunction(event.data);
+                this.processImpl = deserializeWorkletMessage(event.data);
             };
         }
         process(inputs, outputs, parameters) {
@@ -1014,7 +1227,7 @@ class AudioRateOutput extends AbstractOutput {
         }
         return this.connect(new this._.ChannelSplitter(...inputChannelGroups));
     }
-    transformAudio(fn, dimension, { windowSize, useWorklet } = {}) {
+    transformAudio(fn, dimension = "none", { windowSize, useWorklet } = {}) {
         const options = {
             dimension,
             windowSize,
@@ -1243,7 +1456,7 @@ class BaseComponent extends BaseConnectable {
     splitChannels(...inputChannelGroups) {
         return this.getAudioOutputProperty('splitChannels')(...inputChannelGroups);
     }
-    transformAudio(fn, dimension, { windowSize, useWorklet } = {}) {
+    transformAudio(fn, dimension = "none", { windowSize, useWorklet } = {}) {
         return this.getAudioOutputProperty('transformAudio')(fn, dimension, { windowSize, useWorklet });
     }
 }
@@ -9062,8 +9275,8 @@ class AudioExecutionContext extends ToStringAndUUID {
         this.dimension = dimension;
         this.applyToChunk = getProcessingFunction(dimension);
     }
-    processAudioFrame(inputChunks, outputChunk, context) {
-        return this.applyToChunk(this.fn.bind(context), inputChunks, outputChunk);
+    processAudioFrame(inputChunks, outputChunk, contextFactory) {
+        return this.applyToChunk(this.fn, inputChunks, outputChunk, contextFactory);
     }
     /**
      * Guess the number of output channels by applying the function to a fake input.
@@ -9074,14 +9287,19 @@ class AudioExecutionContext extends ToStringAndUUID {
         // The output may have more channels than the input, so be flexible when 
         // testing it so as to not break the implementation.
         const outputChunk = createChunk(constants.MAX_CHANNELS);
-        const context = {
+        const contextFactory = new SignalProcessingContextFactory({
             sampleRate: this.audioContext.sampleRate,
-            currentFrame: 0,
-            currentTime: 0
-        };
+            getCurrentTime: () => this.audioContext.currentTime,
+            getFrameIndex: () => 0,
+            numInputs,
+            numChannelsPerInput,
+            numOutputChannels: constants.MAX_CHANNELS,
+            windowSize,
+            dimension: this.dimension
+        });
         // The returned value will be the number of new output channels, if it's 
         // different from the provided buffer size, otherwise undefined.
-        const numOutputChannels = this.processAudioFrame(inputChunks, outputChunk, context);
+        const numOutputChannels = this.processAudioFrame(inputChunks, outputChunk, contextFactory);
         return numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : numChannelsPerInput;
     }
     static defineAudioGraph(processorNode, { numInputs, numChannelsPerInput }) {
@@ -9147,7 +9365,13 @@ class WorkletExecutionContext extends AudioExecutionContext {
         // connected, otherwise the processor may run process() with an
         // empty input array.
         // https://bugzilla.mozilla.org/show_bug.cgi?id=1629478
-        const serializedFunction = serializeFunction(fn, dimension);
+        const serializedFunction = serializeWorkletMessage(fn, {
+            dimension,
+            numInputs,
+            numChannelsPerInput,
+            numOutputChannels,
+            windowSize: 128
+        });
         worklet.port.postMessage(serializedFunction);
         this.inputs = inputs;
         this.output = worklet;
@@ -9158,6 +9382,10 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
         super(fn, dimension);
         this.fn = fn;
         numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : (numOutputChannels = this.inferNumOutputChannels(numInputs, numChannelsPerInput));
+        this.numInputs = numInputs;
+        this.numChannelsPerInput = numChannelsPerInput;
+        this.numOutputChannels = numOutputChannels;
+        this.windowSize = windowSize;
         const processor = createScriptProcessorNode(this.audioContext, windowSize, numChannelsPerInput, numOutputChannels);
         const inputs = AudioExecutionContext.defineAudioGraph(processor, {
             numInputs,
@@ -9169,9 +9397,20 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
     }
     defineAudioProcessHandler(processor) {
         let frameIndex = 0;
+        const contextFactory = new SignalProcessingContextFactory({
+            sampleRate: this.audioContext.sampleRate,
+            getCurrentTime: () => this.audioContext.currentTime,
+            getFrameIndex: () => frameIndex,
+            numInputs: this.numInputs,
+            numChannelsPerInput: this.numChannelsPerInput,
+            numOutputChannels: this.numOutputChannels,
+            windowSize: this.windowSize,
+            dimension: this.dimension
+        });
         const handler = (event) => {
             try {
-                this.processAudioEvent(event, frameIndex++);
+                this.processAudioEvent(event, contextFactory);
+                frameIndex++;
             }
             catch (e) {
                 processor.removeEventListener(constants.EVENT_AUDIOPROCESS, handler);
@@ -9186,7 +9425,7 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
     deinterleaveInputs(flatInputs) {
         return [flatInputs]; // TODO: implement for multi-input case.
     }
-    processAudioEvent(event, frameIndex) {
+    processAudioEvent(event, contextFactory) {
         const inputChunk = [];
         const outputChunk = [];
         for (let c = 0; c < event.inputBuffer.numberOfChannels; c++) {
@@ -9195,13 +9434,8 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
         for (let c = 0; c < event.outputBuffer.numberOfChannels; c++) {
             outputChunk.push(event.outputBuffer.getChannelData(c));
         }
-        const context = {
-            sampleRate: this.audioContext.sampleRate,
-            currentTime: this.audioContext.currentTime,
-            currentFrame: frameIndex
-        };
         const inputChunks = this.deinterleaveInputs(inputChunk);
-        return this.processAudioFrame(inputChunks, outputChunk, context);
+        return this.processAudioFrame(inputChunks, outputChunk, contextFactory);
     }
 }
 class AudioTransformComponent extends BaseComponent {
@@ -13196,6 +13430,7 @@ var internals = /*#__PURE__*/Object.freeze({
   get RangeType () { return RangeType; },
   ScrollingAudioMonitor: ScrollingAudioMonitor,
   ScrollingAudioMonitorDisplay: ScrollingAudioMonitorDisplay,
+  SignalProcessingContextFactory: SignalProcessingContextFactory,
   SimplePolyphonicSynth: SimplePolyphonicSynth,
   SliderDisplay: SliderDisplay,
   SlowDown: SlowDown,
@@ -13213,10 +13448,11 @@ var internals = /*#__PURE__*/Object.freeze({
   createMultiChannelView: createMultiChannelView,
   disconnect: disconnect,
   events: events,
+  generateZeroInput: generateZeroInput,
   getNumInputChannels: getNumInputChannels,
   getNumOutputChannels: getNumOutputChannels,
   getProcessingFunction: getProcessingFunction,
-  serializeFunction: serializeFunction,
+  serializeWorkletMessage: serializeWorkletMessage,
   stackChannels: stackChannels,
   toMultiChannelArray: toMultiChannelArray,
   util: util
