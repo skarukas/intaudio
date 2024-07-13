@@ -158,7 +158,11 @@ class WorkletExecutionContext<D extends AudioDimension> extends AudioExecutionCo
   }): AudioNode[] {
     const inputNodes = []
     for (let i = 0; i < numInputs; i++) {
-      const input = new GainNode(this.audioContext, { channelCount: numChannelsPerInput })
+      const input = new GainNode(this.audioContext, {
+        channelCount: numChannelsPerInput,
+        // Force channelCount even if the input has more / fewer channels.
+        channelCountMode: "explicit"
+      })
       input.connect(workletNode, 0, i)
       inputNodes.push(input)
     }
@@ -291,7 +295,7 @@ export class AudioTransformComponent extends BaseComponent {
 
   constructor(
     public fn: Function,
-    { dimension,
+    { dimension = "none",
       windowSize = undefined,
       inputNames = undefined,
       numInputs = undefined,
@@ -299,14 +303,14 @@ export class AudioTransformComponent extends BaseComponent {
       numOutputChannels = undefined,
       useWorklet = false
     }: {
-      dimension: AudioDimension,
+      dimension?: AudioDimension,
       windowSize?: number,
       inputNames?: ((string | number))[],
       numInputs?: number,
       numChannelsPerInput?: number,
       numOutputChannels?: number,
       useWorklet?: boolean
-    }
+    } = {}
   ) {
     super()
     // Properties.

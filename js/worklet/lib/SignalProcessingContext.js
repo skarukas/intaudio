@@ -15,17 +15,25 @@ export class SignalProcessingContext {
     }
     // TODO: consider making this 1-based to make previousInputs(0) be the current.
     previousInputs(t = 0) {
+        // Inputs may be float32 which will not represent an int perfectly.
+        t = Math.round(t);
         this.maxInputLookback = Math.max(t + 1, this.maxInputLookback);
         return this.inputMemory.get(t);
     }
     previousOutput(t = 0) {
+        // Inputs may be float32 which will not represent an int perfectly.
+        t = Math.round(t);
         this.maxOutputLookback = Math.max(t + 1, this.maxOutputLookback);
         return this.outputMemory.get(t);
     }
     setOutputMemorySize(n) {
+        // Inputs may be float32 which will not represent an int perfectly.
+        n = Math.round(n);
         this.fixedOutputLookback = n;
     }
     setInputMemorySize(n) {
+        // Inputs may be float32 which will not represent an int perfectly.
+        n = Math.round(n);
         this.fixedInputLookback = n;
     }
     execute(fn, inputs) {

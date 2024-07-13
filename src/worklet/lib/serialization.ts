@@ -11,7 +11,8 @@ export type SerializedWorkletMessage = {
   numInputs: number,
   numChannelsPerInput: number,
   numOutputChannels: number,
-  windowSize: number
+  windowSize: number,
+  tracebackString: string
 }
 
 export function serializeWorkletMessage(
@@ -24,13 +25,16 @@ export function serializeWorkletMessage(
     windowSize
   }
 ): SerializedWorkletMessage {
+  const traceback = {}
+  Error.captureStackTrace(traceback)
   return {
     fnString: f.toString(),
     dimension,
     numInputs,
     numChannelsPerInput,
     numOutputChannels,
-    windowSize
+    windowSize,
+    tracebackString: traceback['stack']
   }
 }
 
@@ -40,6 +44,7 @@ export function deserializeWorkletMessage(
   getCurrentTime: () => number,
   getFrameIndex: () => number
 ): Function {
+  const originalTraceback = message.tracebackString
   const innerFunction = new Function('return ' + message.fnString)()
   const applyToChunk = getProcessingFunction(message.dimension)
   const contextFactory = new SignalProcessingContextFactory({
@@ -54,7 +59,16 @@ export function deserializeWorkletMessage(
     outputs: Float32Array[][],
     __parameters: any
   ) {
-    // Apply across dimensions.
-    applyToChunk(innerFunction, inputs, outputs[0], contextFactory)
+    try {
+      // Apply across dimensions.
+      applyToChunk(innerFunction, inputs, outputs[0], contextFactory)
+    } catch (e) {
+      console.error(`Encountered worklet error while processing the following input frame:`)
+      console.error(inputs)
+      if (e.stack) {
+        e.stack = `${e.stack}\n\nMain thread stack trace: ${originalTraceback}`
+      }
+      throw e
+    }
   }
 }

@@ -96,17 +96,25 @@
         }
         // TODO: consider making this 1-based to make previousInputs(0) be the current.
         previousInputs(t = 0) {
+            // Inputs may be float32 which will not represent an int perfectly.
+            t = Math.round(t);
             this.maxInputLookback = Math.max(t + 1, this.maxInputLookback);
             return this.inputMemory.get(t);
         }
         previousOutput(t = 0) {
+            // Inputs may be float32 which will not represent an int perfectly.
+            t = Math.round(t);
             this.maxOutputLookback = Math.max(t + 1, this.maxOutputLookback);
             return this.outputMemory.get(t);
         }
         setOutputMemorySize(n) {
+            // Inputs may be float32 which will not represent an int perfectly.
+            n = Math.round(n);
             this.fixedOutputLookback = n;
         }
         setInputMemorySize(n) {
+            // Inputs may be float32 which will not represent an int perfectly.
+            n = Math.round(n);
             this.fixedInputLookback = n;
         }
         execute(fn, inputs) {
@@ -331,6 +339,7 @@
 
     /* Serialization */
     function deserializeWorkletMessage(message, sampleRate, getCurrentTime, getFrameIndex) {
+        const originalTraceback = message.tracebackString;
         const innerFunction = new Function('return ' + message.fnString)();
         const applyToChunk = getProcessingFunction(message.dimension);
         const contextFactory = new SignalProcessingContextFactory(Object.assign(Object.assign({}, message), { 
@@ -339,8 +348,18 @@
             getCurrentTime,
             getFrameIndex }));
         return function processFn(inputs, outputs, __parameters) {
-            // Apply across dimensions.
-            applyToChunk(innerFunction, inputs, outputs[0], contextFactory);
+            try {
+                // Apply across dimensions.
+                applyToChunk(innerFunction, inputs, outputs[0], contextFactory);
+            }
+            catch (e) {
+                console.error(`Encountered worklet error while processing the following input frame:`);
+                console.error(inputs);
+                if (e.stack) {
+                    e.stack = `${e.stack}\n\nMain thread stack trace: ${originalTraceback}`;
+                }
+                throw e;
+            }
         };
     }
 

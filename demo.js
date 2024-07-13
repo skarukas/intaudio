@@ -486,17 +486,46 @@ const tests = {
       return v * vol
     }, { dimension: "none", useWorklet: true }).withInputs(oscillator, slider)
     transform.connect(monitor).connect(ia.out)
+  },
+  variableDelayWithSlider($root) {
+    // Source: gated noise.
+    const whiteNoiseSource = ia.generate(() => Math.random() - 0.5)
+    const envelope = new ia.ADSR(10, 50, 0, 10)
+    const gatedNoise = ia.combine(
+      [whiteNoiseSource, envelope],
+      (noise, gain) => noise * gain,
+      { useWorklet: true }
+    )
+    // Trigger ADSR each second.
+    setInterval(() => envelope.attackEvent.trigger(), 1000)
+
+    // Control echo duration.
+    let delaySlider = new ia.RangeInputComponent(0, 44100)
+    delaySlider.addToDom($root)
+    const delayedNoise = ia.combine(
+      [gatedNoise, delaySlider],
+      function (noise, delay) {
+        const prevVal = this.previousOutput(delay) * 0.7
+        return noise + prevVal
+      }, { useWorklet: true }
+    )
+
+    // Display.
+    const monitor = new ia.ScrollingAudioMonitor()
+    monitor.addToDom($root, { top: 40 })
+
+    delayedNoise.connect(monitor).connect(ia.out)
   }
-  /* periodicWaveTest() { 
-    const w = new Wave(Wave.Type.SINE)
-  } */
 }
-// All, time -> 0
-// channel -> NaN
+
+
+
+
+
 
 ia.run(() => {
   //return tests.midiInput()
-  for (let test in { multipleInputTransformGainSlider: tests.multipleInputTransformGainSlider }) {
+  for (let test in { variableDelayWithSlider: tests.variableDelayWithSlider }) {
     const $testRoot = $(document.createElement('div'))
     tests[test]($testRoot)
     ia.util.afterRender(() => {

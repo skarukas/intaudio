@@ -43,6 +43,3 @@ export class ChannelStacker extends BaseComponent {
         return stacker.withInputs(inputObj);
     }
 }
-export function stackChannels(inputs) {
-    return ChannelStacker.fromInputs(inputs);
-}

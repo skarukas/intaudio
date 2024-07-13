@@ -9003,17 +9003,25 @@ class SignalProcessingContext {
     }
     // TODO: consider making this 1-based to make previousInputs(0) be the current.
     previousInputs(t = 0) {
+        // Inputs may be float32 which will not represent an int perfectly.
+        t = Math.round(t);
         this.maxInputLookback = Math.max(t + 1, this.maxInputLookback);
         return this.inputMemory.get(t);
     }
     previousOutput(t = 0) {
+        // Inputs may be float32 which will not represent an int perfectly.
+        t = Math.round(t);
         this.maxOutputLookback = Math.max(t + 1, this.maxOutputLookback);
         return this.outputMemory.get(t);
     }
     setOutputMemorySize(n) {
+        // Inputs may be float32 which will not represent an int perfectly.
+        n = Math.round(n);
         this.fixedOutputLookback = n;
     }
     setInputMemorySize(n) {
+        // Inputs may be float32 which will not represent an int perfectly.
+        n = Math.round(n);
         this.fixedInputLookback = n;
     }
     execute(fn, inputs) {
@@ -9238,16 +9246,20 @@ class SignalProcessingContextFactory {
 
 /* Serialization */
 function serializeWorkletMessage(f, { dimension, numInputs, numChannelsPerInput, numOutputChannels, windowSize }) {
+    const traceback = {};
+    Error.captureStackTrace(traceback);
     return {
         fnString: f.toString(),
         dimension,
         numInputs,
         numChannelsPerInput,
         numOutputChannels,
-        windowSize
+        windowSize,
+        tracebackString: traceback['stack']
     };
 }
 function deserializeWorkletMessage(message, sampleRate, getCurrentTime, getFrameIndex) {
+    const originalTraceback = message.tracebackString;
     const innerFunction = new Function('return ' + message.fnString)();
     const applyToChunk = getProcessingFunction(message.dimension);
     const contextFactory = new SignalProcessingContextFactory(Object.assign(Object.assign({}, message), { 
@@ -9256,8 +9268,18 @@ function deserializeWorkletMessage(message, sampleRate, getCurrentTime, getFrame
         getCurrentTime,
         getFrameIndex }));
     return function processFn(inputs, outputs, __parameters) {
-        // Apply across dimensions.
-        applyToChunk(innerFunction, inputs, outputs[0], contextFactory);
+        try {
+            // Apply across dimensions.
+            applyToChunk(innerFunction, inputs, outputs[0], contextFactory);
+        }
+        catch (e) {
+            console.error(`Encountered worklet error while processing the following input frame:`);
+            console.error(inputs);
+            if (e.stack) {
+                e.stack = `${e.stack}\n\nMain thread stack trace: ${originalTraceback}`;
+            }
+            throw e;
+        }
     };
 }
 
@@ -9379,7 +9401,11 @@ class WorkletExecutionContext extends AudioExecutionContext {
     static defineAudioGraph(workletNode, { numInputs, numChannelsPerInput, }) {
         const inputNodes = [];
         for (let i = 0; i < numInputs; i++) {
-            const input = new GainNode(this.audioContext, { channelCount: numChannelsPerInput });
+            const input = new GainNode(this.audioContext, {
+                channelCount: numChannelsPerInput,
+                // Force channelCount even if the input has more / fewer channels.
+                channelCountMode: "explicit"
+            });
             input.connect(workletNode, 0, i);
             inputNodes.push(input);
         }
@@ -9476,7 +9502,7 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
     }
 }
 class AudioTransformComponent extends BaseComponent {
-    constructor(fn, { dimension, windowSize = undefined, inputNames = undefined, numInputs = undefined, numChannelsPerInput = 2, numOutputChannels = undefined, useWorklet = false }) {
+    constructor(fn, { dimension = "none", windowSize = undefined, inputNames = undefined, numInputs = undefined, numChannelsPerInput = 2, numOutputChannels = undefined, useWorklet = false } = {}) {
         super();
         this.fn = fn;
         // Properties.
@@ -12347,9 +12373,6 @@ class ChannelStacker extends BaseComponent {
         return stacker.withInputs(inputObj);
     }
 }
-function stackChannels(inputs) {
-    return ChannelStacker.fromInputs(inputs);
-}
 
 class ControlToAudioConverter extends BaseComponent {
     constructor() {
@@ -13529,14 +13552,35 @@ var internals = /*#__PURE__*/Object.freeze({
   events: events,
   getNumInputChannels: getNumInputChannels,
   getNumOutputChannels: getNumOutputChannels,
-  stackChannels: stackChannels,
   util: util
 });
 
 // TODO: add all public classes
 var public_namespace = Object.assign({ 'SimplePolyphonicSynth': SimplePolyphonicSynth, 'Keyboard': Keyboard, 'ADSR': ADSR, 'TypingKeyboardMIDI': TypingKeyboardMIDI }, internals);
 
+function stackChannels(inputs) {
+    return ChannelStacker.fromInputs(inputs);
+}
+function generate(arg) {
+    if (arg instanceof Function) {
+        return new FunctionComponent(() => Math.random() - 0.5);
+    }
+    else {
+        throw new Error("not supported yet.");
+    }
+}
+function combine(inputs, fn, options = {}) {
+    return new AudioTransformComponent(fn, options).withInputs(...inputs);
+}
+
+var topLevel = /*#__PURE__*/Object.freeze({
+  __proto__: null,
+  combine: combine,
+  generate: generate,
+  stackChannels: stackChannels
+});
+
 const withConfig = main$1.registerAndCreateFactoryFn(defaultConfig, public_namespace, Object.assign({}, internals));
-var main = Object.assign(Object.assign({}, public_namespace), { internals, audioContext: GLOBAL_AUDIO_CONTEXT, out: new AudioRateInput('out', undefined, GLOBAL_AUDIO_CONTEXT.destination), stackChannels: stackChannels, run: run, withConfig });
+var main = Object.assign(Object.assign(Object.assign({}, public_namespace), topLevel), { internals, audioContext: GLOBAL_AUDIO_CONTEXT, out: new AudioRateInput('out', undefined, GLOBAL_AUDIO_CONTEXT.destination), run: run, withConfig });
 
 export { main as default };

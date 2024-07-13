@@ -2,16 +2,20 @@
 import { SignalProcessingContextFactory } from "./SignalProcessingContextFactory.js";
 import { getProcessingFunction } from "./utils.js";
 export function serializeWorkletMessage(f, { dimension, numInputs, numChannelsPerInput, numOutputChannels, windowSize }) {
+    const traceback = {};
+    Error.captureStackTrace(traceback);
     return {
         fnString: f.toString(),
         dimension,
         numInputs,
         numChannelsPerInput,
         numOutputChannels,
-        windowSize
+        windowSize,
+        tracebackString: traceback['stack']
     };
 }
 export function deserializeWorkletMessage(message, sampleRate, getCurrentTime, getFrameIndex) {
+    const originalTraceback = message.tracebackString;
     const innerFunction = new Function('return ' + message.fnString)();
     const applyToChunk = getProcessingFunction(message.dimension);
     const contextFactory = new SignalProcessingContextFactory(Object.assign(Object.assign({}, message), { 
@@ -20,7 +24,17 @@ export function deserializeWorkletMessage(message, sampleRate, getCurrentTime, g
         getCurrentTime,
         getFrameIndex }));
     return function processFn(inputs, outputs, __parameters) {
-        // Apply across dimensions.
-        applyToChunk(innerFunction, inputs, outputs[0], contextFactory);
+        try {
+            // Apply across dimensions.
+            applyToChunk(innerFunction, inputs, outputs[0], contextFactory);
+        }
+        catch (e) {
+            console.error(`Encountered worklet error while processing the following input frame:`);
+            console.error(inputs);
+            if (e.stack) {
+                e.stack = `${e.stack}\n\nMain thread stack trace: ${originalTraceback}`;
+            }
+            throw e;
+        }
     };
 }

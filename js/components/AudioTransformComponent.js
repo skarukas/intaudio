@@ -109,7 +109,11 @@ class WorkletExecutionContext extends AudioExecutionContext {
     static defineAudioGraph(workletNode, { numInputs, numChannelsPerInput, }) {
         const inputNodes = [];
         for (let i = 0; i < numInputs; i++) {
-            const input = new GainNode(this.audioContext, { channelCount: numChannelsPerInput });
+            const input = new GainNode(this.audioContext, {
+                channelCount: numChannelsPerInput,
+                // Force channelCount even if the input has more / fewer channels.
+                channelCountMode: "explicit"
+            });
             input.connect(workletNode, 0, i);
             inputNodes.push(input);
         }
@@ -206,7 +210,7 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
     }
 }
 export class AudioTransformComponent extends BaseComponent {
-    constructor(fn, { dimension, windowSize = undefined, inputNames = undefined, numInputs = undefined, numChannelsPerInput = 2, numOutputChannels = undefined, useWorklet = false }) {
+    constructor(fn, { dimension = "none", windowSize = undefined, inputNames = undefined, numInputs = undefined, numChannelsPerInput = 2, numOutputChannels = undefined, useWorklet = false } = {}) {
         super();
         this.fn = fn;
         // Properties.
