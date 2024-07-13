@@ -3,7 +3,7 @@ import describeFunction from 'function-descriptor';
 import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 import { createScriptProcessorNode, range } from "../shared/util.js";
-import { SignalProcessingContextFactory, WORKLET_NAME, getProcessingFunction, serializeWorkletMessage } from "../shared/audio_worklet/worklet.js";
+import { SignalProcessingContextFactory, WORKLET_NAME, getProcessingFunction, serializeWorkletMessage } from "../worklet/worklet.js";
 import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
 function enumValues(Enum) {
     const nonNumericKeys = Object.keys(Enum).filter((item) => {
@@ -65,6 +65,9 @@ class AudioExecutionContext extends ToStringAndUUID {
         return inputNodes;
     }
     static create(fn, { useWorklet, dimension, numInputs, numChannelsPerInput, windowSize, numOutputChannels }) {
+        if (useWorklet && !this.config.state.workletIsAvailable) {
+            throw new Error("Can't use worklet for processing because the worklet failed to load. Verify the `workletPath` configuration setting is set correctly and the file is available.");
+        }
         const totalNumChannels = numInputs * numChannelsPerInput;
         if (totalNumChannels > constants.MAX_CHANNELS) {
             throw new Error(`The total number of input channels must be less than ${constants.MAX_CHANNELS}. Given numInputs=${numInputs} and numChannelsPerInput=${numChannelsPerInput}.`);

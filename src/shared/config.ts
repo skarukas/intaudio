@@ -14,6 +14,7 @@ export type AudioConfig = {
   audioContext: AudioContext,
   state: {
     isInitialized: boolean,
+    workletIsAvailable: boolean
   }
   defaultSamplePeriodMs: number,
   workletPath: string

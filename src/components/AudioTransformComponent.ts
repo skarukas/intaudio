@@ -6,7 +6,7 @@ import describeFunction from 'function-descriptor'
 import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 import { createScriptProcessorNode, range } from "../shared/util.js";
-import { AudioDimension, AudioFrameContext as AudioFrameContext, MappingFn, SignalProcessingContextFactory, WORKLET_NAME, getProcessingFunction, serializeWorkletMessage } from "../shared/audio_worklet/worklet.js";
+import { AudioDimension, MappingFn, SignalProcessingContextFactory, WORKLET_NAME, getProcessingFunction, serializeWorkletMessage } from "../worklet/worklet.js";
 import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
 
 function enumValues(Enum: object) {
@@ -105,6 +105,9 @@ abstract class AudioExecutionContext<D extends AudioDimension> extends ToStringA
     windowSize: number,
     numOutputChannels: number
   }): AudioExecutionContext<D> {
+    if (useWorklet && !this.config.state.workletIsAvailable) {
+      throw new Error("Can't use worklet for processing because the worklet failed to load. Verify the `workletPath` configuration setting is set correctly and the file is available.")
+    }
     const totalNumChannels = numInputs * numChannelsPerInput
     if (totalNumChannels > constants.MAX_CHANNELS) {
       throw new Error(`The total number of input channels must be less than ${constants.MAX_CHANNELS}. Given numInputs=${numInputs} and numChannelsPerInput=${numChannelsPerInput}.`)

@@ -8,7 +8,8 @@
     "test": "npm run build && node test.js",
     "lint": "npx eslint --fix src/",
     "compile": "tsc",
-    "build": "npm run lint; npm run compile && rollup -c",
+    "build": "npm run lint; npm run compile && npm run rollup",
+    "rollup": "rollup -c rollup.config.main.js && rollup -c rollup.config.worklet.js",
     "watch": "nodemon -e ts --watch src/ --exec \"npm run build\""
   },
   "author": "Stephen Karukas <stephen.karukas@gmail.com>",

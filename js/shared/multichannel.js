@@ -1,5 +1,5 @@
 import { AbstractInput } from "../io/input/AbstractInput.js";
-export * from "./audio_worklet/worklet.js";
+export * from "../worklet/worklet.js";
 export function getNumInputChannels(node) {
     var _a;
     if (node instanceof ChannelMergerNode) {

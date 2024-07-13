@@ -6,13 +6,16 @@ export const GLOBAL_AUDIO_CONTEXT = new AudioContext()
 
 export const defaultConfig: AudioConfig = {
   audioContext: GLOBAL_AUDIO_CONTEXT,
-  state: { isInitialized: false },
+  state: {
+    isInitialized: false,
+    workletIsAvailable: false
+  },
   defaultSamplePeriodMs: 10,
-  workletPath: "js/shared/audio_worklet/worklet.js"
+  workletPath: "dist/worklet.js"
 }
-const _GLOBAL_STATE = defaultConfig.state
-let _runCalled = false 
+let runCalled = false
 
+const config = defaultConfig  // TODO: figure this out
 
 let gestureListeners = []
 /**
@@ -21,32 +24,36 @@ let gestureListeners = []
  * @param callback A function to run once the audio engine is ready.
  */
 export function run(callback: (ctx?: AudioContext) => void) {
-  if (!_runCalled) createInitListeners()
-  _runCalled = true
-  
-  if (_GLOBAL_STATE.isInitialized) {
-    callback(GLOBAL_AUDIO_CONTEXT)
+  if (!runCalled) createInitListeners()
+  runCalled = true
+
+  if (config.state.isInitialized) {
+    callback(config.audioContext)
   } else {
     gestureListeners.push(callback)
   }
 }
 
-function init() {
-  if (_GLOBAL_STATE.isInitialized) return
-  _GLOBAL_STATE.isInitialized = true
-  GLOBAL_AUDIO_CONTEXT.resume()
+function init(workletAvailable: boolean) {
+  if (config.state.isInitialized) return
+  config.state.isInitialized = true
+
+  config.state.workletIsAvailable = workletAvailable
+  workletAvailable || console.warn(`Unable to load worklet file from ${config.workletPath}. Worklet-based processing will be disabled. Verify the workletPath configuration setting is set correctly and the file is available.`)
+
+  config.audioContext.resume()
   for (const listener of gestureListeners) {
-    listener(GLOBAL_AUDIO_CONTEXT)
+    listener(config.audioContext)
   }
 }
 
 function createInitListeners() {
-  const workletPromise = GLOBAL_AUDIO_CONTEXT.audioWorklet.addModule(defaultConfig.workletPath)
+  const workletPromise = config.audioContext.audioWorklet.addModule(config.workletPath)
   const USER_GESTURES = ["change", "click", "contextmenu", "dblclick", "mouseup", "pointerup", "reset", "submit", "touchend"]
   for (const gesture of USER_GESTURES) {
     document.addEventListener(gesture, initAfterAsyncOperations, { once: true })
   }
   function initAfterAsyncOperations() {
-    workletPromise.then(init)
+    workletPromise.then(() => init(true), () => init(false))
   }
 }

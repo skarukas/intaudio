@@ -7,7 +7,6 @@
 // They are used by both Worklet-based and ScriptProcessorNode-based operations.
 export type AudioDimension = "all" | "none" | "channels" | "time"
 export type MultiChannelArray<T> = T[] & { get left(): T, get right(): T }
-export type AudioFrameContext = { sampleRate: number, currentTime: number, currentFrame: number, lastFrame: any }
 
 export function toMultiChannelArray<T>(array: T[]): MultiChannelArray<T> {
   const proxy = new Proxy(array, {

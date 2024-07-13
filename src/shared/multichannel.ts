@@ -1,7 +1,7 @@
 import { AbstractInput } from "../io/input/AbstractInput.js"
 import { AbstractOutput } from "../io/output/AbstractOutput.js"
 import { WebAudioConnectable } from "./types.js"
-export * from "./audio_worklet/worklet.js"
+export * from "../worklet/worklet.js"
 
 // TODO: this doesn't seem to work. Make sure we're connecting to the right *channel* and not just the *input*.
 
@@ -25,8 +25,8 @@ export function getNumOutputChannels(node: WebAudioConnectable) {
   if (node instanceof ChannelSplitterNode) {
     return node.numberOfOutputs
   }
-  return node['__numOutputChannels'] 
-  ?? (node instanceof AudioNode ? node.channelCount : 1)
+  return node['__numOutputChannels']
+    ?? (node instanceof AudioNode ? node.channelCount : 1)
 }
 
 export function createMultiChannelView<T extends MultiChannel>(

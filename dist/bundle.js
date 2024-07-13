@@ -9322,6 +9322,9 @@ class AudioExecutionContext extends ToStringAndUUID {
         return inputNodes;
     }
     static create(fn, { useWorklet, dimension, numInputs, numChannelsPerInput, windowSize, numOutputChannels }) {
+        if (useWorklet && !this.config.state.workletIsAvailable) {
+            throw new Error("Can't use worklet for processing because the worklet failed to load. Verify the `workletPath` configuration setting is set correctly and the file is available.");
+        }
         const totalNumChannels = numInputs * numChannelsPerInput;
         if (totalNumChannels > constants.MAX_CHANNELS) {
             throw new Error(`The total number of input channels must be less than ${constants.MAX_CHANNELS}. Given numInputs=${numInputs} and numChannelsPerInput=${numChannelsPerInput}.`);
@@ -11995,12 +11998,15 @@ MidiLearn.Mode = MidiLearnMode;
 const GLOBAL_AUDIO_CONTEXT = new AudioContext();
 const defaultConfig = {
     audioContext: GLOBAL_AUDIO_CONTEXT,
-    state: { isInitialized: false },
+    state: {
+        isInitialized: false,
+        workletIsAvailable: false
+    },
     defaultSamplePeriodMs: 10,
-    workletPath: "js/shared/audio_worklet/worklet.js"
+    workletPath: "dist/worklet.js"
 };
-const _GLOBAL_STATE = defaultConfig.state;
-let _runCalled = false;
+let runCalled = false;
+const config = defaultConfig; // TODO: figure this out
 let gestureListeners = [];
 /**
  * Register a function to be called once the audio engine is ready and a user gesture has been performed.
@@ -12008,33 +12014,35 @@ let gestureListeners = [];
  * @param callback A function to run once the audio engine is ready.
  */
 function run(callback) {
-    if (!_runCalled)
+    if (!runCalled)
         createInitListeners();
-    _runCalled = true;
-    if (_GLOBAL_STATE.isInitialized) {
-        callback(GLOBAL_AUDIO_CONTEXT);
+    runCalled = true;
+    if (config.state.isInitialized) {
+        callback(config.audioContext);
     }
     else {
         gestureListeners.push(callback);
     }
 }
-function init() {
-    if (_GLOBAL_STATE.isInitialized)
+function init(workletAvailable) {
+    if (config.state.isInitialized)
         return;
-    _GLOBAL_STATE.isInitialized = true;
-    GLOBAL_AUDIO_CONTEXT.resume();
+    config.state.isInitialized = true;
+    config.state.workletIsAvailable = workletAvailable;
+    workletAvailable || console.warn(`Unable to load worklet file from ${config.workletPath}. Worklet-based processing will be disabled. Verify the workletPath configuration setting is set correctly and the file is available.`);
+    config.audioContext.resume();
     for (const listener of gestureListeners) {
-        listener(GLOBAL_AUDIO_CONTEXT);
+        listener(config.audioContext);
     }
 }
 function createInitListeners() {
-    const workletPromise = GLOBAL_AUDIO_CONTEXT.audioWorklet.addModule(defaultConfig.workletPath);
+    const workletPromise = config.audioContext.audioWorklet.addModule(config.workletPath);
     const USER_GESTURES = ["change", "click", "contextmenu", "dblclick", "mouseup", "pointerup", "reset", "submit", "touchend"];
     for (const gesture of USER_GESTURES) {
         document.addEventListener(gesture, initAfterAsyncOperations, { once: true });
     }
     function initAfterAsyncOperations() {
-        workletPromise.then(init);
+        workletPromise.then(() => init(true), () => init(false));
     }
 }
 
