@@ -2,7 +2,7 @@ import stache from 'stache-config';
 import * as internals from './internals.js'
 import public_namespace from './public.js'
 import * as init from './shared/init.js'
-import * as topLevel from './top_level.js'
+import * as topLevel from './topLevel.js'
 
 const withConfig = stache.registerAndCreateFactoryFn(
   init.defaultConfig,

@@ -171,7 +171,7 @@ ia.oscillator(440)
 ```
 
 ##### Option 2
-Here `channels` returns a group of the channels, and `merge()` converts them back into a single signal.
+Here `channels` returns an `ia.group` of the channels, and `merge()` converts them back into a single signal.
 ```js
 ia.oscillator(440).channels
   .split([

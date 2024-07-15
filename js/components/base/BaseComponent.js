@@ -176,9 +176,8 @@ export class BaseComponent extends BaseConnectable {
         var _a, _b;
         for (const name in argDict) {
             const thisInput = (_b = (_a = this.inputs[name]) !== null && _a !== void 0 ? _a : this.inputs["" + name]) !== null && _b !== void 0 ? _b : this.inputs["$" + name];
-            if (!thisInput) {
-                throw new Error(`No input found named '${name}'. Valid inputs: [${Object.keys(this.inputs)}]`);
-            }
+            if (!thisInput)
+                continue;
             const argValue = argDict[name];
             if (argValue instanceof Object && 'connect' in argValue) {
                 argValue.connect(thisInput);

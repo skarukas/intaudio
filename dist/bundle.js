@@ -1054,9 +1054,8 @@ class BaseComponent extends BaseConnectable {
         var _a, _b;
         for (const name in argDict) {
             const thisInput = (_b = (_a = this.inputs[name]) !== null && _a !== void 0 ? _a : this.inputs["" + name]) !== null && _b !== void 0 ? _b : this.inputs["$" + name];
-            if (!thisInput) {
-                throw new Error(`No input found named '${name}'. Valid inputs: [${Object.keys(this.inputs)}]`);
-            }
+            if (!thisInput)
+                continue;
             const argValue = argDict[name];
             if (argValue instanceof Object && 'connect' in argValue) {
                 argValue.connect(thisInput);
@@ -13165,7 +13164,7 @@ Wave.Type = WaveType;
 class HybridOutput extends AudioRateOutput {
     connect(destination) {
         let { input } = this.getDestinationInfo(destination);
-        if (input instanceof AudioRateInput) {
+        if (input instanceof AudioRateInput || input instanceof HybridInput) {
             return AudioRateOutput.prototype.connect.bind(this)(destination);
         }
         else if (input instanceof ControlInput) {
@@ -13558,12 +13557,90 @@ var internals = /*#__PURE__*/Object.freeze({
 // TODO: add all public classes
 var public_namespace = Object.assign({ 'SimplePolyphonicSynth': SimplePolyphonicSynth, 'Keyboard': Keyboard, 'ADSR': ADSR, 'TypingKeyboardMIDI': TypingKeyboardMIDI }, internals);
 
+/**
+ * Represents a group of components that can be operated on independently.
+ */
+class GroupComponent extends BaseComponent {
+    constructor(components) {
+        super();
+        if (components instanceof Array) {
+            this.componentValues = components;
+            this.componentObject = {};
+            for (let i = 0; i < components.length; i++) {
+                this.componentObject[i] = components[i];
+            }
+        }
+        else {
+            this.componentValues = Object.values(components);
+            this.componentObject = components;
+        }
+        for (const key in this.componentObject) {
+            this[key] = this.componentObject[key];
+            this.defineInputAlias(key, this.componentObject[key].getDefaultInput());
+            this.defineOutputAlias(key, this.componentObject[key].getDefaultOutput());
+        }
+    }
+    [Symbol.iterator]() {
+        return this.componentValues[Symbol.iterator]();
+    }
+    getDefaultInput() {
+        throw new Error("Method not implemented.");
+    }
+    getDefaultOutput() {
+        throw new Error("Method not implemented.");
+    }
+    setBypassed(isBypassed) {
+        this.getGroupedResult('setBypassed', isBypassed);
+    }
+    setMuted(isMuted) {
+        this.getGroupedResult('setMuted', isMuted);
+    }
+    getGroupedResult(fnName, ...inputs) {
+        const returnValues = {};
+        for (const key in this.componentObject) {
+            returnValues[key] = this.componentObject[key][fnName](...inputs);
+        }
+        return new GroupComponent(returnValues);
+    }
+    connect(destination) {
+        let { component } = this.getDestinationInfo(destination);
+        if (component instanceof FunctionComponent) {
+            try {
+                return component.withInputs(this.componentObject);
+            }
+            catch (_a) {
+                // Try with ordered inputs if named inputs don't match.
+                return component.withInputs(this.componentValues);
+            }
+        }
+        const groupedResult = this.getGroupedResult('connect', destination);
+        // All entries will be the same, so just return the first.
+        return Object.values(groupedResult)[0];
+    }
+    withInputs(inputDict) {
+        this.getGroupedResult('withInputs', inputDict);
+        return this;
+    }
+    setValues(valueObj) {
+        return this.getGroupedResult('setValues', valueObj);
+    }
+    wasConnectedTo(other) {
+        this.getGroupedResult('wasConnectedTo', other);
+    }
+    sampleSignal(samplePeriodMs) {
+        return this.getGroupedResult('sampleSignal', samplePeriodMs);
+    }
+    propagateUpdatedInput(input, newValue) {
+        return this.getGroupedResult('propagateUpdatedInput', input, newValue);
+    }
+}
+
 function stackChannels(inputs) {
     return ChannelStacker.fromInputs(inputs);
 }
 function generate(arg) {
     if (arg instanceof Function) {
-        return new FunctionComponent(() => Math.random() - 0.5);
+        return new FunctionComponent(arg);
     }
     else {
         throw new Error("not supported yet.");
@@ -13578,11 +13655,19 @@ function combine(inputs, fn, options = {}) {
         return new FunctionComponent(fn).withInputs(inputs);
     }
 }
+// TODO: make this work for inputs/outputs
+function group(inputs) {
+    return new GroupComponent(inputs);
+}
+function split(arg) {
+}
 
 var topLevel = /*#__PURE__*/Object.freeze({
   __proto__: null,
   combine: combine,
   generate: generate,
+  group: group,
+  split: split,
   stackChannels: stackChannels
 });
 

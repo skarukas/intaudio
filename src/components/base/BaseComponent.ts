@@ -218,9 +218,7 @@ export abstract class BaseComponent extends BaseConnectable implements Component
   withInputs(argDict: { [name: string | number]: Connectable | unknown }): this {
     for (const name in argDict) {
       const thisInput = this.inputs[name] ?? this.inputs["" + name] ?? this.inputs["$" + name]
-      if (!thisInput) {
-        throw new Error(`No input found named '${name}'. Valid inputs: [${Object.keys(this.inputs)}]`)
-      }
+      if (!thisInput) continue
       const argValue = argDict[name]
       if (argValue instanceof Object && 'connect' in argValue) {
         (<Connectable>argValue).connect(thisInput)

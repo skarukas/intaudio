@@ -507,6 +507,30 @@ const tests = {
     monitor.addToDom($root, { top: 40 })
 
     delayedNoise.connect(monitor).connect(ia.out)
+  },
+  groupComponents() {
+    // Array destructuring and indexing.
+    const a = ia.generate(() => 0.5)
+    const b = ia.generate(() => -1)
+    let group = ia.group([a, b])
+    let [o1, o2] = group
+    assertEqual(o1, a)
+    assertEqual(o2, b)
+    assertEqual(group[0], a)
+    assertEqual(group[1], b)
+
+    // Object destructuring and indexing.
+    group = ia.group({ o1: a, o2: b })
+    assertEqual(o1, a)
+    assertEqual(o2, b)
+    assertEqual(group.o1, a)
+    assertEqual(group.o2, b)
+
+    // Applying functions to ordered and named inputs.
+    assertSilentSignal(ia.group([a, b]).connect((a, b) => a * 2 + b))
+    assertNonzeroSignal(ia.group([a, b]).connect((a) => a))
+    assertSilentSignal(ia.group({ b, a }).connect((a, b) => a * 2 + b))
+    assertNonzeroSignal(ia.group({ b, a }).connect((a) => a))
   }
 }
 
@@ -517,7 +541,7 @@ const tests = {
 
 ia.run(() => {
   //return tests.midiInput()
-  for (let test in { adsrSummingEnvelopes: tests.adsrSummingEnvelopes }) {
+  for (let test in { groupComponents: tests.groupComponents }) {
     const $testRoot = $(document.createElement('div'))
     tests[test]($testRoot)
     ia.util.afterRender(() => {

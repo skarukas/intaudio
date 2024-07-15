@@ -1,7 +1,7 @@
 import { BaseComponent } from "../components/base/BaseComponent.js"
 import { AbstractInput } from "../io/input/AbstractInput.js"
 
-export class Disconnect extends Error {}
+export class Disconnect extends Error { }
 
 /**
  * A special Error object that, when thrown within a FunctionComponent, will cause the component to disconnect, but not log the error.
@@ -14,6 +14,8 @@ export type CanBeConnectedTo = (
 
 // Any type where AudioNode.connect can connect to it.
 export type WebAudioConnectable = AudioParam | AudioNode
+
+export type ObjectOrArrayOf<T> = T[] | { [key: number | string]: T }
 
 export enum WaveType {
   SINE = "sine",
