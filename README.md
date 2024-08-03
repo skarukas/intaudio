@@ -1,5 +1,5 @@
 > [!NOTE]
-> This project is currently in development as of summer 2024.
+> This project is currently in development as of summer 2024. Demos of its current capabilities may be found in `demo.js`.
 
 # interactive-audio
 Declarative Javascript framework for interactive audio. Arbitrary audio-rate operations, event-based state management, UI components.
