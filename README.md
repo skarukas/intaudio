@@ -1,7 +1,7 @@
 > [!NOTE]
 > This project is currently in development as of summer 2024. Demos of its current capabilities may be found in `demo.js`.
 
-# interactive-audio
+# intaudio
 Declarative Javascript framework for interactive audio. Arbitrary audio-rate operations, event-based state management, UI components.
 
 This framework exists primarily to provide the ability to build arbitrarily-complex, reactive web instruments using minimal, intuitive code. It utilizes a graph-based declarative style to send both event-based and audio-rate based data, which may be familiar with users of [Max](https://cycling74.com/products/max).
