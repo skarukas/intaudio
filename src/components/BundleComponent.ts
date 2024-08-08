@@ -11,7 +11,7 @@ import { FunctionComponent } from "./FunctionComponent.js";
 /**
  * Represents a group of components that can be operated on independently.
  */
-export class GroupComponent extends BaseComponent implements Component, Iterable<Component> {
+export class BundleComponent extends BaseComponent implements Component, Iterable<Component> {
   isBypassed: ControlInput<boolean>;
   isMuted: ControlInput<boolean>;
   triggerInput: ControlInput<symbol>;
@@ -48,17 +48,17 @@ export class GroupComponent extends BaseComponent implements Component, Iterable
     throw new Error("Method not implemented.");
   }
   setBypassed(isBypassed?: boolean): void {
-    this.getGroupedResult('setBypassed', isBypassed)
+    this.getBundledResult('setBypassed', isBypassed)
   }
   setMuted(isMuted?: boolean): void {
-    this.getGroupedResult('setMuted', isMuted)
+    this.getBundledResult('setMuted', isMuted)
   }
-  protected getGroupedResult(fnName: string, ...inputs: any[]) {
+  protected getBundledResult(fnName: string, ...inputs: any[]) {
     const returnValues = {}
     for (const key in this.componentObject) {
       returnValues[key] = this.componentObject[key][fnName](...inputs)
     }
-    return new GroupComponent(returnValues)
+    return new BundleComponent(returnValues)
   }
   connect<T extends CanBeConnectedTo>(destination: T): Component {
     let { component } = this.getDestinationInfo(destination)
@@ -70,24 +70,25 @@ export class GroupComponent extends BaseComponent implements Component, Iterable
         return component.withInputs(this.componentValues)
       }
     }
-    const groupedResult = this.getGroupedResult('connect', destination)
+    const bundledResult = this.getBundledResult('connect', destination)
     // All entries will be the same, so just return the first.
-    return Object.values(groupedResult)[0]
+    return Object.values(bundledResult)[0]
   }
   withInputs(inputDict: { [name: string]: Connectable; }): this {
-    this.getGroupedResult('withInputs', inputDict)
+    this.getBundledResult('withInputs', inputDict)
     return this
   }
   setValues(valueObj: any) {
-    return this.getGroupedResult('setValues', valueObj)
+    return this.getBundledResult('setValues', valueObj)
   }
   wasConnectedTo(other: Connectable): void {
-    this.getGroupedResult('wasConnectedTo', other)
+    this.getBundledResult('wasConnectedTo', other)
   }
+  // TODO: doesn't work.
   sampleSignal(samplePeriodMs?: number): Component {
-    return this.getGroupedResult('sampleSignal', samplePeriodMs)
+    return this.getBundledResult('sampleSignal', samplePeriodMs)
   }
   propagateUpdatedInput<T>(input: AbstractInput<T>, newValue: T) {
-    return this.getGroupedResult('propagateUpdatedInput', input, newValue)
+    return this.getBundledResult('propagateUpdatedInput', input, newValue)
   }
 }

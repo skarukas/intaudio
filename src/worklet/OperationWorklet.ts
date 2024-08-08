@@ -1,6 +1,5 @@
-// Entry point for the worklet.
-
-import { deserializeWorkletMessage } from "./lib/serialization.js"
+import { deserializeWorkletMessage } from "./lib/serialization.js";
+import { IS_WORKLET } from "./lib/utils.js";
 
 // Define properties that will be present in the AudioWorkletGlobalScope
 // (https://developer.mozilla.org/en-US/docs/Web/API/AudioWorkletGlobalScope).
@@ -8,10 +7,9 @@ declare const sampleRate: number
 declare const currentTime: number
 declare const currentFrame: number
 
-export const WORKLET_NAME = "function-worklet"
+export const FUNCTION_WORKLET_NAME = "function-worklet"
 
-// Define AudioWorkletProcessor (if in Worklet)
-if (typeof AudioWorkletProcessor != 'undefined') {
+export const OperationWorklet = IS_WORKLET ?
   class OperationWorklet extends AudioWorkletProcessor {
     processImpl: Function
     constructor() {
@@ -32,8 +30,4 @@ if (typeof AudioWorkletProcessor != 'undefined') {
       this.processImpl && this.processImpl(inputs, outputs, parameters)
       return true
     }
-  }
-
-  // Register the AudioWorkletProcessor.
-  registerProcessor(WORKLET_NAME, OperationWorklet);
-}
+  } : null

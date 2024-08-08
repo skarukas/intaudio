@@ -1,3 +1,14 @@
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+import { TypedConfigurable } from "./config.js";
+import constants from "./constants.js";
 import { TimeMeasure } from "./types.js";
 export function tryWithFailureMessage(fn, message) {
     try {
@@ -19,6 +30,27 @@ export function createScriptProcessorNode(context, windowSize, numInputChannels,
 export function range(n) {
     return Array(n).fill(0).map((v, i) => i);
 }
+export function enumerate(arr) {
+    return arr.map((v, i) => [i, v]);
+}
+export function* zip(...iterables) {
+    const iterators = iterables.map(iterable => iterable[Symbol.iterator]());
+    let done = false;
+    while (!done) {
+        const current = iterators.map(iterator => iterator.next());
+        done = current.some(result => result.done);
+        if (!done) {
+            yield current.map(result => result.value);
+        }
+    }
+}
+export function arrayToObject(arr) {
+    const res = {};
+    for (const [i, v] of enumerate(arr)) {
+        res[i] = v;
+    }
+    return res;
+}
 export function createConstantSource(audioContext) {
     let src = audioContext.createConstantSource();
     src.offset.setValueAtTime(0, audioContext.currentTime);
@@ -27,6 +59,9 @@ export function createConstantSource(audioContext) {
 }
 export function isComponent(x) {
     return !!(x === null || x === void 0 ? void 0 : x.isComponent);
+}
+export function isFunction(x) {
+    return x instanceof Function && !(x instanceof TypedConfigurable);
 }
 export function mapLikeToObject(map) {
     const obj = {};
@@ -48,6 +83,36 @@ export function scaleRange(v, [inMin, inMax], [outMin, outMax]) {
 export function afterRender(fn) {
     setTimeout(fn, 100);
 }
+const primitiveClasses = [Number, Boolean, String, Symbol, BigInt];
+export function isAlwaysAllowedDatatype(value) {
+    return value == constants.TRIGGER || value == undefined;
+}
+export function wrapValidator(fn) {
+    return function (v) {
+        if (!isAlwaysAllowedDatatype(v) && fn(v) === false) {
+            throw new Error(`The value ${v} failed validation.`);
+        }
+    };
+}
+export function createTypeValidator(type) {
+    if (primitiveClasses.includes(type)) {
+        type = type.name.toLowerCase();
+    }
+    if (typeof type === 'string') {
+        return function (value) {
+            if (typeof value != type) {
+                throw new Error(`Expected value to be typeof '${value}', but found type '${typeof value}' instead.`);
+            }
+        };
+    }
+    else {
+        return function (value) {
+            if (!(value instanceof type)) {
+                throw new Error(`Expected value to be instanceof ${type.name}, but found type '${typeof value}' instead.`);
+            }
+        };
+    }
+}
 export function defineTimeRamp(audioContext, timeMeasure, node = undefined, mapFn = v => v, durationSec = 1e8) {
     // Continuous ramp representing the AudioContext time.
     let multiplier;
@@ -60,12 +125,13 @@ export function defineTimeRamp(audioContext, timeMeasure, node = undefined, mapF
     else if (timeMeasure == TimeMeasure.SAMPLES) {
         multiplier = audioContext.sampleRate;
     }
+    const toValue = (v) => mapFn(v * multiplier);
     let timeRamp = node !== null && node !== void 0 ? node : createConstantSource(audioContext);
     let currTime = audioContext.currentTime;
     const endTime = currTime + durationSec;
     timeRamp.offset.cancelScheduledValues(currTime);
-    timeRamp.offset.setValueAtTime(mapFn(0), currTime);
-    timeRamp.offset.linearRampToValueAtTime(mapFn(durationSec), endTime);
+    timeRamp.offset.setValueAtTime(toValue(0), currTime);
+    timeRamp.offset.linearRampToValueAtTime(toValue(durationSec), endTime);
     return timeRamp;
 }
 // TODO: figure out how to avoid circular dependency??
@@ -80,4 +146,45 @@ export function createComponent(x: any): Component {
   }
   return undefined
 }
- */ 
+ */
+export function loadFile(audioContext, filePathOrUrl) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const response = yield fetch(filePathOrUrl);
+        const arrayBuffer = yield response.arrayBuffer();
+        return audioContext.decodeAudioData(arrayBuffer);
+    });
+}
+const registryIdPropname = "__registryId__";
+export function getBufferId(buffer) {
+    if (!buffer[registryIdPropname]) {
+        buffer[registryIdPropname] = crypto.randomUUID();
+    }
+    return buffer[registryIdPropname];
+}
+export function bufferToFloat32Arrays(buffer) {
+    const arrs = [];
+    for (let c = 0; c < buffer.numberOfChannels; c++) {
+        arrs.push(buffer.getChannelData(c));
+    }
+    return arrs;
+}
+// These functions are unused as SharedArrayBuffer has is restricted to serving
+// the page with certain headers. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#security_requirements
+// TODO: consider revisitng using SharedArrayBuffer to share the buffer between 
+// threads instead of copying.
+/* Turns the underlying data into a shared buffer, if it is not already. */
+export function makeBufferShared(arr) {
+    if (arr.buffer instanceof SharedArrayBuffer) {
+        return arr;
+    }
+    const sharedBuffer = new SharedArrayBuffer(arr.buffer.byteLength);
+    const sharedArray = new Float32Array(sharedBuffer);
+    sharedArray.set(arr);
+    return sharedArray;
+}
+export function makeAudioBufferShared(buffer) {
+    for (let c = 0; c < buffer.numberOfChannels; c++) {
+        const original = buffer.getChannelData(c);
+        buffer.copyToChannel(makeBufferShared(original), c);
+    }
+}

@@ -10,7 +10,7 @@ import { HybridInput } from "./HybridInput.js"
 export class ComponentInput<T> extends AudioRateInput {
   private _value: T
   constructor(
-    public name: string | number, 
+    public name: string | number,
     parent: BaseComponent,
     public defaultInput?: AbstractInput<T>
   ) {
@@ -20,10 +20,11 @@ export class ComponentInput<T> extends AudioRateInput {
     this._value = defaultInput?.value
   }
   setValue(value: any) {
+    this.validate(value)
     // JS objects represent collections of parameter names and values
     const isPlainObject = value?.constructor === Object
     if (isPlainObject && !value["_raw"]) {
-      
+
       // Validate each param is defined in the target.
       for (let key in <object>value) {
         if (!(key in this.parent.inputs)) {

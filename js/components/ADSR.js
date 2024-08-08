@@ -4,12 +4,12 @@ export class ADSR extends BaseComponent {
     constructor(attackDurationMs, decayDurationMs, sustainAmplitude, releaseDurationMs) {
         super();
         // Inputs
-        this.attackEvent = this.defineControlInput('attackEvent');
-        this.releaseEvent = this.defineControlInput('releaseEvent');
-        this.attackDurationMs = this.defineControlInput('attackDurationMs', attackDurationMs);
-        this.decayDurationMs = this.defineControlInput('decayDurationMs', decayDurationMs);
-        this.sustainAmplitude = this.defineControlInput('sustainAmplitude', sustainAmplitude);
-        this.releaseDurationMs = this.defineControlInput('releaseDurationMs', releaseDurationMs);
+        this.attackEvent = this.defineControlInput('attackEvent').ofType(Symbol);
+        this.releaseEvent = this.defineControlInput('releaseEvent').ofType(Symbol);
+        this.attackDurationMs = this.defineControlInput('attackDurationMs', attackDurationMs).ofType(Number);
+        this.decayDurationMs = this.defineControlInput('decayDurationMs', decayDurationMs).ofType(Number);
+        this.sustainAmplitude = this.defineControlInput('sustainAmplitude', sustainAmplitude).ofType(Number);
+        this.releaseDurationMs = this.defineControlInput('releaseDurationMs', releaseDurationMs).ofType(Number);
         this._paramModulator = createConstantSource(this.audioContext);
         this.audioOutput = this.defineAudioOutput('audioOutput', this._paramModulator);
         this.state = { noteStart: 0, attackFinish: 0, decayFinish: 0 };

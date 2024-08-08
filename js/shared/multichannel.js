@@ -1,7 +1,10 @@
-import { AbstractInput } from "../io/input/AbstractInput.js";
+import { toMultiChannelArray } from "../worklet/lib/types.js";
 export function getNumInputChannels(node) {
     var _a;
-    if (node instanceof ChannelMergerNode) {
+    if (node instanceof ChannelSplitterNode) {
+        return node.numberOfOutputs;
+    }
+    else if (node instanceof ChannelMergerNode) {
         return node.numberOfInputs;
     }
     return (_a = node['__numInputChannels']) !== null && _a !== void 0 ? _a : (node instanceof AudioNode ? node.channelCount : 1);
@@ -11,18 +14,21 @@ export function getNumOutputChannels(node) {
     if (node instanceof ChannelSplitterNode) {
         return node.numberOfOutputs;
     }
+    else if (node instanceof ChannelMergerNode) {
+        return node.numberOfInputs;
+    }
     return (_a = node['__numOutputChannels']) !== null && _a !== void 0 ? _a : (node instanceof AudioNode ? node.channelCount : 1);
 }
-export function createMultiChannelView(multiChannelIO, node) {
+export function createMultiChannelView(multiChannelIO, supportsMultichannel) {
     let channels = [];
-    if (!(node instanceof AudioNode)) {
-        return channels;
+    if (!supportsMultichannel) {
+        return toMultiChannelArray(channels);
     }
-    const numChannels = multiChannelIO instanceof AbstractInput ? getNumInputChannels(node) : getNumOutputChannels(node);
+    const numChannels = 'numInputChannels' in multiChannelIO ? multiChannelIO.numInputChannels : multiChannelIO.numOutputChannels;
     for (let c = 0; c < numChannels; c++) {
         channels.push(createChannelView(multiChannelIO, c));
     }
-    return channels;
+    return toMultiChannelArray(channels);
 }
 function createChannelView(multiChannelIO, activeChannel) {
     return new Proxy(multiChannelIO, {
@@ -73,5 +79,6 @@ export function connectWebAudioChannels(audioContext, source, destination, fromC
         const merger = audioContext.createChannelMerger();
         return source.connect(merger, fromChannel, toChannel).connect(destination);
     }
+    //console.log(`Connecting ${source.constructor.name} [channel=${fromChannel ?? "*"}] to ${destination} [channel=${toChannel ?? "*"}]`)
     return simpleConnect(source, destination, fromChannel, toChannel);
 }

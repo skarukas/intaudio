@@ -22,11 +22,11 @@ export class AudioRateSignalSampler extends BaseComponent {
         samplePeriodMs !== null && samplePeriodMs !== void 0 ? samplePeriodMs : (samplePeriodMs = this.config.defaultSamplePeriodMs);
         this._analyzer = this.audioContext.createAnalyser();
         // Inputs
-        this.samplePeriodMs = this.defineControlInput('samplePeriodMs', samplePeriodMs);
+        this.samplePeriodMs = this.defineControlInput('samplePeriodMs', samplePeriodMs).ofType(Number);
         this.audioInput = this.defineAudioInput('audioInput', this._analyzer);
         this.setDefaultInput(this.audioInput);
         // Output
-        this.controlOutput = this.defineControlOutput('controlOutput');
+        this.controlOutput = this.defineControlOutput('controlOutput').ofType(Number);
         this.preventIOOverwrites();
     }
     getCurrentSignalValue() {

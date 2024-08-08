@@ -1,10 +1,10 @@
 import { AbstractInput } from "../../io/input/AbstractInput.js";
 import { TypedConfigurable } from "../config.js";
-import { isComponent } from "../util.js";
+import { isComponent, isFunction } from "../util.js";
 import { ToStringAndUUID } from "./ToStringAndUUID.js";
 export class BaseConnectable extends ToStringAndUUID {
     getDestinationInfo(destination) {
-        if (destination instanceof Function) {
+        if (isFunction(destination)) {
             destination = new this._.FunctionComponent(destination);
         }
         let component, input;
@@ -19,7 +19,7 @@ export class BaseConnectable extends ToStringAndUUID {
         }
         else if (isComponent(destination)) {
             component = destination;
-            input = destination.getDefaultInput();
+            input = component.getDefaultInput();
         }
         else {
             throw new Error("Improper input type for connect(). " + destination);

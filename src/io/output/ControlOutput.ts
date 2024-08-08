@@ -1,10 +1,12 @@
 import { Component } from "../../components/base/Component.js"
+import { resolvePromiseArgs } from "../../shared/decorators.js"
 import { CanBeConnectedTo } from "../../shared/types.js"
 import { AudioRateInput } from "../input/AudioRateInput.js"
 import { ComponentInput } from "../input/ComponentInput.js"
 import { AbstractOutput } from "./AbstractOutput.js"
 
 export class ControlOutput<T> extends AbstractOutput<T> {
+  numOutputChannels: number = 1
   connect<T extends CanBeConnectedTo>(destination: T): Component {
     let { component, input } = this.getDestinationInfo(destination)
     // TODO: fix... should be "destination" but won't work for non-connectables like Function.
@@ -18,7 +20,10 @@ export class ControlOutput<T> extends AbstractOutput<T> {
     this.connections.push(input)
     return component
   }
-  setValue(value: T, rawObject: boolean = false) {
+  @resolvePromiseArgs
+  setValue(value: T | Promise<T>, rawObject: boolean = false) {
+    value = <T>value
+    this.validate(value)
     if (value?.constructor === Object && rawObject) {
       value = { _raw: true, ...value }
     }

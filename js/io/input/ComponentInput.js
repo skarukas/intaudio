@@ -13,6 +13,7 @@ export class ComponentInput extends AudioRateInput {
         this._value = defaultInput === null || defaultInput === void 0 ? void 0 : defaultInput.value;
     }
     setValue(value) {
+        this.validate(value);
         // JS objects represent collections of parameter names and values
         const isPlainObject = (value === null || value === void 0 ? void 0 : value.constructor) === Object;
         if (isPlainObject && !value["_raw"]) {

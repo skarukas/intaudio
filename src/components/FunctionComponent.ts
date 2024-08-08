@@ -140,6 +140,11 @@ export class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any,
   process(event) {
     return this.fn(event)
   }
+  __call__(...inputs: Array<Connectable | unknown>): this;
+  __call__(inputDict: { [name: string]: Connectable | unknown }): this;
+  override __call__(...inputs: any): this {
+    return this.withInputs(...inputs)
+  }
   withInputs(...inputs: Array<Connectable | unknown>): this;
   withInputs(inputDict: { [name: string]: Connectable | unknown }): this;
   override withInputs(...inputs: any): this {

@@ -1,8 +1,10 @@
 import { AudioConfig } from "./config.js"
+import { SignalLogger } from "./logger.js"
 
 // TODO: make this stuff stache-configurable.
 
 export const GLOBAL_AUDIO_CONTEXT = new AudioContext()
+let logger: SignalLogger
 
 export const defaultConfig: AudioConfig = {
   audioContext: GLOBAL_AUDIO_CONTEXT,
@@ -10,7 +12,11 @@ export const defaultConfig: AudioConfig = {
     isInitialized: false,
     workletIsAvailable: false
   },
+  get logger(): SignalLogger {
+    return logger ?? (logger = new SignalLogger())
+  },
   defaultSamplePeriodMs: 10,
+  useWorkletByDefault: false,
   workletPath: "dist/worklet.js"
 }
 let runCalled = false

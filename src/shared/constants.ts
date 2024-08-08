@@ -19,6 +19,7 @@ export default Object.freeze({
   MIN_PLAYBACK_RATE: 0.0625,
   MAX_PLAYBACK_RATE: 16.0,
   MAX_CHANNELS: 32,
+  MAX_ANALYZER_LENGTH: 32768,
   // Special placeholder for when an input both has no defaultValue and it has 
   // never been set.
   // TODO: need special value?

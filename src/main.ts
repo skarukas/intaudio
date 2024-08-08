@@ -15,6 +15,7 @@ export default {
   ...topLevel,
   internals,
   audioContext: init.GLOBAL_AUDIO_CONTEXT,
+  config: init.defaultConfig,
   out: new internals.AudioRateInput('out', undefined, init.GLOBAL_AUDIO_CONTEXT.destination),
   run: init.run,
   withConfig

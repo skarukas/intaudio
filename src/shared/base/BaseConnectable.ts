@@ -3,7 +3,7 @@ import { Component } from "../../components/base/Component.js";
 import { AbstractInput } from "../../io/input/AbstractInput.js";
 import { TypedConfigurable } from "../config.js";
 import { CanBeConnectedTo } from "../types.js";
-import { isComponent } from "../util.js";
+import { isComponent, isFunction } from "../util.js";
 import { Connectable } from "./Connectable.js";
 import { ToStringAndUUID } from "./ToStringAndUUID.js";
 
@@ -12,9 +12,9 @@ export abstract class BaseConnectable extends ToStringAndUUID implements Connect
   abstract connect<T extends Component>(destination: T): T;
   abstract connect<T extends CanBeConnectedTo>(destination: T): Component;
 
-  getDestinationInfo(destination: CanBeConnectedTo): { component: Component, input: AbstractInput} {
-    if (destination instanceof Function) {
-      destination = new this._.FunctionComponent(destination)
+  getDestinationInfo(destination: CanBeConnectedTo): { component: Component, input: AbstractInput } {
+    if (isFunction(destination)) {
+      destination = new this._.FunctionComponent(<Function>destination)
     }
     let component: Component,
       input: AbstractInput;
@@ -26,8 +26,8 @@ export abstract class BaseConnectable extends ToStringAndUUID implements Connect
       component = destination.parent
       input = destination
     } else if (isComponent(destination)) {
-      component = destination
-      input = destination.getDefaultInput()
+      component = <Component>destination
+      input = component.getDefaultInput()
     } else {
       throw new Error("Improper input type for connect(). " + destination)
     }

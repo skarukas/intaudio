@@ -5,61 +5,111 @@ if (!ia) {
 }
 console.log(ia)
 
-function assertEqual(actual, expected, msg = undefined) {
-  assertTrue(actual == expected, msg ?? `${actual} != ${expected}`)
+function wait(ms, fn) {
+  let resolve;
+  setTimeout(() => {
+    resolve(fn())
+  }, ms)
+  return new Promise((res) => resolve = res)
+}
+let currMax = 0
+function plot(arr, yrange = undefined, plotname = "plot") {
+  if (yrange == undefined) {
+    currMax = Math.max(currMax, ...arr)
+    yrange = [0, currMax]
+  }
+  const data = [{ x: arr.map((v, i) => i), y: arr, mode: "lines" }]
+  Plotly.react(plotname, data, { yaxis: { range: yrange } })
 }
 
-const assertTrue = (pred, msg) => {
-  console.assert(pred, msg)
-  console.log("Passed assertion")
-}
+class TestCase {
+  assertSamplingPeriodMs = 100
+  constructor(name) {
+    this.name = name
+  }
+  assertEqual(actual, expected, msg = undefined) {
+    this.assertTrue(actual == expected, msg ?? `${actual} != ${expected}`)
+  }
+  assertFalse(pred, msg) {
+    this.assertTrue(!pred, msg)
+  }
+  assertTrue(pred, msg) {
+    const symbol = pred ? "✓" : "𐄂"
+    const percent = pred ? 100 : 0
+    console.assert(pred, msg)
+    const $listItem = appendTestSuccessScore(this.name)
+    $listItem
+      .text(symbol)
+      .css('color', getColor(percent))
+  }
+  assertSignal(output, predicate, maxGapMs = 4000) {
+    const $listItem = appendTestSuccessScore(this.name)
+    let matchCount = 0
+    let totalCount = 0
+    const trace = Error().stack
+    output.sampleSignal(this.assertSamplingPeriodMs).connect(v => {
+      totalCount += 1
+      matchCount += !!predicate(v)
+      const matchPercent = 100 * matchCount / totalCount
+      $listItem
+        .text(`${matchPercent.toFixed(2)}%`)
+        .css('color', getColor(matchPercent))
+    })
+  }
+  assertSilentSignal(output) {
+    this.assertSignal(output, v => v == 0)
+  }
 
-const ASSERT_SAMPLING_PERIOD_MS = 50
+  assertSignalEquals(output, val, maxGapMs = 4000) {
+    this.assertSignal(output, v => v == val, maxGapMs)
+  }
 
-function assertSilentSignal(output) {
-  const trace = Error().stack
-  output.sampleSignal(ASSERT_SAMPLING_PERIOD_MS).connect(v => {
-    if (v) {
-      console.error(output)
-      console.error(`Expected silent signal, found value ${v}. ` + trace)
-      ia.disconnect()
+  assertNonzeroSignal(output, maxGapMs = 4000) {
+    this.assertSignal(output, v => v != 0, maxGapMs)
+  }
+
+  assertThrows(fn, substr) {
+    try {
+      fn()
+      this.assertTrue(false, "Method succeeded. " + fn)
+    } catch (e) {
+      this.assertTrue(e.toString().match(substr), "Wrong error " + e)
     }
-  })
-}
-
-function assertNonzeroSignal(output, maxGapMs = 4000) {
-  let zeroCount = 0
-  const trace = Error().stack
-  output.sampleSignal(ASSERT_SAMPLING_PERIOD_MS).connect(v => {
-    if (v) {
-      zeroCount = 0
-    } else {
-      zeroCount++
-      if (zeroCount > maxGapMs / ASSERT_SAMPLING_PERIOD_MS) {
-        console.error(output)
-        console.error(`Expected nonzero signal, found silence for more than ${maxGapMs}ms. ` + trace)
-        ia.disconnect()
-      }
-    }
-  })
-}
-
-function assertThrows(fn, substr) {
-  try {
-    fn()
-    assertTrue(false, "Method succeeded. " + fn)
-  } catch (e) {
-    assertTrue(e.toString().match(substr), "Wrong error " + e)
   }
 }
 
-function display(v, max = 50) {
-  let n = Math.floor(v * max)
-  if (v > 0) {
-    console.log(".".repeat(n))
-  } else {
-    //console.log("x".repeat(-n))
+
+const $testStatusRoot = $(".test-status-root")
+let testCaseListContainers = {}
+
+function appendTestSuccessScore(testName) {
+  if (!testCaseListContainers[testName]) {
+    const $div = $(document.createElement("div"))
+    const $title = $(document.createElement("p")).text(testName)
+    const $list = $(document.createElement("ol"))
+    $div.appendTo($testStatusRoot)
+    $div.append($title, $list)
+    testCaseListContainers[testName] = $list
   }
+  const $listItem = $(document.createElement("li"))
+  $listItem.appendTo(testCaseListContainers[testName])
+  return $listItem
+}
+
+function interpolate(rgb1, rgb2, intval) {
+  const res = []
+  for (let i = 0; i < 3; i++) {
+    res.push(Math.round(rgb1[i] * (1 - intval) + rgb2[i] * intval));
+  }
+
+  return `rgb(${res.join(",")})`
+}
+
+const redColor = [255, 0, 0]
+const greenColor = [0, 200, 0]
+
+function getColor(percent) {
+  return interpolate(redColor, greenColor, percent / 100)
 }
 
 function createOscillator(freq = 440) {
@@ -78,10 +128,10 @@ const tests = {
     subtractNumbers.connect(v => {
       val = v
     })
-    assertTrue(val == undefined)
+    this.assertTrue(val == undefined)
     subtractNumbers.$x.setValue(10)
     subtractNumbers.$y.setValue(20)
-    assertTrue(val == "1020", val)
+    this.assertTrue(val == "1020", val)
   },
   keyboardAndSynth($root) {
     const keyboard = new ia.Keyboard(48)
@@ -120,7 +170,7 @@ const tests = {
     oscillatorOutput.connect(subtractSignals.$x)
     oscillatorOutput.connect(subtractSignals.$y)
     let t1 = subtractSignals.sampleSignal(1024)
-    t1.connect(v => assertTrue(v == 0, v))
+    t1.connect(v => this.assertTrue(v == 0, v))
 
     let t2 = oscillatorOutput
       .connect(v => v * 300)
@@ -154,7 +204,7 @@ const tests = {
     bang.trigger()
     bang.trigger()
     bang.trigger()
-    assertTrue(bangs == 3, bangs)
+    this.assertTrue(bangs == 3, bangs)
   },
   adsrEnvelopeSimple($root) {
     // This should:
@@ -279,8 +329,8 @@ const tests = {
     }))
     fn.connect(envelope)
     fn.triggerInput.trigger()
-    assertTrue(envelope.attackDurationMs.value == 1000, envelope.attackDurationMs.value)
-    assertTrue(envelope.decayDurationMs.value == 100, envelope.decayDurationMs.value)
+    this.assertTrue(envelope.attackDurationMs.value == 1000, envelope.attackDurationMs.value)
+    this.assertTrue(envelope.decayDurationMs.value == 100, envelope.decayDurationMs.value)
   },
   audioParamByDictFailure() {
     let envelope = new ia.ADSR(100, 10, 0.5, 1000)
@@ -312,7 +362,7 @@ const tests = {
     })
     setTimeout(() => {
       slider.setValues({ input: 50 })
-      assertTrue(JSON.stringify(inputs) == JSON.stringify([30, 50]), inputs)
+      this.assertTrue(JSON.stringify(inputs) == JSON.stringify([30, 50]), inputs)
     }, 1000)
   },
   namespaceConfig() {
@@ -324,7 +374,7 @@ const tests = {
     let synth = new ia2.SimplePolyphonicSynth()
     let transformed = synth.connect(x => x / 2)
 
-    assertTrue(
+    this.assertTrue(
       (transformed.configId == synth.configId)
       && (configId == synth.configId),
       [configId, transformed.configId, synth.configId])
@@ -334,7 +384,7 @@ const tests = {
     let ia2 = ia.withConfig({ audioContext })
     let keyboard = new ia.Keyboard()
     let synth = new ia2.SimplePolyphonicSynth()
-    assertThrows(
+    this.assertThrows(
       () => keyboard.connect(synth),
       "Unable to connect components from different namespaces.")
   },
@@ -411,13 +461,13 @@ const tests = {
     // Apply to each sample, across channels.
     const channelTransform = oscillator.transformAudio(({ left, right }) => {
       return [left, undefined, right, undefined]
-    }, "channels", { useWorklet: true })
+    }, { useWorklet: true, dimension: "channels" })
     channelTransform.connect(monitor.input.channels[2])
-    assertEqual(channelTransform.numOutputChannels, 4)
-    assertNonzeroSignal(channelTransform.output.channels[0])
-    assertSilentSignal(channelTransform.output.channels[1])
-    assertNonzeroSignal(channelTransform.output.channels[2])
-    assertSilentSignal(channelTransform.output.channels[3])
+    this.assertEqual(channelTransform.numOutputChannels, 4)
+    this.assertNonzeroSignal(channelTransform.output.channels[0])
+    this.assertSilentSignal(channelTransform.output.channels[1])
+    this.assertNonzeroSignal(channelTransform.output.channels[2])
+    this.assertSilentSignal(channelTransform.output.channels[3])
 
     // Apply across channels and time.
     const ctTransform = oscillator.transformAudio(function ({ left, right }) {
@@ -425,10 +475,10 @@ const tests = {
         left[i] = (left[i] + right[(left.length - i) - 1]) / 2
       }
       return [left]
-    }, "all", { useWorklet: true })
+    }, { useWorklet: true, dimension: "all" })
     ctTransform.connect(monitor.input.channels[1])
-    assertEqual(ctTransform.numOutputChannels, 1)
-    assertNonzeroSignal(ctTransform.output.left)
+    this.assertEqual(ctTransform.numOutputChannels, 1)
+    this.assertNonzeroSignal(ctTransform.output.left)
 
     // Apply to each sample in each channel.
     const sampleTransform = oscillator.transformAudio(function (x) {
@@ -438,21 +488,21 @@ const tests = {
         avg += this.previousOutput(t) / windowSize
       }
       return -avg
-    }, "none", { useWorklet: true })
+    }, { useWorklet: true })
     sampleTransform.connect(monitor.input.channels[0])
 
-    assertEqual(sampleTransform.numOutputChannels, 2)
-    assertNonzeroSignal(sampleTransform.output.channels[0])
-    assertNonzeroSignal(sampleTransform.output.channels[1])
+    this.assertEqual(sampleTransform.numOutputChannels, 2)
+    this.assertNonzeroSignal(sampleTransform.output.channels[0])
+    this.assertNonzeroSignal(sampleTransform.output.channels[1])
 
     // The AudioProcessingEvent is bound to `this`.
     const thisSampleTransform = oscillator.transformAudio(function (x) {
       return this.currentTime
-    }, "none")
+    })
 
-    assertEqual(thisSampleTransform.numOutputChannels, 2)
-    assertNonzeroSignal(thisSampleTransform.output.channels[0])
-    assertNonzeroSignal(thisSampleTransform.output.channels[1])
+    this.assertEqual(thisSampleTransform.numOutputChannels, 2)
+    this.assertNonzeroSignal(thisSampleTransform.output.channels[0])
+    this.assertNonzeroSignal(thisSampleTransform.output.channels[1])
 
     // Reduce over the time dimension.
     const timeTransform = oscillator.transformAudio(arr => {
@@ -460,12 +510,12 @@ const tests = {
         arr[i] = (arr[i] + arr[i + 1]) / 2
       }
       return arr
-    }, "time", { useWorklet: true })
+    }, { useWorklet: true, dimension: "time" })
     timeTransform.connect(monitor.input.channels[3])
-    assertNonzeroSignal(timeTransform.output.channels[0])
-    assertNonzeroSignal(timeTransform.output.channels[1])
+    this.assertNonzeroSignal(timeTransform.output.channels[0])
+    this.assertNonzeroSignal(timeTransform.output.channels[1])
 
-    assertEqual(timeTransform.numOutputChannels, 2)
+    this.assertEqual(timeTransform.numOutputChannels, 2)
   },
   multipleInputTransformGainSlider($root) {
     let slider = new ia.RangeInputComponent()
@@ -489,7 +539,7 @@ const tests = {
       { useWorklet: true }
     )
     // Trigger ADSR each second.
-    setInterval(() => envelope.attackEvent.trigger(), 1000)
+    setInterval(() => envelope.attackEvent(), 1000)
 
     // Control echo duration.
     let delaySlider = new ia.RangeInputComponent(0, 44100)
@@ -508,42 +558,380 @@ const tests = {
 
     delayedNoise.connect(monitor).connect(ia.out)
   },
-  groupComponents() {
+  variableDelaySinewave($root) {
+    // Source: gated noise.
+    const whiteNoiseSource = ia.generate(() => Math.random() - 0.5)
+    const envelope = new ia.ADSR(10, 50, 0, 10)
+    const gatedNoise = ia.combine(
+      [whiteNoiseSource, envelope],
+      (noise, gain) => noise * gain,
+      { useWorklet: true }
+    )
+    // Trigger ADSR each second.
+    //setInterval(() => envelope.attackEvent.trigger(), 1000)
+    envelope.attackEvent.trigger()
+
+    // Control echo duration.
+
+    const lfo = new ia.Wave("triangle", 21)
+      .transformAudio(([l, r]) => {
+        const bw = 44100
+        return [
+          (l ** 0.5 + Math.random()) * bw / 2, //((l + 1) / 2) * Math.random() * bw,
+          (-(r ** 0.5) + Math.random()) * bw / 2 //((1 - r) / 2) * Math.random() * bw
+        ]
+      }, { dimension: "channels" })
+
+    const delayedNoise = ia.combine(
+      [gatedNoise, lfo],
+      function (noise, delay) {
+        if (Math.random() < 0.00001) return Math.random()
+        const prevVal = this.previousOutput(delay)// * 0.8
+        return noise + prevVal
+      }, { useWorklet: true }
+    )
+
+    // Display.
+    const monitor = new ia.ScrollingAudioMonitor()
+    monitor.addToDom($root, { top: 40 })
+    delayedNoise.connect(monitor).connect(ia.out)
+  },
+  bundleArray() {
     // Array destructuring and indexing.
     const a = ia.generate(() => 0.5)
     const b = ia.generate(() => -1)
-    let group = ia.group([a, b])
-    let [o1, o2] = group
-    assertEqual(o1, a)
-    assertEqual(o2, b)
-    assertEqual(group[0], a)
-    assertEqual(group[1], b)
-
+    const bundle = ia.bundle([a, b])
+    const [o1, o2] = bundle
+    this.assertEqual(o1, a)
+    this.assertEqual(o2, b)
+    this.assertEqual(bundle[0], a)
+    this.assertEqual(bundle[1], b)
+  },
+  bundleObject() {
+    const a = ia.generate(() => 0.5)
+    const b = ia.generate(() => -1)
     // Object destructuring and indexing.
-    group = ia.group({ o1: a, o2: b })
-    assertEqual(o1, a)
-    assertEqual(o2, b)
-    assertEqual(group.o1, a)
-    assertEqual(group.o2, b)
+    const bundle = ia.bundle({ o1: a, o2: b })
+    this.assertEqual(bundle.o1, a)
+    this.assertEqual(bundle.o2, b)
 
     // Applying functions to ordered and named inputs.
-    assertSilentSignal(ia.group([a, b]).connect((a, b) => a * 2 + b))
-    assertNonzeroSignal(ia.group([a, b]).connect((a) => a))
-    assertSilentSignal(ia.group({ b, a }).connect((a, b) => a * 2 + b))
-    assertNonzeroSignal(ia.group({ b, a }).connect((a) => a))
+    this.assertSilentSignal(ia.bundle([a, b]).connect((a, b) => a * 2 + b))
+    this.assertNonzeroSignal(ia.bundle([a, b]).connect((a) => a))
+    this.assertSilentSignal(ia.bundle({ b, a }).connect((a, b) => a * 2 + b))
+    this.assertNonzeroSignal(ia.bundle({ b, a }).connect((a) => a))
+  },
+  perOutputArrayInput() {
+    const a = ia.generate(() => 0.5)
+    const b = ia.generate(() => -1)
+    const bundle = ia.bundle([a, b])
+    const modifiedBundle = bundle.perOutput([
+      a => a.connect(x => x + 5),
+      b => b.connect(x => x * 2)
+    ])
+    const [a1, b1] = modifiedBundle
+    this.assertSignalEquals(modifiedBundle[0], 5.5)
+    this.assertSignalEquals(modifiedBundle[1], -2)
+    this.assertSignalEquals(a1, 5.5)
+    this.assertSignalEquals(b1, -2)
+  },
+  perOutputObjInput() {
+    const a = ia.generate(() => 0.5)
+    const b = ia.generate(() => -1)
+    const bundle = ia.bundle({ b, a })
+    const modifiedBundle = bundle.perOutput({
+      a: a => a.connect(x => x + 5),
+      b: b => b.connect(x => x * 2)
+    })
+    this.assertSignalEquals(modifiedBundle.a, 5.5)
+    this.assertSignalEquals(modifiedBundle.b, -2)
+  },
+  perChannel() {
+    const a = ia.generate(() => 0.5)
+    const b = ia.generate(() => -1)
+    // broken.... need to make this work for both outputs AND inputs
+    const stack = ia.stackChannels([a, b])
+    const modifiedStack = stack.perChannel({
+      left: l => l.connect(x => x + 5),
+      right: r => r.connect(x => x * 2)
+    })
+    this.assertSignalEquals(modifiedStack.output.left, 5.5)
+    this.assertSignalEquals(modifiedStack.output.right, -2)
+  },
+  processingPreservesPhase() {
+    // Currently fails for both worklet and non-worklet.
+    // Could there be some way to keep signals synced? (prob not)
+    const signal = ia.generate(() => Math.random())
+    const processedSignal = signal.connect(x => x)
+    const diff = ia.bundle([signal, processedSignal]).connect((x, y) => x - y)
+    this.assertSilentSignal(diff)
+  },
+  bufferComponent($root) {
+    ia.config.useWorkletByDefault = true
+    const buffer = ia.bufferReader("assets/fugue.m4a")
+    const timeRamp = ia.ramp('samples').transformAudio(
+      x => (1 + Math.sin(x / (10 * 44100))) * 20 * 44100
+    )
+    ia.stackChannels([
+      timeRamp.left,
+      timeRamp.transformAudio(x => 20 * 44100 - x).left
+    ]).connect(buffer.time)
+      .logSignal()
+
+    const monitor = new ia.ScrollingAudioMonitor()
+    monitor.addToDom($root)
+    buffer.connect(monitor).connect(ia.out)
+  },
+  bufferWriter() {
+    const buffer = new AudioBuffer({
+      numberOfChannels: 2,
+      length: 128,
+      sampleRate: ia.audioContext.sampleRate
+    })
+    const writer = ia.bufferWriter(buffer)
+    const rand = ia.generate(() => Math.random())
+    const position = rand.connect(v => Math.floor(v * 4))
+    const value = rand.connect(v => Math.floor(v * 4) + v)
+    position.connect(writer.position)
+    value.connect(writer.valueToWrite)
+
+    for (const c of [0, 1]) {  // For each channel
+      wait(500, () => {
+        // Expect (only) the first four values to be written.
+        const channel = buffer.getChannelData(c)
+        const firstSlice = channel.slice(0, 4)
+        this.assertTrue(firstSlice.every(v => v != 0))
+        // NOTE: Element 4 is sometimes nonzero, maybe due to float32 rounding 
+        // of Math.random() values up to 1. So don't check it.
+        this.assertTrue(channel.slice(5, 128).every(v => v == 0))
+        return firstSlice
+      }).then(firstSlice => wait(500, () => {
+        // Verify that the buffer in the main thread is updated regularly.
+        const secondSlice = buffer.getChannelData(c).slice(0, 4)
+        this.assertTrue(secondSlice.every(v => v != 0))
+        this.assertTrue(secondSlice.every((v, i) => v != firstSlice[i]))
+      }))
+    }
+  },
+  twoBufferWriters() {
+    const buffer = new AudioBuffer({
+      numberOfChannels: 2,
+      length: 128,
+      sampleRate: ia.audioContext.sampleRate
+    })
+    const rand = ia.generate(() => Math.random())
+
+    // The first writer writes to the first 4 samples.
+    const writer1 = ia.bufferWriter(buffer)
+    const position1 = rand.connect(v => Math.floor(v * 4))
+    const value1 = rand.connect(v => Math.floor(v * 4) + v)
+    position1.connect(writer1.position)
+    value1.connect(writer1.valueToWrite)
+
+    // The second writer writes to samples 4-7.
+    const writer2 = ia.bufferWriter(buffer)
+    const position2 = rand.connect(v => Math.floor(v * 4) + 4)
+    const value2 = rand.connect(v => Math.floor(v * 4) + 4 + v)
+    position2.connect(writer2.position)
+    value2.connect(writer2.valueToWrite)
+
+    for (const c of [0, 1]) {  // For each channel
+      wait(500, () => {
+        // Expect (only) the first eight values to be written.
+        const channel = buffer.getChannelData(c)
+        const firstSlice = channel.slice(0, 8)
+        this.assertTrue(firstSlice.every(v => v != 0))
+        // NOTE: Element 8 is sometimes nonzero, maybe due to float32 rounding 
+        // of Math.random() values up to 1. So don't check it.
+        this.assertTrue(channel.slice(10, 128).every(v => v == 0))
+        return firstSlice
+      }).then(firstSlice => wait(500, () => {
+        // Verify that the buffer in the main thread is updated regularly.
+        const secondSlice = buffer.getChannelData(c).slice(0, 8)
+        this.assertTrue(secondSlice.every(v => v != 0))
+        this.assertTrue(secondSlice.every((v, i) => v != firstSlice[i]))
+      }))
+    }
+  },
+  bufferWriterAndReader() {
+    const buffer = new AudioBuffer({
+      numberOfChannels: 2,
+      length: 128,
+      sampleRate: ia.audioContext.sampleRate
+    })
+    // The reader loops the buffer.
+    const time = ia.ramp('samples').connect(x => x % 128)
+    const reader = ia.bufferReader(buffer)
+    time.connect(reader.time)
+
+    // The writer writes noise to the buffer.
+    const writer = ia.bufferWriter(buffer)
+    const rand = ia.generate(() => Math.random())
+    const position = rand.connect(v => Math.floor(v * 128))
+    position.connect(writer.position)
+    rand.connect(writer.valueToWrite)
+
+    // Even though the reader was initialized when the buffer was filled with 
+    // zeros, it should still be updated by the writer.
+    this.assertNonzeroSignal(reader)
+    reader.logSignal()
+  },
+  /** Capture a live multichannel AudioBuffer from an audio stream. */
+  capture() {
+    // Generate stereo noise signal.
+    // Each has a right channel which is silent. TODO: fix this. These should 
+    // be single-channel signals.
+    const signal1 = ia.generate(() => Math.random())
+    const signal2 = ia.generate(() => Math.random())
+    const stereoSignal = ia.stackChannels([signal1.left, signal2.left])
+
+    // Waiting a bit as there is sometimes delay (zeros) from WebAudio when 
+    // generating audio...
+    wait(1000, () => {
+      for (const numSamples of [1, 128, 44100]) {
+        stereoSignal.capture(numSamples).then(([buffer]) => {
+          this.assertEqual(buffer.length, numSamples)
+          const l = buffer.getChannelData(0)
+          const r = buffer.getChannelData(1)
+          this.assertFalse(l.every(v => v == 0), 'Found silent left channel.')
+          this.assertFalse(r.every(v => v == 0), 'Found silent right channel.')
+          this.assertFalse(l.every((v, i) => v == r[i]), 'Found same data in left and right channels.')
+        })
+      }
+    })
+  },
+  fftPassthrough($root) {
+    // TODO: Right channel of osc is muted (shouldn't be the case...)
+    //const signal = new ia.AudioComponent(createOscillator(880)).left
+
+    ia.config.useWorkletByDefault = true
+    const signal = ia.bufferReader("assets/fugue.m4a")
+    const timeRamp = ia.ramp('samples')
+    timeRamp.connect(signal.time)
+
+    // TODO: numbers greater than 128 are messed up.... how to fix?
+    // Status: FFT calc seems correct. But the indices don't seem to match up.
+    // Peaks are not at the same place in the 1024 output compared to the later 
+    // recorded segment.
+    // OLD:
+    // - There is an issue with re-batched fft (probably not ifft)
+    // - Not an issue with imaginary input missing
+    // - Doesn't seem to be mismatch between queue sizes
+    // - Doesn't seem to be due to rewritten input (have copied data)
+    // - Can't reproduce offline...
+    // - Confirmed using mag = sync that things are NOT aligned when data comes 
+    //     out batched.
+    // UPDATE:
+    // - There was an issue with the capture code (again)
+    // - FFT is likely not the issue because different bad sounds come from the 
+    //    same FFT display.
+    // - Suspect something in ifft
+    // - Magnitudes at beginning of IFFT are mainly zero. It seems only one 
+    //    nonzero slice (128) is actually getting thru
+    // - Pre-sync looks fine--sync issue? Signal sum pre/post sync are 
+    //    different. 
+    // - The sync input to IFFT for some reason is always 128 samples repeating.
+    //    Are all inputs like this? 
+    // - *All inputs are the same 128 samples repeating*. This is probably true 
+    //     for FFT too but didn't notice it bc the spectrum is similar enough.
+    // - The issue was that I accidentally removed the code that duplicated the 
+    //    input data... so it was being overwritten.
+    // UPDATE 2:
+    // - There is actually still a buzz (seems like DC issue?) or freq = 1/fftSize
+    // - It's possible this is due to the batching... / FFT recieving an old 
+    //    [0-127] section but a new 128-1024 section.
+    // - Yep. Should be fixed now.
+    const fftSize = 1024
+    const fft = signal.fft(fftSize)
+    const r = ia.recorder([fft.sync, fft.magnitude])
+    function plotFft() {
+      r.capture(fftSize).then(b => {
+        const sync = b[0].getChannelData(0)
+        const mag = b[1].getChannelData(0)
+        const syncedMag = [...mag]
+        sync.map((v, i) => {
+          syncedMag[sync[i]] = mag[i]
+        })
+        syncedMag.forEach((v, i) => syncedMag[i] += (syncedMag[fftSize - i] ?? 0))
+        plot(syncedMag.slice(0, Math.floor(syncedMag.length / 2)))
+        // Redraw ASAP
+        requestAnimationFrame(plotFft)
+      })
+    }
+    plotFft()
+    const passthrough = fft.ifft()
+    /* const monitor = new ia.ScrollingAudioMonitor()
+    monitor.addToDom($root)
+    fft.sync.connect(monitor)
+     */
+    /*  
+    const monitor = new ia.ScrollingAudioMonitor()
+    monitor.addToDom($root)
+    passthrough.connect(monitor) */
+    passthrough.connect(ia.out)
+    this.assertNonzeroSignal(passthrough)
+  },
+  // This is a wishlist example. TODO: implement required functionality.
+  combineAllDataTypes($root) {
+    // Audio player.
+    const player = ia.bufferReader("assets/fugue.m4a")
+    player.start()
+    const bufferFft = player.fft()
+
+    // UI Toggle.
+    const freezeToggle = ia.toggle()
+    freezeToggle.addToDom($root)
+
+    // Random noise.
+    const noiseSignal = ia.generate(() => Math.random())
+
+    // Freeze spectrum when switch is true, otherwise add some noise.
+    const frozenSpectrum = ia.combine(
+      [bufferFft, noiseSignal, freezeToggle],
+      (fft, noise, isFrozen) => {
+        if (isFrozen) {
+          // Freeze FFT ('state' stores user-defined properties).
+          // NOTE: previousOutputs doesn't work, as it would initially 
+          // be zero.
+          this.state.frozenMagnitude ??= fft.magnitude
+          return {
+            magnitude: this.state.frozenMagnitude,
+            phase: fft.phase
+          }
+        } else {
+          // Add some noise to magnitude.
+          // The FFT size and audio frame size should always be the same.
+          this.state.frozenMagnitude = undefined
+          const noisyMag = fft.magnitude.map(
+            (v, i) => v + 0.1 * noise[i]
+          )
+          return {
+            magnitude: noisyMag,
+            phase: fft.phase
+          }
+        }
+      }, { outputSignature: [ia.FFTOutput] })
+
+    frozenSpectrum.ifft().connect(ia.out)
   }
 }
 
 
 
-
-
-
 ia.run(() => {
-  //return tests.midiInput()
-  for (let test in { groupComponents: tests.groupComponents }) {
+  const testMatcher = /(fftPassthrough).*/
+  const testNames = Object.keys(tests).filter(s => s.match(testMatcher))
+  console.log("Running tests: " + testNames)
+
+  for (let testName of testNames) {
     const $testRoot = $(document.createElement('div'))
-    tests[test]($testRoot)
+    try {
+      const testCase = new TestCase(testName)
+      tests[testName].bind(testCase)($testRoot)
+    } catch (e) {
+      e.msg = `Failed to execute test case ${testName}: ${e.msg}`
+      console.error(e)
+    }
     ia.util.afterRender(() => {
       if ($testRoot.children().length) {
         $testRoot.appendTo('#root')

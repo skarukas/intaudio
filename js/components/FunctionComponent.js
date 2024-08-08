@@ -103,6 +103,9 @@ export class FunctionComponent extends BaseComponent {
     process(event) {
         return this.fn(event);
     }
+    __call__(...inputs) {
+        return this.withInputs(...inputs);
+    }
     withInputs(...inputs) {
         var _a;
         let inputDict = {};

@@ -5,9 +5,23 @@ import { BaseComponent } from "./base/BaseComponent.js"
 import { ControlInput } from "../io/input/ControlInput.js"
 import { AudioRateOutput } from "../io/output/AudioRateOutput.js"
 
-export class ADSR extends BaseComponent {
+type I = {
   readonly attackEvent: ControlInput<typeof constants.TRIGGER>
   readonly releaseEvent: ControlInput<typeof constants.TRIGGER>
+  readonly attackDurationMs: ControlInput<number>
+  readonly decayDurationMs: ControlInput<number>
+  readonly sustainAmplitude: ControlInput<number>
+  readonly releaseDurationMs: ControlInput<number>
+}
+
+type O = {
+  readonly audioOutput: AudioRateOutput
+}
+
+export class ADSR extends BaseComponent<I, O> implements I, O {
+  readonly outputs: { audioOutput: AudioRateOutput }
+  readonly attackEvent: ControlInput<any>
+  readonly releaseEvent: ControlInput<any>
   readonly attackDurationMs: ControlInput<number>
   readonly decayDurationMs: ControlInput<number>
   readonly sustainAmplitude: ControlInput<number>
@@ -25,12 +39,12 @@ export class ADSR extends BaseComponent {
   ) {
     super()
     // Inputs
-    this.attackEvent = this.defineControlInput('attackEvent')
-    this.releaseEvent = this.defineControlInput('releaseEvent')
-    this.attackDurationMs = this.defineControlInput('attackDurationMs', attackDurationMs)
-    this.decayDurationMs = this.defineControlInput('decayDurationMs', decayDurationMs)
-    this.sustainAmplitude = this.defineControlInput('sustainAmplitude', sustainAmplitude)
-    this.releaseDurationMs = this.defineControlInput('releaseDurationMs', releaseDurationMs)
+    this.attackEvent = this.defineControlInput('attackEvent').ofType(Symbol)
+    this.releaseEvent = this.defineControlInput('releaseEvent').ofType(Symbol)
+    this.attackDurationMs = this.defineControlInput('attackDurationMs', attackDurationMs).ofType(Number)
+    this.decayDurationMs = this.defineControlInput('decayDurationMs', decayDurationMs).ofType(Number)
+    this.sustainAmplitude = this.defineControlInput('sustainAmplitude', sustainAmplitude).ofType(Number)
+    this.releaseDurationMs = this.defineControlInput('releaseDurationMs', releaseDurationMs).ofType(Number)
 
     this._paramModulator = createConstantSource(this.audioContext)
     this.audioOutput = this.defineAudioOutput('audioOutput', this._paramModulator)

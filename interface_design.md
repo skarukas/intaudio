@@ -201,6 +201,32 @@ ia.oscillator(440)
   })
 ```
 
+
+`perChannel`?
+
+```js
+ia.oscillator(440).perChannel({
+  left: s => s.connect(ia.delay(10)),
+  right: s => s
+})
+```
+
+```js
+ia.oscillator(440).perChannel([
+  s => s.connect(ia.delay(10)),
+  s => s
+])
+```
+
+```js
+mySignal.fft().perOutput({
+  magnitudes: s => s.perChannel({
+    left: l => l.delay(128)
+  }),
+  phases: s => s.connect(x => x + 2 * Math.PI)
+}).ifft()
+```
+
 ### Dynamic processing
 
 #### `ia.selector`: Switch between different audio processing modules.
@@ -262,3 +288,141 @@ ia.patcher({
 ```
 
 This could also have a UI, which is a patching environment (this would be really cool but difficult).
+
+## Buffer handling
+
+### Reading buffers
+
+#### `ia.bufferReader`
+
+##### Audio-rate interface
+
+Control the offset of the playback using an audioInput (currently called `position`, will be renamed to `offset`).
+
+##### Control-rate interface (TBD)
+TODO: implement `start(playbackRate?)` and `stop()` methods / trigger controlInputs, which control the time. The audioInput should control the *offset* instead of the actual playback.
+
+### Writing buffers
+
+#### Control-rate interface: `ia.recorder`
+
+Capture audio from a live component (audio stream).
+- Capture predetermined length: `capture(numSamples) -> Promise<AudioBuffer>`. 
+- Capture based on events: `start()` then  `stop() -> Promise<AudioBuffer>`
+
+Also available through `component.capture(numSamples) -> Promise<AudioBuffer>`
+
+#### Audio-rate interface: `ia.bufferWriter`
+
+Two audio-rate inputs:
+- `valueToWrite`
+- `position`
+
+No outputs, but the underlying buffer is changed and can be used in other components.
+
+## FFT
+(should probbaly call this stft)
+
+Special type of I/O:
+- `FFTInput`
+- `FFTOutput`
+
+Each has properties `magnitude` / `phase` (P0) *or* `real` / `imaginary` (P1) which are each `AudioRateOutput`. Also has `sync` which goes from `0` to `fftSize-1` and helps line up the beginning of the FFT window.
+
+### Normal execution
+```js
+const fft = signal.fft({ windowSize })
+// Or signal.connect(ia.fft({ windowSize }))
+const mutatedSignal = fft.map(({ magnitude, phase }) => {
+  // Supports audioTransform "context" methods
+  // Also: this.frameSize, etc.
+  const prevOutputFrame = this.previousOutput()
+  magnitude[5] += + 0.8 * prevOutputFrame.magnitude[5]
+  return { magnitude, phase }
+}).ifft()
+```
+### Custom IFFT execution
+```js
+const sync = ia.ramp('samples').connect(v => v % windowSize)
+// Only first partial (pretending this doesn't cause latency...).
+// v == 1 might also not work...
+const magnitude = sync.connect(v => v == 1 ? 1 : 0)
+const ifft = ia.ifft({ windowSize })
+magnitude.connect(ifft.magnitude)
+sync.connect(ifft.sync)
+```
+"Map" function (working name) must return either `{ real, imaginary? }` or `{ magnitude, phase? }`. (Or should it assume mutation in place...?)
+
+One idea: make `magnitude`, `phase`, `real`, and `imaginary` all available, with custom get / set bracket notation to overwrite the underlying buffer.
+
+Problem: if someone uses the individual `AudioRateOutputs` (e.g. `magnitude`) then processing them individually may cause latency and make the sync signal no longer accurate. But this is a general issue that I don't fully understand.
+
+## Integer issue
+
+Sometimes, audio-rate signals must represent exact integers (e.g. sample index or FFT sync signal). However, float32 values are not exact integers.
+
+### Option 1: Re-encode
+One solution is to encode as integer buffers with the same number of bits:
+```js
+// Encode
+const intArr = new Int32Array(128).map((v, i) => i)
+floatArr = new Float32Array(intArr.buffer)
+
+// Decode
+const decodedArr = new Int32Array(floatArr.buffer)
+```
+
+We'd have to have a way to record which datatype an input should be... which opens up a can of worms about how to process functions with these inputs
+
+```js
+// Given the raw (number) values. 
+f = ia.function((sync: int, val: float) => {
+  // How do we know whether to encode the output as float or an int?
+  return sync + val
+})
+```
+
+Then if we attach that to a position:
+```js
+const reader = ia.bufferReader(fname)
+f.connect(reader.offset)
+```
+
+The actual data will be upscaled to "real" float32 causing a problem
+
+### Option 2: Round [preferred]
+
+Whenever we need to process a number as an int, round it to the nearest integer at the beginning of processing
+
+### Option 3: Round at source [preferred]
+
+Whenever there is a ramp method with `units='samples'`, round the values **before** outputting them. I *think* they may still be `==` to javascript integers represented by the `number` type.
+
+## Mapping
+
+### North star: Combine FFT / audio / control elements.
+```js
+ia.combine(
+  [myFft, myNoiseSignal, freezeSwitch],
+  (fft, noise, swtch) => { 
+    if (swtch) {
+      // Freeze FFT ('state' stores user-defined properties).
+      // NOTE: previousOutputs doesn't work, as it would initially 
+      // be zero.
+      this.state.frozenMagnitude ??= fft.magnitude
+      return {
+        magnitude: this.state.frozenMagnitude,
+        phase: fft.phase
+      }    
+    } else {
+      // Add some noise to magnitude.
+      // The FFT size and audio frame size should always be the same.
+      this.state.frozenMagnitude = undefined
+      const noisyMag = fft.magnitude.map((v, i) => v + 0.1 * noise[i])
+      return {
+        magnitude: noisyMag,
+        phase: fft.phase
+      }
+    }
+}, { outputSignature: [FFTOutput]})
+```

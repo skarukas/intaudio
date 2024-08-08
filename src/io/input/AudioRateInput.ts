@@ -1,11 +1,12 @@
 import { Component } from "../../components/base/Component.js"
 import { AbstractInput } from "./AbstractInput.js"
 import constants from "../../shared/constants.js"
-import { WebAudioConnectable } from "../../shared/types.js"
-import { MultiChannel, createMultiChannelView, getNumInputChannels } from "../../shared/multichannel.js"
+import { MultiChannel, WebAudioConnectable } from "../../shared/types.js"
+import { createMultiChannelView, getNumInputChannels } from "../../shared/multichannel.js"
+import { MultiChannelArray } from "../../worklet/lib/types.js"
 
 export class AudioRateInput extends AbstractInput<number> implements MultiChannel<AudioRateInput> {
-  readonly channels: this[]
+  readonly channels: MultiChannelArray<this>
   activeChannel: number = undefined
   get numInputChannels(): number {
     return this.activeChannel ? 1 : getNumInputChannels(this.audioSink)
@@ -17,7 +18,7 @@ export class AudioRateInput extends AbstractInput<number> implements MultiChanne
     public audioSink: WebAudioConnectable
   ) {
     super(name, parent, false)
-    this.channels = createMultiChannelView(this, audioSink)
+    this.channels = createMultiChannelView(this, audioSink instanceof AudioNode)
   }
   get left(): this {
     return this.channels[0]
@@ -29,6 +30,7 @@ export class AudioRateInput extends AbstractInput<number> implements MultiChanne
     return this.audioSink["value"]  // TODO: fix? AudioNodes have no value.
   }
   setValue(value: number | typeof constants.TRIGGER) {
+    this.validate(value)
     if (value == constants.TRIGGER) {
       value = this.value
     }

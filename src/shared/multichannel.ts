@@ -1,20 +1,10 @@
-import { AbstractInput } from "../io/input/AbstractInput.js"
-import { AbstractOutput } from "../io/output/AbstractOutput.js"
-import { WebAudioConnectable } from "./types.js"
-
-// TODO: this doesn't seem to work. Make sure we're connecting to the right *channel* and not just the *input*.
-
-export interface MultiChannel<T extends (AbstractInput | AbstractOutput) = any> {
-  // In practice, each channel is a "view" (Proxy) of the object with a 
-  // different value of activeChannel, rather than a copy.
-  get left(): T
-  get right(): T
-  channels: T[]
-  activeChannel: number
-}
+import { MultiChannelArray, toMultiChannelArray } from "../worklet/lib/types.js"
+import { MultiChannel, WebAudioConnectable } from "./types.js"
 
 export function getNumInputChannels(node: WebAudioConnectable) {
-  if (node instanceof ChannelMergerNode) {
+  if (node instanceof ChannelSplitterNode) {
+    return node.numberOfOutputs
+  } else if (node instanceof ChannelMergerNode) {
     return node.numberOfInputs
   }
   return node['__numInputChannels'] ?? (node instanceof AudioNode ? node.channelCount : 1)
@@ -23,6 +13,8 @@ export function getNumInputChannels(node: WebAudioConnectable) {
 export function getNumOutputChannels(node: WebAudioConnectable) {
   if (node instanceof ChannelSplitterNode) {
     return node.numberOfOutputs
+  } else if (node instanceof ChannelMergerNode) {
+    return node.numberOfInputs
   }
   return node['__numOutputChannels']
     ?? (node instanceof AudioNode ? node.channelCount : 1)
@@ -30,17 +22,17 @@ export function getNumOutputChannels(node: WebAudioConnectable) {
 
 export function createMultiChannelView<T extends MultiChannel>(
   multiChannelIO: T,
-  node: WebAudioConnectable
-): T[] {
+  supportsMultichannel: boolean
+): MultiChannelArray<T> {
   let channels = []
-  if (!(node instanceof AudioNode)) {
-    return channels
+  if (!supportsMultichannel) {
+    return toMultiChannelArray(channels)
   }
-  const numChannels = multiChannelIO instanceof AbstractInput ? getNumInputChannels(node) : getNumOutputChannels(node)
+  const numChannels = 'numInputChannels' in multiChannelIO ? multiChannelIO.numInputChannels : (<any>multiChannelIO).numOutputChannels
   for (let c = 0; c < numChannels; c++) {
     channels.push(createChannelView(multiChannelIO, c))
   }
-  return channels
+  return toMultiChannelArray(channels)
 }
 
 function createChannelView<T extends MultiChannel>(
@@ -105,5 +97,6 @@ export function connectWebAudioChannels(
     const merger = audioContext.createChannelMerger()
     return source.connect(merger, fromChannel, toChannel).connect(<any>destination)
   }
+  //console.log(`Connecting ${source.constructor.name} [channel=${fromChannel ?? "*"}] to ${destination} [channel=${toChannel ?? "*"}]`)
   return simpleConnect(source, destination, fromChannel, toChannel)
 }

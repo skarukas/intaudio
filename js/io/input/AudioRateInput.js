@@ -11,7 +11,7 @@ export class AudioRateInput extends AbstractInput {
         this.parent = parent;
         this.audioSink = audioSink;
         this.activeChannel = undefined;
-        this.channels = createMultiChannelView(this, audioSink);
+        this.channels = createMultiChannelView(this, audioSink instanceof AudioNode);
     }
     get left() {
         return this.channels[0];
@@ -24,6 +24,7 @@ export class AudioRateInput extends AbstractInput {
         return this.audioSink["value"]; // TODO: fix? AudioNodes have no value.
     }
     setValue(value) {
+        this.validate(value);
         if (value == constants.TRIGGER) {
             value = this.value;
         }

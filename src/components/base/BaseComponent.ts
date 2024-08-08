@@ -5,7 +5,7 @@ import { AbstractOutput } from "../../io/output/AbstractOutput.js";
 import { BaseConnectable } from "../../shared/base/BaseConnectable.js";
 
 import constants from "../../shared/constants.js";
-import { WebAudioConnectable, CanBeConnectedTo } from "../../shared/types.js";
+import { WebAudioConnectable, CanBeConnectedTo, ObjectOrArrayOf, ObjectOf, KeysLike, AnyInput, AnyOutput, Bundle } from "../../shared/types.js";
 import { FunctionComponent } from "../FunctionComponent.js";
 import { Component } from "./Component.js";
 import { Connectable } from "../../shared/base/Connectable.js";
@@ -15,13 +15,28 @@ import { AudioRateOutput } from "../../io/output/AudioRateOutput.js";
 import { HybridInput } from "../../io/input/HybridInput.js";
 import { HybridOutput } from "../../io/output/HybridOutput.js";
 import { AudioRateInput } from "../../io/input/AudioRateInput.js";
-import { MultiChannelArray } from "../../worklet/lib/types.js";
+import { MultiChannelArray, toMultiChannelArray } from "../../worklet/lib/types.js";
+import { arrayToObject, enumerate, isFunction, range, zip } from "../../shared/util.js";
+import { BundleComponent } from "../BundleComponent.js";
+import { lazyProperty } from "../../shared/decorators.js";
+import { CompoundInput } from "../../io/input/CompoundInput.js";
+import { CompoundOutput } from "../../io/output/CompoundOutput.js";
+import { FFTComponent } from "../FFTComponent.js";
+import { FFTStream } from "../../shared/FFTStream.js";
 
-export abstract class BaseComponent extends BaseConnectable implements Component, AudioSignalStream {
+const SPEC_MATCH_REST_SYMBOL = "*"
+const SPEC_SPLIT_SYMBOL = ","
+
+type ChannelKey = "left" | "right" | number
+
+export abstract class BaseComponent<
+  InputTypes extends AnyInput = AnyInput,
+  OutputTypes extends AnyOutput = AnyOutput
+> extends BaseConnectable implements Component<InputTypes, OutputTypes>, AudioSignalStream {
   readonly isComponent = true
   private static instanceExists = false
-  outputs: { [name: string]: AbstractOutput } = {};
-  inputs: { [name: string]: AbstractInput } = {};
+  inputs: InputTypes = <any>{};
+  outputs: OutputTypes = <any>{};
 
   isBypassed: ControlInput<boolean>
   isMuted: ControlInput<boolean>
@@ -42,6 +57,22 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     this._reservedInputs = [this.isBypassed, this.isMuted, this.triggerInput]
     this._reservedOutputs = []
     this.preventIOOverwrites()
+  }
+  logSignal({
+    samplePeriodMs = 1000,
+    format
+  }: {
+    samplePeriodMs?: number,
+    format?: string
+  } = {}): this {
+    this.getAudioOutputProperty('logSignal')({
+      samplePeriodMs,
+      format
+    })
+    return this
+  }
+  capture(numSamples: number): Promise<AudioBuffer[]> {
+    return this.getAudioOutputProperty('capture')(numSamples)
   }
 
   toString() {
@@ -77,7 +108,7 @@ export abstract class BaseComponent extends BaseConnectable implements Component
       configurable: false
     })
   }
-  private defineInputOrOutput(propName, inputOrOutput, inputsOrOutputsArray) {
+  protected defineInputOrOutput(propName, inputOrOutput, inputsOrOutputsArray) {
     inputsOrOutputsArray[propName] = inputOrOutput
     return inputOrOutput
   }
@@ -93,6 +124,14 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     isRequired: boolean = false
   ): ControlInput<T> {
     let input = new this._.ControlInput(name, this, defaultValue, isRequired)
+    return this.defineInputOrOutput(name, input, this.inputs)
+  }
+  protected defineCompoundInput<T extends ObjectOf<AbstractInput>>(
+    name: string | number,
+    inputs: T,
+    defaultInput?: AbstractInput
+  ): CompoundInput<T> {
+    let input = new this._.CompoundInput(name, this, inputs, defaultInput)
     return this.defineInputOrOutput(name, input, this.inputs)
   }
   protected defineAudioInput(
@@ -111,16 +150,24 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     let input = new this._.HybridInput(name, this, destinationNode, defaultValue, isRequired)
     return this.defineInputOrOutput(name, input, this.inputs)
   }
+  protected defineCompoundOutput<T extends ObjectOf<AbstractOutput>>(
+    name: string | number,
+    outputs: T,
+    defaultOutput?: AbstractOutput
+  ): CompoundOutput<T> {
+    let output = new this._.CompoundOutput(name, outputs, this, defaultOutput)
+    return this.defineInputOrOutput(name, output, this.outputs)
+  }
   protected defineControlOutput(name: string | number): ControlOutput<any> {
-    let output = new this._.ControlOutput(name)
+    let output = new this._.ControlOutput(name, this)
     return this.defineInputOrOutput(name, output, this.outputs)
   }
   protected defineAudioOutput(name: string | number, audioNode: AudioNode): AudioRateOutput {
-    let output = new this._.AudioRateOutput(name, audioNode)
+    let output = new this._.AudioRateOutput(name, audioNode, this)
     return this.defineInputOrOutput(name, output, this.outputs)
   }
   protected defineHybridOutput(name: string | number, audioNode: AudioNode): HybridOutput {
-    let output = new this._.HybridOutput(name, audioNode)
+    let output = new this._.HybridOutput(name, audioNode, this)
     return this.defineInputOrOutput(name, output, this.outputs)
   }
   protected setDefaultInput(input: AbstractInput) {
@@ -235,15 +282,172 @@ export abstract class BaseComponent extends BaseConnectable implements Component
     this.inputAdded(other)
     return other
   }
+  protected getInputsBySpecs(inputSpecs: (string | string[])[]): AbstractInput[][] {
+    return this.getBySpecs(inputSpecs, this.inputs)
+  }
+  protected getChannelsBySpecs(channelSpecs: (string | (number | string)[])[]): AbstractOutput[][] {
+    const output = this.getDefaultOutput()
+    if (!(output instanceof AudioRateOutput || output instanceof HybridOutput)) {
+      throw new Error("No default audio-rate output found. Select a specific output to use this operation.")
+    }
+    // Convert to stringified numbers.
+    const numberedSpecs = channelSpecs.map(spec => {
+      const toNumber = (c: string) => {
+        const noSpace = String(c).replace(/s/g, "")
+        if (noSpace == "left") return "0"
+        if (noSpace == "right") return "1"
+        return c
+      }
+      return spec instanceof Array ? spec.map(toNumber) : toNumber(spec)
+    })
+    const channelObj = arrayToObject(<any>output.channels)
+    return this.getBySpecs(numberedSpecs, channelObj)
+  }
+  protected getOutputsBySpecs(outputSpecs: (string | string[])[]): AbstractOutput[][] {
+    return this.getBySpecs(outputSpecs, this.outputs)
+  }
+  /**
+   * Given an array of strings specifying which inputs/outputs to select, return an array of the same length where each entry contains the inputs/outputs matched by that spec.
+   * 
+   * Each spec is one of:
+   * 1. A string representing a specific input or output name. Example: `"in1"`.
+   * 2. An array of input or output names. Example: `["in1", "in2"]`.
+   * 3. A stringified version of (2). Example: `"in1, in2"`.
+   * 4. The string `"*"` which means to match any unspecified. This may only appear once.
+   * 
+   * NOTE: Any spaces will be removed, so `"in1,in2"`, `" in1 , in2 "`, and `"in1, in2"` are equivalent.
+   */
+  protected getBySpecs<T extends (AbstractInput | AbstractOutput)>(
+    specs: (string | (number | string)[])[],
+    obj: ObjectOf<T>
+  ): T[][] {
+    // Remove spaces.
+    specs = specs.map(spec => {
+      const removeSpaces = (s: string) => String(s).replace(/s/g, "")
+      return spec instanceof Array ? spec.map(removeSpaces) : removeSpaces(spec)
+    })
+
+    const matchedObjects = specs.map(() => [])
+    const matchedKeys = new Set()
+    const starIndices = []  // Indices i in the list where specs[i] = "*"
+
+    for (let [i, spec] of enumerate(specs)) {
+      if (spec == SPEC_MATCH_REST_SYMBOL) {
+        starIndices.push(i)
+        continue
+      } else if (!(spec instanceof Array)) {
+        spec = spec.split(SPEC_SPLIT_SYMBOL)
+      }
+      spec.forEach(key => {
+        if (matchedKeys.has(key)) {
+          throw new Error(`Invalid spec. At most one instance of each key may be specified, but '${key}' was mentioned multiple times. Given: ${JSON.stringify(specs)}`)
+        }
+        matchedKeys.add(key)
+      })
+      matchedObjects[i] = spec.map(key => obj[key])
+    }
+
+    if (starIndices.length > 1) {
+      throw new Error(`Invalid spec. At most one key may be '*'. Given: ${JSON.stringify(specs)}`)
+    } else if (starIndices.length == 1) {
+      // Get any unmatched inputs/outputs.
+      matchedObjects[starIndices[0]] = Object.keys(obj)
+        .filter(key => !matchedKeys.has(key))
+        .map(key => obj[key])
+    }
+    return matchedObjects
+  }
+  /*   split(spec: ObjectOf<string | string[]>): Component;
+    split(spec: ObjectOf<string | string[]>): Component;
+      
+    } */
+
+  /**
+   * Define a map from output name to a definition of the signal processing graph to connect it to.
+   * 
+   * TODO: Outputs that aren't mentioned should be passed through unchanged (currenly not supported bc they aren't components).
+   * 
+   * Ex: myComponent.perOutput({
+   *   output1: o1 => o1.connect(ia.oscillator().frequency)
+   * })
+   */
+  perOutput(
+    functions: KeysLike<OutputTypes, (x: Connectable) => Component>
+  )
+  perOutput(
+    functions: ((x: Connectable) => Component)[]
+  )
+  perOutput(
+    functions: ObjectOrArrayOf<((x: Connectable) => Component)>
+  ): BundleComponent {
+    if (functions instanceof Array) functions = arrayToObject(functions)
+    const result: ObjectOf<Component> = {}
+    const keys = Object.keys(functions)
+    const outputGroups = this.getOutputsBySpecs(keys)
+    for (const [key, outputGroup] of zip(keys, outputGroups)) {
+      if (isFunction(functions[key])) {
+        // TODO: support these specs.
+        if (key.includes(SPEC_SPLIT_SYMBOL)
+          || key.includes(SPEC_MATCH_REST_SYMBOL)
+        ) {
+          throw new Error("Array and rest specs not currently supported.")
+        }
+        const res = functions[key](outputGroup[0])
+        res && (result[key] = res)
+      }
+      // Otherwise, leave it out. TODO: Throw error if not explicitly null
+      // or undefined?
+    }
+    return new this._.BundleComponent(result)
+  }
+  perChannel(
+    functions: { left?: (x: Connectable) => Component, right?: (x: Connectable) => Component, [key: number]: (x: Connectable) => Component }
+  )
+  perChannel(
+    functions: ((x: Connectable) => Component)[]
+  )
+  perChannel(
+    functions: ObjectOrArrayOf<((x: Connectable) => Component)>
+  ): Component {
+    if (functions instanceof Array) functions = arrayToObject(functions)
+    const keys = Object.keys(functions)
+    const outputGroups = this.getChannelsBySpecs(keys)
+    const result: Component[] = Array(outputGroups.length).fill(undefined)
+    const toNum = (c: string) => {
+      const noSpace = String(c).replace(/s/g, "")
+      if (noSpace == "left") return "0"
+      if (noSpace == "right") return "1"
+      return c
+    }
+    for (const [key, outputGroup] of zip(keys, outputGroups)) {
+      if (isFunction(functions[key])) {
+        // TODO: support these specs.
+        if (key.includes(SPEC_SPLIT_SYMBOL)
+          || key.includes(SPEC_MATCH_REST_SYMBOL)
+        ) {
+          throw new Error("Array and rest specs not currently supported.")
+        }
+        const res = functions[key](outputGroup[0])
+        res && (result[toNum(key)] = res)
+      }
+      // Otherwise, leave it out. TODO: Throw error if not explicitly null
+      // or undefined?
+    }
+    return this._.ChannelStacker.fromInputs(result)
+  }
+
+  // Delegate the property to the default audio output (if any).
   protected getAudioOutputProperty(propName: string) {
     const output = this.getDefaultOutput()
     if (output instanceof AudioRateOutput) {
       const prop = output[propName]
-      return prop instanceof Function ? prop.bind(output) : prop
+      return isFunction(prop) ? prop.bind(output) : prop
     } else {
       throw new Error(`Cannot get property '${propName}'. No default audio-rate output found for ${this}. Select an audio-rate output and use 'output.${propName}' instead.`)
     }
   }
+
+  /** Methods delegated to default audio input / output. **/
   get numInputChannels() {
     return this.getDefaultInput().numInputChannels
   }
@@ -256,14 +460,28 @@ export abstract class BaseComponent extends BaseConnectable implements Component
   splitChannels(...inputChannelGroups: number[][]): Iterable<AudioRateOutput> {
     return this.getAudioOutputProperty('splitChannels')(...inputChannelGroups)
   }
-  transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], dimension: "all", { windowSize, useWorklet }?: { windowSize?: number, useWorklet?: boolean }): Component;
-  transformAudio(fn: (input: MultiChannelArray<number>) => number[], dimension: "channels", { useWorklet }?: { useWorklet?: boolean }): Component;
-  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), dimension: "time", { windowSize, useWorklet }?: { windowSize?: number, useWorklet?: boolean }): Component;
-  transformAudio(fn: (x: number) => number, dimension?: "none", { useWorklet }?: { useWorklet?: boolean }): Component;
+  // TODO: these should work as both inputs and outputs.
+  get left(): AudioRateOutput {
+    return this.getAudioOutputProperty('left')
+  }
+  get right(): AudioRateOutput {
+    return this.getAudioOutputProperty('right')
+  }
+  get channels(): MultiChannelArray<AudioRateOutput> {
+    return this.getAudioOutputProperty('channels')
+  }
+  transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], { windowSize, useWorklet, dimension }?: { windowSize?: number, useWorklet?: boolean, dimension: "all" }): Component;
+  transformAudio(fn: (input: MultiChannelArray<number>) => number[], { useWorklet, dimension }?: { useWorklet?: boolean, dimension: "channels" }): Component;
+  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), { windowSize, useWorklet, dimension }?: { windowSize?: number, useWorklet?: boolean, dimension: "time" }): Component;
+  transformAudio(fn: (x: number) => number, { useWorklet, dimension }?: { useWorklet?: boolean, dimension?: "none" }): Component;
   transformAudio(
     fn: unknown,
-    dimension: unknown = "none",
-    { windowSize, useWorklet }: { windowSize?: number, useWorklet?: boolean } = {}): Component {
+    { windowSize, useWorklet, dimension = "none" }:
+      { windowSize?: number, useWorklet?: boolean, dimension?: unknown } = {}
+  ): Component {
     return this.getAudioOutputProperty('transformAudio')(fn, dimension, { windowSize, useWorklet })
+  }
+  fft(fftSize: number = 128): FFTStream {
+    return this.getAudioOutputProperty('fft')(fftSize)
   }
 }

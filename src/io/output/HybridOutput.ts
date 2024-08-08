@@ -1,9 +1,11 @@
+import { resolvePromiseArgs } from "../../shared/decorators.js"
 import { AudioRateInput } from "../input/AudioRateInput.js"
 import { ControlInput } from "../input/ControlInput.js"
 import { HybridInput } from "../input/HybridInput.js"
 import { AudioRateOutput } from "./AudioRateOutput.js"
 import { ControlOutput } from "./ControlOutput.js"
 
+// TODO: consider removing this class. Or not? Can be repurposed to handle fft data along with control and audio-rate.
 export class HybridOutput<T = any> extends AudioRateOutput {
   connect(destination) {
     let { input } = this.getDestinationInfo(destination)
@@ -15,7 +17,8 @@ export class HybridOutput<T = any> extends AudioRateOutput {
       throw new Error("Unable to connect to " + destination)
     }
   }
-  setValue(value: T, rawObject: boolean = false) {
+  @resolvePromiseArgs
+  setValue(value: T | Promise<T>, rawObject: boolean = false) {
     ControlOutput.prototype.setValue.bind(this)(value, rawObject)
   }
   onUpdate(callback: (val?) => void) {

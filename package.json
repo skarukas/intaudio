@@ -15,7 +15,9 @@
   "author": "Stephen Karukas <stephen.karukas@gmail.com>",
   "license": "ISC",
   "dependencies": {
+    "@datastructures-js/queue": "^4.2.3",
     "@types/audioworklet": "^0.0.57",
+    "callable-instance": "^2.0.0",
     "function-descriptor": "^1.1.1",
     "jquery-contextmenu": "^3.0.0-beta.2",
     "rollup-plugin-node-externals": "^7.1.2",
@@ -26,6 +28,7 @@
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@types/jquery": "^3.5.30",
     "jquery": "^3.7.1",
+    "jsdoc-escape-at": "^1.0.1",
     "rollup": "^4.18.0",
     "typescript": "^5.5.2"
   }

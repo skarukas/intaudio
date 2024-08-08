@@ -10,9 +10,9 @@ import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
 import { Connectable } from "../shared/base/Connectable.js";
 import { SignalProcessingContextFactory } from "../worklet/lib/SignalProcessingContextFactory.js";
 import { MappingFn, getProcessingFunction } from "../worklet/lib/utils.js";
-import { WORKLET_NAME } from "../worklet/worklet.js";
 import { AudioDimension } from "../worklet/lib/types.js";
 import { serializeWorkletMessage } from "../worklet/lib/serialization.js";
+import { FUNCTION_WORKLET_NAME } from "../worklet/OperationWorklet.js";
 
 function enumValues(Enum: object) {
   const nonNumericKeys = Object.keys(Enum).filter((item) => {
@@ -121,7 +121,7 @@ class WorkletExecutionContext<D extends AudioDimension> extends AudioExecutionCo
   }) {
     super(fn, dimension)
     numOutputChannels ??= this.inferNumOutputChannels(numInputs, numChannelsPerInput)
-    const worklet = new AudioWorkletNode(this.audioContext, WORKLET_NAME, {
+    const worklet = new AudioWorkletNode(this.audioContext, FUNCTION_WORKLET_NAME, {
       numberOfInputs: numInputs,
       outputChannelCount: [numOutputChannels],
       numberOfOutputs: 1
@@ -301,7 +301,7 @@ export class AudioTransformComponent extends BaseComponent {
       numInputs = undefined,
       numChannelsPerInput = 2,
       numOutputChannels = undefined,
-      useWorklet = false
+      useWorklet
     }: {
       dimension?: AudioDimension,
       windowSize?: number,
@@ -313,6 +313,7 @@ export class AudioTransformComponent extends BaseComponent {
     } = {}
   ) {
     super()
+    useWorklet ??= this.config.useWorkletByDefault
     // Properties.
     if (inputNames != undefined) {
       if (numInputs != undefined && numInputs != inputNames.length) {

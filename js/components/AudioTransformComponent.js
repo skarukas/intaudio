@@ -6,8 +6,8 @@ import { createScriptProcessorNode, range } from "../shared/util.js";
 import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
 import { SignalProcessingContextFactory } from "../worklet/lib/SignalProcessingContextFactory.js";
 import { getProcessingFunction } from "../worklet/lib/utils.js";
-import { WORKLET_NAME } from "../worklet/worklet.js";
 import { serializeWorkletMessage } from "../worklet/lib/serialization.js";
+import { FUNCTION_WORKLET_NAME } from "../worklet/OperationWorklet.js";
 function enumValues(Enum) {
     const nonNumericKeys = Object.keys(Enum).filter((item) => {
         return isNaN(Number(item));
@@ -79,7 +79,7 @@ class WorkletExecutionContext extends AudioExecutionContext {
     constructor(fn, { dimension, numInputs, numChannelsPerInput, numOutputChannels, }) {
         super(fn, dimension);
         numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : (numOutputChannels = this.inferNumOutputChannels(numInputs, numChannelsPerInput));
-        const worklet = new AudioWorkletNode(this.audioContext, WORKLET_NAME, {
+        const worklet = new AudioWorkletNode(this.audioContext, FUNCTION_WORKLET_NAME, {
             numberOfInputs: numInputs,
             outputChannelCount: [numOutputChannels],
             numberOfOutputs: 1
@@ -210,9 +210,10 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
     }
 }
 export class AudioTransformComponent extends BaseComponent {
-    constructor(fn, { dimension = "none", windowSize = undefined, inputNames = undefined, numInputs = undefined, numChannelsPerInput = 2, numOutputChannels = undefined, useWorklet = false } = {}) {
+    constructor(fn, { dimension = "none", windowSize = undefined, inputNames = undefined, numInputs = undefined, numChannelsPerInput = 2, numOutputChannels = undefined, useWorklet } = {}) {
         super();
         this.fn = fn;
+        useWorklet !== null && useWorklet !== void 0 ? useWorklet : (useWorklet = this.config.useWorkletByDefault);
         // Properties.
         if (inputNames != undefined) {
             if (numInputs != undefined && numInputs != inputNames.length) {
