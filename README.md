@@ -1,12 +1,16 @@
-# interactive-audio
+> [!NOTE]
+> This project is currently in development as of summer 2024. Demos of its current capabilities may be found in `demo.js`.
+
+# intaudio
 Declarative Javascript framework for interactive audio. Arbitrary audio-rate operations, event-based state management, UI components.
 
-This framework exists primarily to provide the ability to build arbitrarily-complex, reactive web instruments using minimal, intuitive code. It utilizes a graph-based declarative style to send both event-based and audio-rate based data, which may be familiar with users of [Max](https://cycling74.com/products/max).
+This framework provides the ability to build arbitrarily-complex, reactive web instruments using minimal, intuitive code. It utilizes a graph-based declarative style to send both event-based and audio-rate based data (both time and frequency domain), which may be familiar with users of [Max](https://cycling74.com/products/max).
 
 Some features of the framework:
-- Shared interface for event-based and audio-rate signals.
+- Shared interface for event-based, audio-rate, and FFT signals.
+- Efficient audio-rate processing of user-defined functions (no need to define a AudioWorkletProcessor file)
 - Components are reactive, with easily modulatable params through `source.connect(dest.paramName)`
-- Chainable syntax: route audio using `.connect(...).connect(...)` 
+- Fluid and chainable syntax: route audio using `.connect(...).connect(...)` 
 - Easily extendable.
 - Supports multiple scopes with differing configurations and `AudioContext`s.
 
