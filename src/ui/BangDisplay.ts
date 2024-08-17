@@ -4,7 +4,7 @@ declare var $: JQueryStatic;
 
 export class BangDisplay extends BaseDisplay {
   static PRESS_DURATION_MS = 100
-  protected $button: JQuery<HTMLButtonElement>
+  protected $button: JQuery<HTMLButtonElement> | undefined
 
   _display($root: JQuery, width: number, height: number) {
     this.$button = $(document.createElement('button'))

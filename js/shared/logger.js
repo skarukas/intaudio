@@ -29,7 +29,7 @@ export class SignalLogger extends ToStringAndUUID {
         }, this.samplePeriodMs);
     }
     stop() {
-        this.interval && clearInterval(this.interval);
+        clearInterval(this.interval);
     }
     /**
      * Register a node to be monitored.

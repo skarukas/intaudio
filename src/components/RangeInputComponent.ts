@@ -1,4 +1,4 @@
-
+import { AbstractInput } from "../io/input/AbstractInput.js"
 import { ControlInput } from "../io/input/ControlInput.js"
 import { ControlOutput } from "../io/output/ControlOutput.js"
 import { MidiLearn } from "../shared/MidiLearn.js"
@@ -8,6 +8,7 @@ import { RangeInputDisplay } from "../ui/RangeInputDisplay.js"
 import { VisualComponent } from "./base/VisualComponent.js"
 
 export class RangeInputComponent extends VisualComponent<RangeInputDisplay> {
+  display: RangeInputDisplay
   readonly minValue: ControlInput<number>
   readonly maxValue: ControlInput<number>
   readonly step: ControlInput<number>
@@ -50,6 +51,7 @@ export class RangeInputComponent extends VisualComponent<RangeInputDisplay> {
     })
   }
   protected handleMidiUpdate(event: MIDIMessageEvent) {
+    if (event.data == null) return
     const uInt8Value = event.data[2]  // Velocity / value.
     const scaledValue = scaleRange(
       uInt8Value,
@@ -62,7 +64,7 @@ export class RangeInputComponent extends VisualComponent<RangeInputDisplay> {
     this.display.updateValue(newValue)
     this.output.setValue(newValue)
   }
-  inputDidUpdate(input: ControlInput<number>, newValue: number) {
+  inputDidUpdate(input: any, newValue: any) {
     if (input == this.input) {
       this.updateValue(newValue)
     } else if (input == this.minValue) {

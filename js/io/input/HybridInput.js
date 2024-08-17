@@ -8,6 +8,8 @@ import { AbstractInput } from "./AbstractInput.js";
 import constants from "../../shared/constants.js";
 import { createMultiChannelView, getNumInputChannels } from "../../shared/multichannel.js";
 import { resolvePromiseArgs } from "../../shared/decorators.js";
+import { isType } from "../../shared/util.js";
+// TODO: remove this and HybridOutput.
 export class HybridInput extends AbstractInput {
     get numInputChannels() {
         return this.activeChannel ? 1 : getNumInputChannels(this.audioSink);
@@ -42,8 +44,8 @@ export class HybridInput extends AbstractInput {
             value = this.value;
         }
         this._value = value;
-        if (isFinite(+value)) {
-            this.audioSink["value"] = +value;
+        if (isFinite(+value) && isType(this.audioSink, AudioParam)) {
+            this.audioSink.setValueAtTime(+value, 0);
         }
         (_a = this.parent) === null || _a === void 0 ? void 0 : _a.propagateUpdatedInput(this, value);
     }

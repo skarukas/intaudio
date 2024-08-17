@@ -3,6 +3,7 @@ import { ControlInput } from "../io/input/ControlInput.js"
 import { ControlOutput } from "../io/output/ControlOutput.js"
 import constants from "../shared/constants.js"
 import { KeyEvent, KeyEventType } from "../shared/events.js"
+import { ObjectOf } from "../shared/types.js"
 import { BaseComponent } from "./base/BaseComponent.js"
 
 const _MIDI_C0 = 12
@@ -23,7 +24,7 @@ export class TypingKeyboardMIDI extends BaseComponent {
     // Inputs
     this.velocity = this.defineControlInput('velocity', velocity)
     this.octaveInput = this.defineControlInput('octaveInput', octave)
-    this.midiInput = this.defineControlInput('midiInput', constants.UNSET_VALUE, false)
+    this.midiInput = this.defineControlInput('midiInput', <any>constants.UNSET_VALUE, false)
     this.setDefaultInput(this.midiInput)
 
     // Output
@@ -36,7 +37,10 @@ export class TypingKeyboardMIDI extends BaseComponent {
     this.#registerKeyHandlers()
   }
   #registerKeyHandlers() {
-    const keyPressedMap = {}
+    const keyPressedMap: ObjectOf<{
+      isPressed: boolean,
+      pitch: number
+    }> = {}
     const processKeyEvent = (event: KeyboardEvent) => {
       if (event.defaultPrevented) {
         return

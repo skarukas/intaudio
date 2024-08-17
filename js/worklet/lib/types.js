@@ -5,7 +5,7 @@ export function toMultiChannelArray(array) {
                 return target[0];
             if (p == "right")
                 return target[1];
-            return target[p];
+            return Reflect.get(target, p, receiver);
         }
     });
     return proxy;

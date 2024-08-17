@@ -12,7 +12,7 @@ type MidiEvent = [number, number, number];
 
 export interface SupportsSelect {
   selectOptions: { id: string, name: string }[]
-  readonly selectedId: string
+  readonly selectedId: string | undefined
   setOption(id: string): void
 }
 
@@ -30,16 +30,16 @@ const SELECT_ALL_DEVICES = { id: ALL_INPUT_ID, name: "* (all midi inputs)" }
 const DEFAULT_SELECTIONS = [SELECT_NO_DEVICE, SELECT_ALL_DEVICES]
 
 export class MidiInputDevice extends VisualComponent implements SupportsSelect {
+  display: any;
   // I/O.
   readonly selectedDeviceInput: ControlInput<string>
   readonly midiOut: ControlOutput<MidiEvent>
   readonly availableDevices: ControlOutput<{ [id: string]: MIDIInput }>
-  readonly device: ControlOutput<MIDIInput>
   readonly activeDevices: ControlOutput<MIDIInput[]>
 
   // Used by display.
   public selectOptions: { id: string, name: string }[] = DEFAULT_SELECTIONS
-  public selectedId: string
+  public selectedId: string | undefined
 
   // Internals.
   protected deviceMap: { [id: string]: MIDIInput } = {}
@@ -100,7 +100,7 @@ export class MidiInputDevice extends VisualComponent implements SupportsSelect {
     access: MIDIAccess,
     event?: MIDIConnectionEvent
   ) {
-    if (event?.port.type === "output") {
+    if (event?.port?.type === "output") {
       return  // We only care about input changes.
     }
     // Set available inputs.
@@ -123,7 +123,7 @@ export class MidiInputDevice extends VisualComponent implements SupportsSelect {
       return chosenInput?.id
     }
     // Catch special case where user-selected option has precedence.
-    const isSpecialId = [ALL_INPUT_ID, NO_INPUT_ID].includes(this.selectedId)
+    const isSpecialId = [ALL_INPUT_ID, NO_INPUT_ID].includes(<any>this.selectedId)
     const selectedDeviceIsAvailable = this.selectedId && inputs.some(input => input.id == this.selectedId)
     if ((selectedDeviceIsAvailable || isSpecialId)
       && this.defaultDeviceBehavior !== DefaultDeviceBehavior.NEWEST) {
@@ -136,10 +136,10 @@ export class MidiInputDevice extends VisualComponent implements SupportsSelect {
         if (this.selectedId === ALL_INPUT_ID) {
           // The user explicitly selected using "all", so don't box them in.
           return this.selectedId
-        } else if (event?.port.state === "connected") {
+        } else if (event?.port?.state === "connected") {
           // Connect to the new device.
           return event.port.id
-        } else if (event?.port.state === "disconnected" && event.port.id !== this.selectedId) {
+        } else if (event?.port?.state === "disconnected" && event.port.id !== this.selectedId) {
           // Disconnection was irrelevant; keep same device.
           return this.selectedId
         } else {
@@ -154,7 +154,8 @@ export class MidiInputDevice extends VisualComponent implements SupportsSelect {
     }
   }
   protected sendMidiMessage(midiInput: MIDIInput, e: MIDIMessageEvent) {
-    if ([midiInput.id, ALL_INPUT_ID].includes(this.selectedId)) {
+    if (e.data == null) return
+    if ([midiInput.id, ALL_INPUT_ID].includes(<any>this.selectedId)) {
       const [cmd, key, v] = e.data
       this.midiOut.setValue([cmd, key, v])
     }

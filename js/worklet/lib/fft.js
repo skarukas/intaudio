@@ -1,4 +1,5 @@
 // fft.js from https://github.com/indutny/fft.js/tree/master
+// @ts-ignore
 export var FFTJS = function (t) { function r(e) { if (i[e])
     return i[e].exports; var o = i[e] = { i: e, l: !1, exports: {} }; return t[e].call(o.exports, o, o.exports, r), o.l = !0, o.exports; } var i = {}; return r.m = t, r.c = i, r.i = function (t) { return t; }, r.d = function (t, i, e) { r.o(t, i) || Object.defineProperty(t, i, { configurable: !1, enumerable: !0, get: e }); }, r.n = function (t) { var i = t && t.__esModule ? function () { return t.default; } : function () { return t; }; return r.d(i, "a", i), i; }, r.o = function (t, r) { return Object.prototype.hasOwnProperty.call(t, r); }, r.p = "", r(r.s = 0); }([function (t, r, i) {
         "use strict";

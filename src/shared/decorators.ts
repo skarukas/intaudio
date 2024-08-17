@@ -30,7 +30,7 @@ export function lazyProperty(initializer: (thisObj: any, propName?: string) => a
 /**
  * Declare that a function's parameters may be promises, and the function will perform its action once all promises are resolved and return a promise.
  */
-export function resolvePromiseArgs<I extends unknown[], O>(
+export function resolvePromiseArgs<I extends any[], O>(
   obj: any,
   propName: string,
   descriptor: PropertyDescriptor

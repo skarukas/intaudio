@@ -1,6 +1,7 @@
 import constants from "../../shared/constants.js"
+import { BypassEvent, MuteEvent } from "../../shared/events.js";
 import * as init from "../../shared/init.js"
-import { afterRender, scaleRange } from "../../shared/util.js";
+import { afterRender } from "../../shared/util.js";
 import { BaseDisplay } from "../../ui/BaseDisplay.js"
 import { BaseComponent } from "./BaseComponent.js"
 declare var $: JQueryStatic;
@@ -15,13 +16,13 @@ export abstract class VisualComponent<T extends BaseDisplay = any> extends BaseC
   /**
    * The parent element that this and other IA components are children of.
    */
-  $root: JQuery<HTMLDivElement>
+  $root: JQuery<HTMLDivElement> | undefined
   /**
    * The direct parent container of the component, containing any component-independent elements.
    */
-  $container: JQuery<HTMLDivElement>
-  display: NonNullable<T>
-  $bypassIndicator: JQuery
+  $container: JQuery<HTMLDivElement> | undefined
+  abstract display: NonNullable<T>
+  $bypassIndicator: JQuery | undefined
   /**
    * The unique DOM selector that only applies to this element.
    */
@@ -47,12 +48,12 @@ export abstract class VisualComponent<T extends BaseDisplay = any> extends BaseC
   static adjustSize($root: JQuery<HTMLDivElement>) {
     const maxHeight = $root.children().get().reduce((acc, curr) => {
       const top = +$(curr).css('top').replace('px', '')
-      const height = $(curr).outerHeight(true)
+      const height = $(curr).outerHeight(true) ?? 0
       return Math.max(acc, top + height)
     }, 0);
     const maxWidth = $root.children().get().reduce((acc, curr) => {
       const left = +$(curr).css('left').replace('px', '')
-      const width = $(curr).outerWidth(true)
+      const width = $(curr).outerWidth(true) ?? 0
       return Math.max(acc, left + width)
     }, 0);
     $root.css({
@@ -65,23 +66,26 @@ export abstract class VisualComponent<T extends BaseDisplay = any> extends BaseC
       "transform-origin": "top left",
       transform: `rotate(${rotateDeg}deg)`
     })
-    const parentRect = $container.parent().get(0).getBoundingClientRect()
+    const parentRect = $container.parent().get(0)?.getBoundingClientRect()
+    const rect = $container.get(0)?.getBoundingClientRect()
+    if (rect == undefined || parentRect == undefined) {
+      throw new Error("Both $container and its parent must exist.")
+    }
     const top = +$container.css("top").replace("px", "")
     const left = +$container.css("left").replace("px", "")
-    const rect = $container.get(0).getBoundingClientRect()
     $container.css({
       top: top - rect.top + parentRect.top,
       left: left - rect.left + parentRect.left
     })
   }
   addToDom(
-    iaRootElement,
+    iaRootElement: JQuery<HTMLDivElement>,
     { left = 0, top = 0, width = undefined, height = undefined, rotateDeg = 0 }:
       { left?: number, top?: number, width?: number, height?: number, rotateDeg?: number } = {}) {
     this.#assertDisplayIsUsable()
     const cls = <typeof VisualComponent>this.constructor
-    width ??= cls.defaultWidth
-    height ??= cls.defaultHeight
+    width ??= cls.defaultWidth ?? 0
+    height ??= cls.defaultHeight ?? 0
     // Root.
     this.$root = $(iaRootElement).addClass('ia-root')
     if (!this.$root.length) {
@@ -109,8 +113,8 @@ export abstract class VisualComponent<T extends BaseDisplay = any> extends BaseC
     //this.$container.append($component)
     this.display._display(this.$container, width, height)
     afterRender(() => {
-      VisualComponent.adjustSize(this.$root)
-      VisualComponent.rotate(this.$container, rotateDeg)
+      VisualComponent.adjustSize(<any>this.$root)
+      VisualComponent.rotate(<any>this.$container, rotateDeg)
     })
     return $component
   }
@@ -118,10 +122,10 @@ export abstract class VisualComponent<T extends BaseDisplay = any> extends BaseC
     throw new Error("TODO: Remove refreshDom. Individual methods should be written instead.")
     this.#assertDisplayIsUsable()
     if (this.$container) {
-      this.display._refreshDisplay(undefined, undefined)
+      this.display._refreshDisplay(<any>undefined, undefined)
     }
   }
-  onMuteEvent(event) {
+  onMuteEvent(event: MuteEvent) {
     if (this.$container) {
       if (event.shouldMute) {
         this.$container.addClass(constants.MUTED_CLASS)
@@ -130,7 +134,7 @@ export abstract class VisualComponent<T extends BaseDisplay = any> extends BaseC
       }
     }
   }
-  onBypassEvent(event) {
+  onBypassEvent(event: BypassEvent) {
     if (this.$container) {
       if (event.shouldBypass) {
         this.$container.addClass(constants.BYPASSED_CLASS)

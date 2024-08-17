@@ -1,4 +1,4 @@
-import { IS_WORKLET, map2d } from "./utils.js";
+import { map2d, SafeAudioWorkletProcessor } from "./utils.js";
 import { ArrayView, WritableArrayLike } from "./views.js";
 import { Queue } from '@datastructures-js/queue';
 
@@ -71,16 +71,20 @@ class ChunkedQueue<T> {
  * A class that abstracts out the size of actual window received, ensuring all windows have a specific size.
  */
 class AudioStreamScheduler {
+  // TODO: consider allocating inputQueues and outputQueues beforehand and 
+  // relying on the numChannelsPerOutput property.
   constructor(
     public windowSize: number,
     public numInputs: number,
     public numOutputs: number,
-    public processWindow: (i: ArrayView<number>[][], o: ArrayView<number>[][]) => boolean | void,
+    public processWindow: (i: ArrayLike<number>[][], o: ArrayLike<number>[][]) => boolean | void,
     public getChunkStartIndex: (chunk: ArrayView<number>[][]) => number = () => 0
   ) { }
   // Indexed by [input, channel, timeInThePast, localTime]
-  inputQueues?: ChunkedQueue<number>[][]
-  outputQueues?: ChunkedQueue<number>[][]
+  // These are only definitely defined from the point of view of the caller, as 
+  // the caller can only access process(), in which they'll be initialized.
+  inputQueues!: ChunkedQueue<number>[][]
+  outputQueues!: ChunkedQueue<number>[][]
 
   private get inputQueueSize(): number {
     return this.inputQueues[0][0].length
@@ -117,7 +121,7 @@ class AudioStreamScheduler {
     }
   }
   private processScheduledBatches(): boolean {
-    let keepAlive: boolean
+    let keepAlive: boolean | undefined
     for (const inputBatch of this.getScheduledInputBatches()) {
       const numChannels = inputBatch[0].length
 
@@ -196,7 +200,7 @@ class AudioStreamScheduler {
 /**
  * Uses input / output queuing to abstract sequence length away from the size of arrays passed to process().
  */
-export const BaseWorkletProcessor = IS_WORKLET ? class BaseWorkletProcessor extends AudioWorkletProcessor {
+export class BaseWorkletProcessor extends SafeAudioWorkletProcessor {
   scheduler: AudioStreamScheduler
 
   constructor(
@@ -223,9 +227,8 @@ export const BaseWorkletProcessor = IS_WORKLET ? class BaseWorkletProcessor exte
    * Abstract method that receives chunks of size this.windowSize.
    */
   processWindow(
-    inputs: ArrayView<number>[][],
-    outputs: Float32Array[][],
-    parameters
+    inputs: ArrayLike<number>[][],
+    outputs: ArrayLike<number>[][]
   ) {
     throw new Error("Not implemented.")
   }
@@ -242,7 +245,7 @@ export const BaseWorkletProcessor = IS_WORKLET ? class BaseWorkletProcessor exte
   process(
     inputs: Float32Array[][],
     outputs: Float32Array[][],
-    parameters  // TODO: handle parameters?
+    parameters: any  // TODO: handle parameters?
   ): boolean {
     /* const numChannels = Math.max(
       ...inputs.map(v => v.length),
@@ -270,7 +273,7 @@ export const BaseWorkletProcessor = IS_WORKLET ? class BaseWorkletProcessor exte
       throw e
     }
   }
-} : null
+}
 
 /* 
 const scheduler = new AudioStreamScheduler(1024, 1, 3, (inputs, outputs) => {

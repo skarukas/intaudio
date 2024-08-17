@@ -26,6 +26,8 @@ class MidiState {
         }
     }
     static onMidiAccessChange(access, event) {
+        if (!(event instanceof MIDIConnectionEvent))
+            return;
         for (const listener of Object.values(this.accessListeners)) {
             listener(access, event);
         }

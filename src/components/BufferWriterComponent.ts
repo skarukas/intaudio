@@ -19,9 +19,15 @@ export class BufferWriterComponent extends BaseComponent {
       BUFFER_WRITER_WORKLET_NAME,
       {
         numberOfInputs: 2,
-        numberOfOutputs: 0
+        numberOfOutputs: 0,
+        processorOptions: {
+          buffer,
+          bufferId: buffer ? getBufferId(buffer) : undefined
+        }
       })
+    // @ts-ignore Property undefined.
     this.worklet['__numInputChannels'] = numChannels
+    // @ts-ignore Property undefined.
     this.worklet['__numOutputChannels'] = numChannels
     this.worklet.port.onmessage = event => {
       this.handleMessage(event.data)

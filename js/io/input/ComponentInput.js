@@ -2,33 +2,42 @@
 // let i = new ComponentInput(parent)
 import { AudioRateInput } from "./AudioRateInput.js";
 import { HybridInput } from "./HybridInput.js";
+// TODO: replace this whole class with compound input. This may require 
+// refactoring of some code that relies on this class being a AudioRateInput 
+// and having an audioNode.
 // i.setValue({ input1: "val1", input2: "val2" })  // sets vals on parent.
 export class ComponentInput extends AudioRateInput {
+    get defaultInput() {
+        return this._defaultInput;
+    }
     constructor(name, parent, defaultInput) {
         const audioNode = (defaultInput instanceof AudioRateInput || defaultInput instanceof HybridInput) ? defaultInput.audioSink : undefined;
-        super(name, parent, audioNode);
+        super(name, parent, audioNode); // TODO: fix this issue...
         this.name = name;
-        this.defaultInput = defaultInput;
-        this.defaultInput = defaultInput;
-        this._value = defaultInput === null || defaultInput === void 0 ? void 0 : defaultInput.value;
+        this._defaultInput = defaultInput;
+        /* this._value = defaultInput?.value */
     }
     setValue(value) {
+        var _a;
+        /*     console.log("setting value")
+            console.log([value, this.toString()]) */
         this.validate(value);
         // JS objects represent collections of parameter names and values
         const isPlainObject = (value === null || value === void 0 ? void 0 : value.constructor) === Object;
         if (isPlainObject && !value["_raw"]) {
             // Validate each param is defined in the target.
             for (let key in value) {
-                if (!(key in this.parent.inputs)) {
+                if (!(this.parent && key in this.parent.inputs)) {
                     throw new Error(`Given parameter object ${JSON.stringify(value)} but destination ${this.parent} has no input named '${key}'. To pass a raw object without changing properties, set _raw: true on the object.`);
                 }
             }
             for (let key in value) {
-                this.parent.inputs[key].setValue(value[key]);
+                (_a = this.parent) === null || _a === void 0 ? void 0 : _a.inputs[key].setValue(value[key]);
             }
         }
         else if (this.defaultInput == undefined) {
-            throw new Error(`Component ${this.parent} unable to receive input because it has no default input configured. Either connect to one of its named inputs [${Object.keys(this.parent.inputs)}], or send a message as a plain JS object, with one or more input names as keys. Given ${JSON.stringify(value)}`);
+            const inputs = this.parent == undefined ? [] : Object.keys(this.parent.inputs);
+            throw new Error(`Component ${this.parent} unable to receive input because it has no default input configured. Either connect to one of its named inputs [${inputs}], or send a message as a plain JS object, with one or more input names as keys. Given ${JSON.stringify(value)}`);
         }
         else {
             isPlainObject && delete value["_raw"];

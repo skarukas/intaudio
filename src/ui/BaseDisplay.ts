@@ -10,7 +10,7 @@ export abstract class BaseDisplay<T extends VisualComponent = any> {
       throw new Error("JQuery is required to display UI components.")
     }
   }
-  abstract _display($root: JQuery, width: number, height: number);
+  abstract _display($root: JQuery, width: number, height: number): void
   _refreshDisplay<T>(input: ControlInput<T>, newValue: T) {
     throw new Error("Not implemented!")
   }

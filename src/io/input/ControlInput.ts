@@ -9,7 +9,7 @@ export class ControlInput<T> extends AbstractInput<T> {
   constructor(
     public name: string | number,
     parent: Component,
-    defaultValue: T = constants.UNSET_VALUE,
+    defaultValue: T = <any>constants.UNSET_VALUE,
     isRequired: boolean = false
   ) {
     super(name, parent, isRequired)

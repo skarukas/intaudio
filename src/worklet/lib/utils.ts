@@ -1,5 +1,7 @@
+import { enumerate, zip } from "../../shared/util.js"
 import { SignalProcessingContextFactory } from "./SignalProcessingContextFactory.js"
 import { MultiChannelArray, toMultiChannelArray, AudioDimension, SignalProcessingFnInput, ArrayLike } from "./types.js"
+import { WritableArrayLike } from "./views.js"
 
 export const IS_WORKLET = typeof AudioWorkletProcessor != 'undefined'
 
@@ -17,48 +19,56 @@ function writeColumn<T>(arr: ArrayLike<ArrayLike<T>>, col: number, values: T[]) 
   }
 }
 
-function assertValidReturnType(result) {
+function assertValidReturnType(result: any) {
   if (result === undefined) {
     throw new Error("Expected mapping function to return valid value(s), but got undefined.")
   }
 }
 
 function processSamples(
-  fn: (...inputs: number[]) => number,
+  fn: (...inputs: number[]) => number[],
   inputChunks: Float32Array[][],
-  outputChunk: Float32Array[],
+  outputChunks: Float32Array[][],
   contextFactory: SignalProcessingContextFactory<"none">
-): number {
+): number[] {
   const numChannels = inputChunks[0]?.length
   const numSamples = inputChunks[0][0]?.length
   for (let c = 0; c < numChannels; c++) {
     for (let i = 0; i < numSamples; i++) {
       const inputs = inputChunks.map(input => input[c][i])
       const context = contextFactory.getContext({ channelIndex: c, sampleIndex: i })
-      const result = context.execute(fn, inputs)
-      assertValidReturnType(result)
-      outputChunk[c][i] = result
+      const outputs = context.execute(fn, inputs)
+      for (const [output, dest] of zip(outputs, outputChunks)) {
+        assertValidReturnType(output)
+        dest[c][i] = output
+      }
     }
   }
-  return undefined
+  // The number of output channels is the same as the input because this is not
+  // determined by the user's function.
+  return inputChunks.map(x => x.length)
 }
 
 
 function processTime(
-  fn: (...inputs: Float32Array[]) => (Float32Array | number[]),
+  fn: (...inputs: Float32Array[]) => (Float32Array | number[])[],
   inputChunks: Float32Array[][],
-  outputChunk: Float32Array[],
+  outputChunks: Float32Array[][],
   contextFactory: SignalProcessingContextFactory<"time">
-): number {
+): number[] {
   const numChannels = inputChunks[0]?.length
   for (let c = 0; c < numChannels; c++) {
     const inputs = inputChunks.map(input => input[c])
     const context = contextFactory.getContext({ channelIndex: c })
-    const output = context.execute(fn, inputs)
-    assertValidReturnType(output)
-    outputChunk[c].set(output)
+    const outputs = context.execute(fn, inputs)
+    for (const [output, dest] of zip(outputs, outputChunks)) {
+      assertValidReturnType(output)
+      dest[c].set(output)
+    }
   }
-  return undefined
+  // The number of output channels is the same as the input because this is not
+  // determined by the user's function.
+  return inputChunks.map(x => x.length)
 }
 
 /**
@@ -66,26 +76,28 @@ function processTime(
  * 
  * @param fn 
  * @param inputChunks 
- * @param outputChunk 
- * @returns The number of channels output by the function.
+ * @param outputChunks 
+ * @returns The number of channels for each output of the function.
  */
 function processTimeAndChannels(
-  fn: (...inputs: MultiChannelArray<Float32Array>[]) => (Float32Array | number[])[],
+  fn: (...inputs: MultiChannelArray<Float32Array>[]) => (Float32Array | number[])[][],
   inputChunks: Float32Array[][],
-  outputChunk: Float32Array[],
+  outputChunks: Float32Array[][],
   contextFactory: SignalProcessingContextFactory<"all">
-): number {
+): number[] {
   const inputs = inputChunks.map(toMultiChannelArray)
   const context = contextFactory.getContext()
-  const result = context.execute(fn, inputs)
-  assertValidReturnType(result)
-  for (let c = 0; c < result.length; c++) {
-    if (result[c] == undefined) {
-      continue  // This signifies that the channel should be empty.
+  const outputs = context.execute(fn, inputs)
+  assertValidReturnType(outputs)
+  for (const [output, dest] of zip(outputs, outputChunks)) {
+    for (let c = 0; c < output.length; c++) {
+      if (output[c] == undefined) {
+        continue  // This signifies that the channel should be empty.
+      }
+      dest[c].set(output[c])
     }
-    outputChunk[c].set(result[c])
   }
-  return result.length
+  return outputs.map(a => a.length)
 }
 
 /**
@@ -93,16 +105,16 @@ function processTimeAndChannels(
  * 
  * @param fn 
  * @param inputChunks 
- * @param outputChunk 
- * @returns The number of channels output by the function.
+ * @param outputChunks 
+ * @returns The number of channels for each output of the function.
  */
 function processChannels(
-  fn: (...inputs: MultiChannelArray<number>[]) => number[],
+  fn: (...inputs: MultiChannelArray<number>[]) => number[][],
   inputChunks: Float32Array[][],
-  outputChunk: Float32Array[],
+  outputChunks: Float32Array[][],
   contextFactory: SignalProcessingContextFactory<"channels">
-): number {
-  let numOutputChannels;
+): number[] {
+  const numOutputChannels = Array(outputChunks.length).fill(0)
   const numSamples = inputChunks[0][0]?.length
   for (let i = 0; i < numSamples; i++) {
     // Get the i'th sample, across all channels and inputs.
@@ -111,12 +123,16 @@ function processChannels(
       return toMultiChannelArray(inputChannels)
     })
     const context = contextFactory.getContext({ sampleIndex: i })
-    const outputChannels = context.execute(
-      (...inputs: any[]) => fn(...inputs).map(v => isFinite(v) ? v : 0),
-      inputs)
-    assertValidReturnType(outputChannels)
-    writeColumn(outputChunk, i, outputChannels)
-    numOutputChannels = outputChannels.length
+    // .map(v => isFinite(v) ? v : 0)
+    const outputChannels = context.execute(fn, inputs)
+    for (
+      const [j, [output, destChunk]]
+      of enumerate(zip(outputChannels, outputChunks))
+    ) {
+      assertValidReturnType(outputChannels)
+      writeColumn(destChunk, i, output)
+      numOutputChannels[j] = output.length
+    }
   }
 
   return numOutputChannels
@@ -124,9 +140,9 @@ function processChannels(
 export type MappingFn<D extends AudioDimension> = (
   fn: Function,
   inputs: Float32Array[][],
-  output: Float32Array[],
+  outputs: Float32Array[][],
   contextFactory: SignalProcessingContextFactory<D>
-) => number
+) => number[]
 
 export function getProcessingFunction<D extends AudioDimension>(
   dimension: D
@@ -159,7 +175,7 @@ export function generateZeroInput<D extends AudioDimension>(
       for (let i = 0; i < numChannels; i++) {
         frame.push(new Float32Array(windowSize))
       }
-      return toMultiChannelArray(frame) as (SignalProcessingFnInput<D>)
+      return <any>toMultiChannelArray(frame) as (SignalProcessingFnInput<D>)
     case "channels":
       const channels = Array(windowSize).fill(0)
       return toMultiChannelArray(channels) as (SignalProcessingFnInput<D>)
@@ -179,8 +195,25 @@ export function mod(x: number, y: number) {
   return ((x % y) + y) % y
 }
 
-function sum(arr: Array<number>) {
-  return arr.reduce((a, b) => a + b, 0)
+export function sum(iter: Iterable<number>): number {
+  let sm = 0
+  for (const x of iter) {
+    sm += x
+  }
+  return sm
+}
+
+const _NO_VALUE = Symbol("_NO_VALUE")
+
+export function allEqual(iter: Iterable<any>): boolean {
+  let lastValue: any = _NO_VALUE
+  for (const x of iter) {
+    if (lastValue != _NO_VALUE && lastValue != x) {
+      return false
+    }
+    lastValue = x
+  }
+  return true
 }
 
 /* Safe version of TypedArray.set that doesn't throw RangeError. */
@@ -212,10 +245,10 @@ export function joinTypedArrays<T extends ArrayLike<any>>(
 }
 
 export function toComplexArray(
-  real: Float32Array,
-  imaginary: Float32Array,
-  complexOut?: Array<number>
-): Array<number> {
+  real: ArrayLike<number>,
+  imaginary: ArrayLike<number>,
+  complexOut?: ArrayLike<number>
+): ArrayLike<number> {
   complexOut ??= Array(real.length * 2).fill(0)
   for (let i = 0; i < real.length; i++) {
     complexOut[i * 2] = real[i]
@@ -224,11 +257,11 @@ export function toComplexArray(
   return complexOut
 }
 
-export function splitComplexArray(
-  complexArray: Array<number>,
-  outReal?: Float32Array,
-  outImaginary?: Float32Array
-): { real: Float32Array, imaginary: Float32Array } {
+export function splitComplexArray<T>(
+  complexArray: ArrayLike<number>,
+  outReal?: ArrayLike<any>,
+  outImaginary?: ArrayLike<any>
+): { real: ArrayLike<any>, imaginary: ArrayLike<any> } {
   const fftSize = complexArray.length / 2
   outReal ??= new Float32Array(fftSize)
   outImaginary ??= new Float32Array(fftSize)
@@ -275,11 +308,11 @@ export function polToCar(
 }
 
 export function polToCarArray(
-  magnitude: Float32Array,
-  phase: Float32Array,
-  real?: Float32Array,
-  imaginary?: Float32Array
-): { real: Float32Array, imaginary: Float32Array } {
+  magnitude: ArrayLike<number>,
+  phase: ArrayLike<number>,
+  real?: WritableArrayLike<number>,
+  imaginary?: WritableArrayLike<number>
+): { real: WritableArrayLike<number>, imaginary: WritableArrayLike<number> } {
   real ??= new Float32Array(magnitude.length)
   imaginary ??= new Float32Array(magnitude.length)
   for (let i = 0; i < real.length; i++) {
@@ -290,13 +323,32 @@ export function polToCarArray(
   return { real, imaginary }
 }
 
-export function getChannel(arr: Float32Array[], c: number) {
+export function getChannel<ArrType extends ArrayLike<any>>(
+  arr: ArrayLike<ArrType>, c: number
+): ArrType {
   return arr[c % arr.length]
+}
+
+export function forEach<T>(
+  arr: ArrayLike<T>,
+  fn: (v: T, i: number) => void
+) {
+  return Array.prototype.forEach.call(arr, fn)
 }
 
 export function map2d<T, V>(
   grid: Array<Array<T>>,
-  fn: (v: T, i?: number, j?: number) => V
+  fn: (v: T, i: number, j: number) => V
 ): Array<Array<V>> {
   return grid.map((arr, i) => arr.map((v, j) => fn(v, i, j)))
+}
+
+export const SafeAudioWorkletProcessor = IS_WORKLET ? AudioWorkletProcessor : class AudioWorkletProcessor {
+  port: MessagePort
+  outPort: MessagePort
+  constructor() {
+    const channel = new MessageChannel()
+    this.port = channel.port1
+    this.outPort = channel.port2
+  }
 }

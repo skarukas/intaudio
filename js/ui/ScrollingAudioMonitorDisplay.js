@@ -29,14 +29,15 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay {
         this.updateWaveformDisplay();
     }
     updateWaveformDisplay() {
+        var _a, _b;
         if (this.$container) {
             const { minValue, maxValue } = this.component.getCurrentValueRange();
             if (minValue != this.currMinValue) {
-                this.$minValueDisplay.text(__classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, minValue));
+                (_a = this.$minValueDisplay) === null || _a === void 0 ? void 0 : _a.text(__classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, minValue));
                 this.currMinValue = minValue;
             }
             if (maxValue != this.currMaxValue) {
-                this.$maxValueDisplay.text(__classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, maxValue));
+                (_b = this.$maxValueDisplay) === null || _b === void 0 ? void 0 : _b.text(__classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, maxValue));
                 this.currMaxValue = maxValue;
             }
             __classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_displayWaveform).call(this, minValue, maxValue);
@@ -77,20 +78,27 @@ _ScrollingAudioMonitorDisplay_instances = new WeakSet(), _ScrollingAudioMonitorD
         return value.toFixed(2);
     }
 }, _ScrollingAudioMonitorDisplay_displayWaveform = function _ScrollingAudioMonitorDisplay_displayWaveform(minValue, maxValue) {
+    var _a, _b;
+    if (!this.$canvas) {
+        throw new Error("$canvas must be defined.");
+    }
     let maxX = Number(this.$canvas.attr('width'));
     let memory = this.component._memory;
     let memLength = memory[0].length;
     let entryWidth = maxX / memLength;
     let maxY = Number(this.$canvas.attr('height'));
     const canvas = this.$canvas[0];
-    var ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+        throw new Error("Unable to load 2d Canvas context.");
+    }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     let hasOutOfBoundsValues = false;
     const toX = (i) => i * entryWidth;
     const toY = (v) => {
         const coordValue = scaleRange(v, [minValue, maxValue], [maxY, 0]);
-        hasOutOfBoundsValues = hasOutOfBoundsValues
-            || v && ((coordValue > maxY) || (coordValue < 0));
+        const isOutOfBounds = !!(v && ((coordValue > maxY) || (coordValue < 0)));
+        hasOutOfBoundsValues || (hasOutOfBoundsValues = isOutOfBounds);
         return coordValue;
     };
     // Draw 0 line
@@ -108,9 +116,9 @@ _ScrollingAudioMonitorDisplay_instances = new WeakSet(), _ScrollingAudioMonitorD
     }
     // Warn user visually if the range of the signal is not captured.
     if (hasOutOfBoundsValues) {
-        this.$container.addClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS);
+        (_a = this.$container) === null || _a === void 0 ? void 0 : _a.addClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS);
     }
     else {
-        this.$container.removeClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS);
+        (_b = this.$container) === null || _b === void 0 ? void 0 : _b.removeClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS);
     }
 };

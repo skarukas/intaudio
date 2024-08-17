@@ -1,5 +1,6 @@
 import { MidiMessageListener } from "./MidiListener.js";
 import constants from "./constants.js";
+// @ts-ignore No d.ts file found.
 import { ContextMenu } from 'jquery-contextmenu';
 var MidiLearnMode;
 (function (MidiLearnMode) {
@@ -18,7 +19,7 @@ export class MidiLearn {
         this.onMidiLearnConnection = onMidiLearnConnection;
         this.onMidiMessage = onMidiMessage;
         contextMenuSelector && this.addMidiLearnContextMenu(contextMenuSelector);
-        this.contextMenuSelector = contextMenuSelector;
+        this.$contextMenu = contextMenuSelector ? $(contextMenuSelector) : undefined;
         this.midiMessageListener = new MidiMessageListener(this.midiMessageHandler.bind(this));
     }
     addMidiLearnContextMenu(contextMenuSelector) {
@@ -39,10 +40,9 @@ export class MidiLearn {
         });
     }
     enterMidiLearnMode() {
+        var _a;
         this.isInMidiLearnMode = true;
-        $(this.contextMenuSelector)
-            .removeClass(constants.MIDI_LEARN_ASSIGNED_CLASS)
-            .addClass(constants.MIDI_LEARN_LISTENING_CLASS);
+        (_a = this.$contextMenu) === null || _a === void 0 ? void 0 : _a.removeClass(constants.MIDI_LEARN_ASSIGNED_CLASS).addClass(constants.MIDI_LEARN_LISTENING_CLASS);
         // Exit on escape.
         window.addEventListener("keydown", (event) => {
             if (event.key == "Escape") {
@@ -51,26 +51,31 @@ export class MidiLearn {
         }, { once: true });
     }
     exitMidiLearnMode() {
+        var _a;
         this.isInMidiLearnMode = false;
-        $(this.contextMenuSelector).removeClass(constants.MIDI_LEARN_LISTENING_CLASS);
+        (_a = this.$contextMenu) === null || _a === void 0 ? void 0 : _a.removeClass(constants.MIDI_LEARN_LISTENING_CLASS);
     }
     matchesLearnedFilter(input, event) {
-        var _a;
+        var _a, _b, _c, _d, _e;
+        if (event.data == null)
+            return false;
         const inputMatches = ((_a = this.learnedMidiInput) === null || _a === void 0 ? void 0 : _a.id) == input.id;
         const statusMatch = inputMatches && (this.learnMode == MidiLearnMode.INPUT
-            || this.learnedMidiEvent.data[0] == event.data[0]);
+            || ((_c = (_b = this.learnedMidiEvent) === null || _b === void 0 ? void 0 : _b.data) === null || _c === void 0 ? void 0 : _c[0]) == event.data[0]);
         const firstByteMatch = statusMatch && (this.learnMode != MidiLearnMode.FIRST_BYTE
-            || this.learnedMidiEvent.data[1] == event.data[1]);
+            || ((_e = (_d = this.learnedMidiEvent) === null || _d === void 0 ? void 0 : _d.data) === null || _e === void 0 ? void 0 : _e[1]) == event.data[1]);
         return firstByteMatch;
     }
     midiMessageHandler(input, event) {
+        var _a;
+        if (event.data == null)
+            return;
         if (this.isInMidiLearnMode) {
             this.learnedMidiInput = input;
             this.learnedMidiEvent = event;
             this.onMidiLearnConnection(input, event.data);
             this.onMidiMessage(event);
-            $(this.contextMenuSelector)
-                .addClass(constants.MIDI_LEARN_ASSIGNED_CLASS);
+            (_a = this.$contextMenu) === null || _a === void 0 ? void 0 : _a.addClass(constants.MIDI_LEARN_ASSIGNED_CLASS);
             this.exitMidiLearnMode();
         }
         else if (this.matchesLearnedFilter(input, event)) {

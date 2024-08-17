@@ -5,6 +5,7 @@ import { KeyboardDisplay } from "../ui/KeyboardDisplay.js"
 import { VisualComponent } from "./base/VisualComponent.js"
 
 export class Keyboard extends VisualComponent<KeyboardDisplay> {
+  display: KeyboardDisplay
   readonly numKeys: ControlInput<number>
   readonly lowestPitch: ControlInput<number>
   readonly midiInput: ControlInput<KeyEvent>
@@ -28,14 +29,14 @@ export class Keyboard extends VisualComponent<KeyboardDisplay> {
     this.preventIOOverwrites()
   }
 
-  inputDidUpdate<T>(input: ControlInput<T>, newValue: T) {
+  protected inputDidUpdate<T>(input: ControlInput<T>, newValue: T) {
     if (input == this.numKeys || input == this.lowestPitch) {
       //this.refreshDom()
       throw new Error("Can't update numKeys or lowestPitch yet.")
     }
     if (input == this.midiInput) {
       // Show key being pressed.
-      this.display.showKeyEvent(newValue)
+      this.display.showKeyEvent(<KeyEvent>newValue)
       // Propagate.
       this.midiOutput.setValue(<KeyEvent>newValue)
     }
@@ -44,13 +45,13 @@ export class Keyboard extends VisualComponent<KeyboardDisplay> {
   get highestPitch() {
     return this.lowestPitch.value + this.numKeys.value
   }
-  #getKeyId(keyNumber) {
+  private getKeyId(keyNumber: number) {
     return `${this._uuid}-k${keyNumber}`  // Unique identifier.
   }
-  _keyDown(keyNumber) {
-    this.midiOutput.setValue(new KeyEvent(KeyEventType.KEY_DOWN, keyNumber, 64, this.#getKeyId(keyNumber)))
+  keyDown(keyNumber: number) {
+    this.midiOutput.setValue(new KeyEvent(KeyEventType.KEY_DOWN, keyNumber, 64, this.getKeyId(keyNumber)))
   }
-  _keyUp(keyNumber) {
-    this.midiOutput.setValue(new KeyEvent(KeyEventType.KEY_UP, keyNumber, 64, this.#getKeyId(keyNumber)))
+  keyUp(keyNumber: number) {
+    this.midiOutput.setValue(new KeyEvent(KeyEventType.KEY_UP, keyNumber, 64, this.getKeyId(keyNumber)))
   }
 }

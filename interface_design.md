@@ -426,3 +426,54 @@ ia.combine(
     }
 }, { outputSignature: [FFTOutput]})
 ```
+
+#### Concerns
+
+- For FFT-based operations, we will need to synchonize two different FFT inputs. One may start 1 "audio frame" (128 samples) later but have an FFT size of 1024, for example.
+- We also need to only allow FFTs of the same window size
+- As far as dimensions: we should change it to be `includeTimeDimension: boolean` and `includeChannelDimension: boolean`. For operations involving FFT, `includeTimeDimension` must always be true. Any audio signal passed will have the same window size as the FFT.
+- The control inputs should be tranferred over with a `postMessage()` call. This means they *must* be serializable.
+- The current value of each control input on the worklet side should be used. So the event-based updating won't be controlled by the worklet processing.
+- We need to have a way of processing according to an `inputSignature` and `outputSignature`. The `inputSignature` will be inferred.
+- Dimensions always go `[outputs, channels, data]`, where `data` is either FFT keys, or an audio array or single number.
+- We need to have a type check on the output. It is assumed to be audio-rate if `outputSignature` is not specified. Here's what it checks:
+  - If the output is not an array, that's fine; it is converted to an array of size 1.
+  - If `includeChannelDimension` is true, each entry in the output array must either be a dict with `left`, `right` and numbered keys, or an array.
+  - FFT outputs must have keys `magnitude` and `phase`.
+  - Audio outputs can be of type `Float32Array` or `number[]`.
+  - `undefined` is only acceptable when specifying that a channel should be empty.
+  - Control outputs are *not* allowed.
+
+This is made simpler by the fact that `outputSignature` must be specified if the output is not audio.
+
+```js
+return [
+  // Single-channel FFT output.
+  {
+    left: {
+      magnitude: leftMagnitude,
+      phase: leftPhase
+    }
+  },
+  // Stereo FFT output, array-style.
+  [
+    {
+      magnitude: leftMagnitude,
+      phase: leftPhase
+    },
+    {
+      magnitude: rightMagnitude,
+      phase: rightPhase
+    }
+  ],
+  // Stereo audio output, array-style.
+  [leftAudio, rightAudio],
+  // Quad audio output, object-style.
+  {
+    left: leftAudio,
+    right: rightAudio,
+    2: channel2Audio,
+    3: channel3Audio
+  }
+]
+```

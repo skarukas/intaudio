@@ -19,19 +19,27 @@ export function tryWithFailureMessage(fn, message) {
         throw e;
     }
 }
+export function isPlainObject(value) {
+    return (value === null || value === void 0 ? void 0 : value.constructor) === Object;
+}
 export function createScriptProcessorNode(context, windowSize, numInputChannels, numOutputChannels) {
     const processor = context.createScriptProcessor(windowSize, numInputChannels, numOutputChannels);
     // Store true values because the constructor settings are not persisted on 
     // the WebAudio object.
+    // @ts-ignore Property undefined.
     processor['__numInputChannels'] = numInputChannels;
+    // @ts-ignore Property undefined.
     processor['__numOutputChannels'] = numOutputChannels;
     return processor;
 }
 export function range(n) {
     return Array(n).fill(0).map((v, i) => i);
 }
-export function enumerate(arr) {
-    return arr.map((v, i) => [i, v]);
+export function* enumerate(arr) {
+    let i = 0;
+    for (const x of arr) {
+        yield [i++, x];
+    }
 }
 export function* zip(...iterables) {
     const iterators = iterables.map(iterable => iterable[Symbol.iterator]());
@@ -94,24 +102,28 @@ export function wrapValidator(fn) {
         }
     };
 }
+export function isType(x, types) {
+    types = types instanceof Array ? types : [types];
+    let res = false;
+    for (let type of types) {
+        if (primitiveClasses.includes(type)) {
+            type = type.name.toLowerCase();
+        }
+        if (typeof type === 'string') {
+            res || (res = typeof x == type);
+        }
+        else {
+            res || (res = x instanceof type);
+        }
+    }
+    return res;
+}
 export function createTypeValidator(type) {
-    if (primitiveClasses.includes(type)) {
-        type = type.name.toLowerCase();
-    }
-    if (typeof type === 'string') {
-        return function (value) {
-            if (typeof value != type) {
-                throw new Error(`Expected value to be typeof '${value}', but found type '${typeof value}' instead.`);
-            }
-        };
-    }
-    else {
-        return function (value) {
-            if (!(value instanceof type)) {
-                throw new Error(`Expected value to be instanceof ${type.name}, but found type '${typeof value}' instead.`);
-            }
-        };
-    }
+    return function (value) {
+        if (!isType(value, type)) {
+            throw new Error(`Expected value to be typeof / instanceof '${type}', but found type '${typeof value}' instead. Value: ${value}`);
+        }
+    };
 }
 export function defineTimeRamp(audioContext, timeMeasure, node = undefined, mapFn = v => v, durationSec = 1e8) {
     // Continuous ramp representing the AudioContext time.
@@ -156,9 +168,12 @@ export function loadFile(audioContext, filePathOrUrl) {
 }
 const registryIdPropname = "__registryId__";
 export function getBufferId(buffer) {
+    // @ts-ignore Property undefined.
     if (!buffer[registryIdPropname]) {
+        // @ts-ignore Property undefined.
         buffer[registryIdPropname] = crypto.randomUUID();
     }
+    // @ts-ignore Property undefined.
     return buffer[registryIdPropname];
 }
 export function bufferToFloat32Arrays(buffer) {

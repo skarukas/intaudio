@@ -1,3 +1,5 @@
+import { createMultiChannelView } from "../../shared/multichannel.js";
+import { isPlainObject } from "../../shared/util.js";
 import { AbstractInput } from "./AbstractInput.js";
 import { AudioRateInput } from "./AudioRateInput.js";
 export class CompoundInput extends AbstractInput {
@@ -11,16 +13,20 @@ export class CompoundInput extends AbstractInput {
     get keys() {
         return new Set(Object.keys(this.inputs));
     }
+    get defaultInput() {
+        return this._defaultInput;
+    }
     constructor(name, parent, inputs, defaultInput) {
         super(name, parent, false);
         this.name = name;
         this.parent = parent;
-        this.defaultInput = defaultInput;
         this.activeChannel = undefined;
         this.inputs = {};
+        let hasMultichannelInput = false;
         // Define 'this.inputs' and 'this' interface for underlying inputs.
         Object.keys(inputs).map(name => {
             const input = inputs[name];
+            hasMultichannelInput || (hasMultichannelInput = input instanceof AudioRateInput && input.audioSink instanceof AudioNode);
             if (Object.prototype.hasOwnProperty(name)) {
                 console.warn(`Cannot create top-level CompoundInput property '${name}' because it is reserved. Use 'inputs.${name}' instead.`);
             }
@@ -33,6 +39,8 @@ export class CompoundInput extends AbstractInput {
                 });
             }
         });
+        this.channels = createMultiChannelView(this, hasMultichannelInput);
+        this._defaultInput = defaultInput;
     }
     mapOverInputs(fn) {
         const res = {};
@@ -48,7 +56,17 @@ export class CompoundInput extends AbstractInput {
     get value() {
         return this.mapOverInputs(input => input.value);
     }
-    setValue(valueDict) {
-        this.mapOverInputs((input, name) => input.setValue(valueDict[name]));
+    setValue(value) {
+        if (isPlainObject(value) && Object.keys(value).every(k => this.keys.has(k))) {
+            // If each key is a valid value, assign it as such.
+            this.mapOverInputs((input, name) => input.setValue(value[name]));
+        }
+        else if (this.defaultInput) {
+            // Assume it's an input for the default input.
+            this.defaultInput.setValue(value);
+        }
+        else {
+            throw new Error(`The given compound input (${this}) has no default input, so setValue expected a plain JS object with keys equal to a subset of ${[...this.keys]}. Given: ${value} (${JSON.stringify(value)}). Did you intend to call setValue of one of its named inputs (.inputs[inputName])instead?`);
+        }
     }
 }

@@ -9,9 +9,9 @@ export class FFTOutput extends CompoundOutput<{
   phase: AudioRateOutput,
   sync: AudioRateOutput
 }> implements FFTStream {
-  magnitude: AudioRateOutput
-  phase: AudioRateOutput
-  sync: AudioRateOutput
+  magnitude!: AudioRateOutput
+  phase!: AudioRateOutput
+  sync!: AudioRateOutput
   // TODO: add fftSize, etc.
   constructor(
     public name: string | number,

@@ -15,7 +15,7 @@ import { AudioRateOutput } from "../../io/output/AudioRateOutput.js";
 import { HybridInput } from "../../io/input/HybridInput.js";
 import { HybridOutput } from "../../io/output/HybridOutput.js";
 import { AudioRateInput } from "../../io/input/AudioRateInput.js";
-import { MultiChannelArray, toMultiChannelArray } from "../../worklet/lib/types.js";
+import { AudioDimension, MultiChannelArray, toMultiChannelArray } from "../../worklet/lib/types.js";
 import { arrayToObject, enumerate, isFunction, range, zip } from "../../shared/util.js";
 import { BundleComponent } from "../BundleComponent.js";
 import { lazyProperty } from "../../shared/decorators.js";
@@ -23,6 +23,7 @@ import { CompoundInput } from "../../io/input/CompoundInput.js";
 import { CompoundOutput } from "../../io/output/CompoundOutput.js";
 import { FFTComponent } from "../FFTComponent.js";
 import { FFTStream } from "../../shared/FFTStream.js";
+import { BypassEvent, MuteEvent } from "../../shared/events.js";
 
 const SPEC_MATCH_REST_SYMBOL = "*"
 const SPEC_SPLIT_SYMBOL = ","
@@ -42,8 +43,8 @@ export abstract class BaseComponent<
   isMuted: ControlInput<boolean>
   triggerInput: ControlInput<typeof constants.TRIGGER>
 
-  private _defaultInput: AbstractInput
-  private _defaultOutput: AbstractOutput
+  private _defaultInput: AbstractInput | undefined
+  private _defaultOutput: AbstractOutput | undefined
   private _reservedInputs: Array<AbstractInput>
   private _reservedOutputs: Array<AbstractOutput>
   constructor() {
@@ -76,7 +77,7 @@ export abstract class BaseComponent<
   }
 
   toString() {
-    function _getNames(obj, except) {
+    function _getNames(obj: any, except: any[]) {
       let entries = Object.keys(obj).filter(i => !except.includes(obj[i]))
       if (entries.length == 1) {
         return `${entries.join(", ")}`
@@ -102,25 +103,45 @@ export abstract class BaseComponent<
     Object.keys(this.inputs).map(this.freezeProperty.bind(this))
     Object.keys(this.outputs).map(this.freezeProperty.bind(this))
   }
-  private freezeProperty(propName) {
+  private freezeProperty(propName: string) {
     Object.defineProperty(this, propName, {
       writable: false,
       configurable: false
     })
   }
-  protected defineInputOrOutput(propName, inputOrOutput, inputsOrOutputsArray) {
-    inputsOrOutputsArray[propName] = inputOrOutput
+  protected defineInputOrOutput<T extends AbstractOutput>(
+    propName: string | number,
+    inputOrOutput: T,
+    inputsOrOutputsObject: ObjectOf<AbstractOutput>
+  ): T
+  protected defineInputOrOutput<T extends AbstractInput>(
+    propName: string | number,
+    inputOrOutput: T,
+    inputsOrOutputsObject: ObjectOf<AbstractInput>
+  ): T
+  protected defineInputOrOutput(
+    propName: string | number,
+    inputOrOutput: any,
+    inputsOrOutputsObject: ObjectOf<any>
+  ) {
+    inputsOrOutputsObject[propName] = inputOrOutput
     return inputOrOutput
   }
-  protected defineOutputAlias<T>(name: string, output: AbstractOutput<T>): AbstractOutput<T> {
+  protected defineOutputAlias<OutputType extends AbstractOutput<any>>(
+    name: string | number,
+    output: OutputType
+  ): OutputType {
     return this.defineInputOrOutput(name, output, this.outputs)
   }
-  protected defineInputAlias<T>(name: string | number, input: T): T {
+  protected defineInputAlias<InputType extends AbstractInput<any>>(
+    name: string | number,
+    input: InputType
+  ): InputType {
     return this.defineInputOrOutput(name, input, this.inputs)
   }
   protected defineControlInput<T>(
     name: string | number,
-    defaultValue: T = constants.UNSET_VALUE,
+    defaultValue: T | undefined = constants.UNSET_VALUE,
     isRequired: boolean = false
   ): ControlInput<T> {
     let input = new this._.ControlInput(name, this, defaultValue, isRequired)
@@ -144,7 +165,7 @@ export abstract class BaseComponent<
   protected defineHybridInput<T>(
     name: string | number,
     destinationNode: WebAudioConnectable,
-    defaultValue: T = constants.UNSET_VALUE,
+    defaultValue: T | undefined = constants.UNSET_VALUE,
     isRequired: boolean = false
   ): HybridInput<T> {
     let input = new this._.HybridInput(name, this, destinationNode, defaultValue, isRequired)
@@ -177,7 +198,7 @@ export abstract class BaseComponent<
     this._defaultOutput = output
   }
   getDefaultInput(): ComponentInput<any> {
-    const name = 'default'
+    const name = '[[default]]'
     if (this._defaultInput) {
       return new this._.ComponentInput(name, this, this._defaultInput)
     }
@@ -189,7 +210,7 @@ export abstract class BaseComponent<
     return new this._.ComponentInput(name, this)
   }
 
-  getDefaultOutput(): AbstractOutput {
+  get defaultOutput(): AbstractOutput | undefined {
     if (this._defaultOutput) {
       return this._defaultOutput
     }
@@ -214,15 +235,16 @@ export abstract class BaseComponent<
     } */
   }
 
-  propagateUpdatedInput(inputStream, newValue) {
-    if (inputStream == this.isBypassed) {
-      this.onBypassEvent(newValue)
-    } else if (inputStream == this.isMuted) {
-      this.onMuteEvent(newValue)
+  propagateUpdatedInput<T>(inputStream: AbstractInput<T>, newValue: T) {
+    if (inputStream == <any>this.isBypassed) {
+      this.onBypassEvent(<BypassEvent>newValue)
+    } else if (inputStream == <any>this.isMuted) {
+      this.onMuteEvent(<MuteEvent>newValue)
     }
-    if (inputStream == this.triggerInput) {
+    if (inputStream == <any>this.triggerInput) {
       // Always execute function, even if it's unsafe.
-      this.inputDidUpdate(undefined, undefined)
+      // TODO: should this really pass undefined here? Or call for EVERY input?
+      this.inputDidUpdate(<any>undefined, undefined)
     } else if (this.allInputsAreDefined()) {
       this.inputDidUpdate(inputStream, newValue)
     } else {
@@ -231,16 +253,11 @@ export abstract class BaseComponent<
   }
 
   // Abstract methods.
-  protected outputAdded(output) { }
-  protected inputAdded(output) { }
-  protected onBypassEvent(event) { }
-  protected onMuteEvent(event) { }
-  protected inputDidUpdate(input, newValue) { }
-  processEvent(event) {
-    // Method describing how an incoming event is mutated before passing to the
-    // component outputs.
-    return event
-  }
+  protected outputAdded<T>(destintion: AbstractInput<T>) { }
+  protected inputAdded<T>(source: AbstractOutput<T>) { }
+  protected onBypassEvent(event: BypassEvent) { }
+  protected onMuteEvent(event: MuteEvent) { }
+  protected inputDidUpdate<T>(input: AbstractInput<T>, newValue: T) { }
 
   setBypassed(isBypassed = true) {
     this.isBypassed.setValue(isBypassed)
@@ -249,13 +266,16 @@ export abstract class BaseComponent<
     this.isMuted.setValue(isMuted)
   }
 
-  connect<T extends CanBeConnectedTo>(destination: T): Component {
+  connect<T extends CanBeConnectedTo>(destination: T): Component | undefined {
     let { component, input } = this.getDestinationInfo(destination)
-    if (!input || (input instanceof ComponentInput && !input.defaultInput)) {
-      throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${Object.keys(component.inputs)}]`)
+    // || (input instanceof ComponentInput && !input.defaultInput) causes dict 
+    // outputs to not work
+    if (!input) {
+      const inputs = component == undefined ? [] : Object.keys(component.inputs)
+      throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${inputs}]`)
     }
     component && this.outputAdded(input)
-    const output = this.getDefaultOutput()
+    const output = this.defaultOutput
     if (!output) {
       throw new Error(`No default output found for ${this}, so unable to connect to destination: ${component}. Found named outputs: [${Object.keys(this.outputs)}]`)
     }
@@ -275,10 +295,10 @@ export abstract class BaseComponent<
     }
     return this
   }
-  setValues(valueObj) {
+  setValues(valueObj: ObjectOf<any>) {
     return this.getDefaultInput().setValue(valueObj)
   }
-  wasConnectedTo(other) {
+  wasConnectedTo<T>(other: AbstractOutput<T>): AbstractOutput<T> {
     this.inputAdded(other)
     return other
   }
@@ -286,17 +306,17 @@ export abstract class BaseComponent<
     return this.getBySpecs(inputSpecs, this.inputs)
   }
   protected getChannelsBySpecs(channelSpecs: (string | (number | string)[])[]): AbstractOutput[][] {
-    const output = this.getDefaultOutput()
+    const output = this.defaultOutput
     if (!(output instanceof AudioRateOutput || output instanceof HybridOutput)) {
       throw new Error("No default audio-rate output found. Select a specific output to use this operation.")
     }
     // Convert to stringified numbers.
     const numberedSpecs = channelSpecs.map(spec => {
-      const toNumber = (c: string) => {
+      const toNumber = (c: string | number): string => {
         const noSpace = String(c).replace(/s/g, "")
         if (noSpace == "left") return "0"
         if (noSpace == "right") return "1"
-        return c
+        return String(c)
       }
       return spec instanceof Array ? spec.map(toNumber) : toNumber(spec)
     })
@@ -323,11 +343,11 @@ export abstract class BaseComponent<
   ): T[][] {
     // Remove spaces.
     specs = specs.map(spec => {
-      const removeSpaces = (s: string) => String(s).replace(/s/g, "")
+      const removeSpaces = (s: string | number) => String(s).replace(/s/g, "")
       return spec instanceof Array ? spec.map(removeSpaces) : removeSpaces(spec)
     })
 
-    const matchedObjects = specs.map(() => [])
+    const matchedObjects: T[][] = specs.map(() => [])
     const matchedKeys = new Set()
     const starIndices = []  // Indices i in the list where specs[i] = "*"
 
@@ -371,12 +391,13 @@ export abstract class BaseComponent<
    *   output1: o1 => o1.connect(ia.oscillator().frequency)
    * })
    */
+  // @ts-ignore "Overload signature not compatible" with no reason given.
   perOutput(
     functions: KeysLike<OutputTypes, (x: Connectable) => Component>
-  )
+  ): BundleComponent
   perOutput(
     functions: ((x: Connectable) => Component)[]
-  )
+  ): BundleComponent
   perOutput(
     functions: ObjectOrArrayOf<((x: Connectable) => Component)>
   ): BundleComponent {
@@ -400,12 +421,13 @@ export abstract class BaseComponent<
     }
     return new this._.BundleComponent(result)
   }
+
   perChannel(
     functions: { left?: (x: Connectable) => Component, right?: (x: Connectable) => Component, [key: number]: (x: Connectable) => Component }
-  )
+  ): Component
   perChannel(
     functions: ((x: Connectable) => Component)[]
-  )
+  ): Component
   perChannel(
     functions: ObjectOrArrayOf<((x: Connectable) => Component)>
   ): Component {
@@ -413,11 +435,11 @@ export abstract class BaseComponent<
     const keys = Object.keys(functions)
     const outputGroups = this.getChannelsBySpecs(keys)
     const result: Component[] = Array(outputGroups.length).fill(undefined)
-    const toNum = (c: string) => {
+    const toNum = (c: string | number) => {
       const noSpace = String(c).replace(/s/g, "")
-      if (noSpace == "left") return "0"
-      if (noSpace == "right") return "1"
-      return c
+      if (noSpace == "left") return 0
+      if (noSpace == "right") return 1
+      return <number>c
     }
     for (const [key, outputGroup] of zip(keys, outputGroups)) {
       if (isFunction(functions[key])) {
@@ -438,9 +460,9 @@ export abstract class BaseComponent<
 
   // Delegate the property to the default audio output (if any).
   protected getAudioOutputProperty(propName: string) {
-    const output = this.getDefaultOutput()
+    const output = this.defaultOutput
     if (output instanceof AudioRateOutput) {
-      const prop = output[propName]
+      const prop = (<any>output)[propName]
       return isFunction(prop) ? prop.bind(output) : prop
     } else {
       throw new Error(`Cannot get property '${propName}'. No default audio-rate output found for ${this}. Select an audio-rate output and use 'output.${propName}' instead.`)
@@ -470,14 +492,61 @@ export abstract class BaseComponent<
   get channels(): MultiChannelArray<AudioRateOutput> {
     return this.getAudioOutputProperty('channels')
   }
-  transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], { windowSize, useWorklet, dimension }?: { windowSize?: number, useWorklet?: boolean, dimension: "all" }): Component;
-  transformAudio(fn: (input: MultiChannelArray<number>) => number[], { useWorklet, dimension }?: { useWorklet?: boolean, dimension: "channels" }): Component;
-  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), { windowSize, useWorklet, dimension }?: { windowSize?: number, useWorklet?: boolean, dimension: "time" }): Component;
-  transformAudio(fn: (x: number) => number, { useWorklet, dimension }?: { useWorklet?: boolean, dimension?: "none" }): Component;
   transformAudio(
-    fn: unknown,
-    { windowSize, useWorklet, dimension = "none" }:
-      { windowSize?: number, useWorklet?: boolean, dimension?: unknown } = {}
+    fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[],
+    {
+      windowSize,
+      useWorklet,
+      dimension
+    }: {
+      windowSize?: number,
+      useWorklet?: boolean,
+      dimension: "all"
+    }
+  ): Component;
+  transformAudio(
+    fn: (input: MultiChannelArray<number>) => number[],
+    {
+      useWorklet,
+      dimension
+    }: {
+      useWorklet?: boolean,
+      dimension: "channels"
+    }
+  ): Component;
+  transformAudio(
+    fn: (samples: Float32Array) => (Float32Array | number[]),
+    {
+      windowSize,
+      useWorklet,
+      dimension
+    }: {
+      windowSize?: number,
+      useWorklet?: boolean,
+      dimension: "time"
+    }
+  ): Component;
+  transformAudio(
+    fn: (x: number) => number,
+    {
+      useWorklet,
+      dimension
+    }: {
+      useWorklet?: boolean,
+      dimension?: "none"
+    }
+  ): Component;
+  transformAudio(
+    fn: Function,
+    {
+      windowSize,
+      useWorklet,
+      dimension = "none"
+    }: {
+      windowSize?: number,
+      useWorklet?: boolean,
+      dimension?: AudioDimension
+    } = {}
   ): Component {
     return this.getAudioOutputProperty('transformAudio')(fn, dimension, { windowSize, useWorklet })
   }

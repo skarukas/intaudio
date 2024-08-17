@@ -1,4 +1,3 @@
-import { ComponentInput } from "../../io/input/ComponentInput.js";
 import { BaseConnectable } from "../../shared/base/BaseConnectable.js";
 import constants from "../../shared/constants.js";
 import { AudioRateOutput } from "../../io/output/AudioRateOutput.js";
@@ -63,8 +62,8 @@ export class BaseComponent extends BaseConnectable {
             configurable: false
         });
     }
-    defineInputOrOutput(propName, inputOrOutput, inputsOrOutputsArray) {
-        inputsOrOutputsArray[propName] = inputOrOutput;
+    defineInputOrOutput(propName, inputOrOutput, inputsOrOutputsObject) {
+        inputsOrOutputsObject[propName] = inputOrOutput;
         return inputOrOutput;
     }
     defineOutputAlias(name, output) {
@@ -112,7 +111,7 @@ export class BaseComponent extends BaseConnectable {
         this._defaultOutput = output;
     }
     getDefaultInput() {
-        const name = 'default';
+        const name = '[[default]]';
         if (this._defaultInput) {
             return new this._.ComponentInput(name, this, this._defaultInput);
         }
@@ -123,7 +122,7 @@ export class BaseComponent extends BaseConnectable {
         }
         return new this._.ComponentInput(name, this);
     }
-    getDefaultOutput() {
+    get defaultOutput() {
         if (this._defaultOutput) {
             return this._defaultOutput;
         }
@@ -155,6 +154,7 @@ export class BaseComponent extends BaseConnectable {
         }
         if (inputStream == this.triggerInput) {
             // Always execute function, even if it's unsafe.
+            // TODO: should this really pass undefined here? Or call for EVERY input?
             this.inputDidUpdate(undefined, undefined);
         }
         else if (this.allInputsAreDefined()) {
@@ -165,16 +165,11 @@ export class BaseComponent extends BaseConnectable {
         }
     }
     // Abstract methods.
-    outputAdded(output) { }
-    inputAdded(output) { }
+    outputAdded(destintion) { }
+    inputAdded(source) { }
     onBypassEvent(event) { }
     onMuteEvent(event) { }
     inputDidUpdate(input, newValue) { }
-    processEvent(event) {
-        // Method describing how an incoming event is mutated before passing to the
-        // component outputs.
-        return event;
-    }
     setBypassed(isBypassed = true) {
         this.isBypassed.setValue(isBypassed);
     }
@@ -183,11 +178,14 @@ export class BaseComponent extends BaseConnectable {
     }
     connect(destination) {
         let { component, input } = this.getDestinationInfo(destination);
-        if (!input || (input instanceof ComponentInput && !input.defaultInput)) {
-            throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${Object.keys(component.inputs)}]`);
+        // || (input instanceof ComponentInput && !input.defaultInput) causes dict 
+        // outputs to not work
+        if (!input) {
+            const inputs = component == undefined ? [] : Object.keys(component.inputs);
+            throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${inputs}]`);
         }
         component && this.outputAdded(input);
-        const output = this.getDefaultOutput();
+        const output = this.defaultOutput;
         if (!output) {
             throw new Error(`No default output found for ${this}, so unable to connect to destination: ${component}. Found named outputs: [${Object.keys(this.outputs)}]`);
         }
@@ -221,7 +219,7 @@ export class BaseComponent extends BaseConnectable {
         return this.getBySpecs(inputSpecs, this.inputs);
     }
     getChannelsBySpecs(channelSpecs) {
-        const output = this.getDefaultOutput();
+        const output = this.defaultOutput;
         if (!(output instanceof AudioRateOutput || output instanceof HybridOutput)) {
             throw new Error("No default audio-rate output found. Select a specific output to use this operation.");
         }
@@ -233,7 +231,7 @@ export class BaseComponent extends BaseConnectable {
                     return "0";
                 if (noSpace == "right")
                     return "1";
-                return c;
+                return String(c);
             };
             return spec instanceof Array ? spec.map(toNumber) : toNumber(spec);
         });
@@ -320,9 +318,9 @@ export class BaseComponent extends BaseConnectable {
         const toNum = (c) => {
             const noSpace = String(c).replace(/s/g, "");
             if (noSpace == "left")
-                return "0";
+                return 0;
             if (noSpace == "right")
-                return "1";
+                return 1;
             return c;
         };
         for (const [key, outputGroup] of zip(keys, outputGroups)) {
@@ -342,7 +340,7 @@ export class BaseComponent extends BaseConnectable {
     }
     // Delegate the property to the default audio output (if any).
     getAudioOutputProperty(propName) {
-        const output = this.getDefaultOutput();
+        const output = this.defaultOutput;
         if (output instanceof AudioRateOutput) {
             const prop = output[propName];
             return isFunction(prop) ? prop.bind(output) : prop;

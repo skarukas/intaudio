@@ -7,6 +7,7 @@ export function getNumInputChannels(node) {
     else if (node instanceof ChannelMergerNode) {
         return node.numberOfInputs;
     }
+    // @ts-ignore Property undefined.
     return (_a = node['__numInputChannels']) !== null && _a !== void 0 ? _a : (node instanceof AudioNode ? node.channelCount : 1);
 }
 export function getNumOutputChannels(node) {
@@ -17,6 +18,7 @@ export function getNumOutputChannels(node) {
     else if (node instanceof ChannelMergerNode) {
         return node.numberOfInputs;
     }
+    // @ts-ignore Property undefined.
     return (_a = node['__numOutputChannels']) !== null && _a !== void 0 ? _a : (node instanceof AudioNode ? node.channelCount : 1);
 }
 export function createMultiChannelView(multiChannelIO, supportsMultichannel) {
@@ -48,7 +50,7 @@ function createChannelView(multiChannelIO, activeChannel) {
 /**
  * Call the correct WebAudio methods to connect channels.
  */
-function simpleConnect(source, destination, fromChannel = undefined, toChannel = undefined) {
+function simpleConnect(source, destination, fromChannel = 0, toChannel = 0) {
     if (destination instanceof AudioParam) {
         return source.connect(destination, fromChannel);
     }

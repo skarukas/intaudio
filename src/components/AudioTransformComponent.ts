@@ -1,29 +1,23 @@
 
 import { AudioRateInput } from "../io/input/AudioRateInput.js";
-import { AudioRateOutput } from "../io/output/AudioRateOutput.js";
 import constants from "../shared/constants.js";
+// @ts-ignore
 import describeFunction from 'function-descriptor'
 import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
-import { createScriptProcessorNode, range } from "../shared/util.js";
+import { createScriptProcessorNode, enumerate, range } from "../shared/util.js";
 import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
 import { Connectable } from "../shared/base/Connectable.js";
 import { SignalProcessingContextFactory } from "../worklet/lib/SignalProcessingContextFactory.js";
-import { MappingFn, getProcessingFunction } from "../worklet/lib/utils.js";
+import { MappingFn, getProcessingFunction, sum } from "../worklet/lib/utils.js";
 import { AudioDimension } from "../worklet/lib/types.js";
 import { serializeWorkletMessage } from "../worklet/lib/serialization.js";
 import { FUNCTION_WORKLET_NAME } from "../worklet/OperationWorklet.js";
+import { StreamSpec } from "../shared/StreamSpec.js";
 
-function enumValues(Enum: object) {
-  const nonNumericKeys = Object.keys(Enum).filter((item) => {
-    return isNaN(Number(item));
-  });
-  return nonNumericKeys.map(k => Enum[k])
-}
-
-abstract class AudioExecutionContext<D extends AudioDimension> extends ToStringAndUUID {
-  inputs: AudioNode[]
-  output: AudioNode
+export abstract class AudioExecutionContext<D extends AudioDimension> extends ToStringAndUUID {
+  abstract inputs: AudioNode[]
+  abstract outputs: AudioNode[]
   protected applyToChunk: MappingFn<D>
 
   constructor(public fn: Function, public dimension: D) {
@@ -33,105 +27,111 @@ abstract class AudioExecutionContext<D extends AudioDimension> extends ToStringA
 
   protected processAudioFrame(
     inputChunks: Float32Array[][],
-    outputChunk: Float32Array[],
+    outputChunks: Float32Array[][],
     contextFactory: SignalProcessingContextFactory<D>
-  ): number {
-    return this.applyToChunk(this.fn, inputChunks, outputChunk, contextFactory)
+  ): number[] {
+    return this.applyToChunk(this.fn, inputChunks, outputChunks, contextFactory)
   }
 
   /**
    * Guess the number of output channels by applying the function to a fake input.
    */
   protected inferNumOutputChannels(
-    numInputs: number,
-    numChannelsPerInput: number,
+    inputSpec: StreamSpec,
+    outputSpec: StreamSpec,
     windowSize: number = 128
-  ): number {
-    const createChunk = numChannels => range(numChannels).map(
+  ): number[] {
+    const createChunk = (numChannels: number) => range(numChannels).map(
       _ => new Float32Array(windowSize)
     )
-    const inputChunks = range(numInputs).map(
-      () => createChunk(numChannelsPerInput)
-    )
+    const inputChunks = inputSpec.numChannelsPerStream.map(createChunk)
     // The output may have more channels than the input, so be flexible when 
     // testing it so as to not break the implementation.
-    const outputChunk = createChunk(constants.MAX_CHANNELS)
+    const maxChannelsPerOutput = range(outputSpec.numStreams).fill(constants.MAX_CHANNELS)
+    const outputChunks = maxChannelsPerOutput.map(createChunk)
     const contextFactory = new SignalProcessingContextFactory({
       sampleRate: this.audioContext.sampleRate,
       getCurrentTime: () => this.audioContext.currentTime,
       getFrameIndex: () => 0,
-      numInputs,
-      numChannelsPerInput,
-      numOutputChannels: constants.MAX_CHANNELS,
+      numChannelsPerInput: inputSpec.numChannelsPerStream,
+      numChannelsPerOutput: maxChannelsPerOutput,
       windowSize,
       dimension: this.dimension
     })
     // The returned value will be the number of new output channels, if it's 
     // different from the provided buffer size, otherwise undefined.
-    const numOutputChannels = this.processAudioFrame(inputChunks, outputChunk, contextFactory)
-    return numOutputChannels ?? numChannelsPerInput
+    const numChannelsPerOutput = this.processAudioFrame(inputChunks, outputChunks, contextFactory)
+    return numChannelsPerOutput ?? outputSpec.numChannelsPerStream
   }
   static create<D extends AudioDimension>(fn: Function, {
     useWorklet,
     dimension,
-    numInputs,
-    numChannelsPerInput,
+    inputSpec,
+    outputSpec,
     windowSize,
-    numOutputChannels
   }: {
     useWorklet: boolean,
     dimension: D,
-    numInputs: number,
-    numChannelsPerInput: number,
-    windowSize: number,
-    numOutputChannels: number
+    inputSpec: StreamSpec,
+    outputSpec: StreamSpec,
+    windowSize: number | undefined
   }): AudioExecutionContext<D> {
-    if (useWorklet && !this.config.state.workletIsAvailable) {
-      throw new Error("Can't use worklet for processing because the worklet failed to load. Verify the `workletPath` configuration setting is set correctly and the file is available.")
-    }
-    const totalNumChannels = numInputs * numChannelsPerInput
-    if (totalNumChannels > constants.MAX_CHANNELS) {
-      throw new Error(`The total number of input channels must be less than ${constants.MAX_CHANNELS}. Given numInputs=${numInputs} and numChannelsPerInput=${numChannelsPerInput}.`)
-    }
     if (useWorklet) {
-      return new WorkletExecutionContext(fn, {
+      return new this._.WorkletExecutionContext(fn, {
         dimension,
-        numInputs,
-        numChannelsPerInput,
-        numOutputChannels,
+        inputSpec,
+        outputSpec
       })
     } else {
-      return new ScriptProcessorExecutionContext(fn, {
+      return new this._.ScriptProcessorExecutionContext(fn, {
         dimension,
-        numInputs,
-        numChannelsPerInput,
+        inputSpec,
+        outputSpec,
         windowSize,
-        numOutputChannels
       })
     }
   }
 }
 
-class WorkletExecutionContext<D extends AudioDimension> extends AudioExecutionContext<D> {
+export class WorkletExecutionContext<D extends AudioDimension> extends AudioExecutionContext<D> {
+  inputs: AudioNode[];
+  outputs: AudioNode[];
   constructor(fn: Function, {
     dimension,
-    numInputs,
-    numChannelsPerInput,
-    numOutputChannels,
+    inputSpec,
+    outputSpec
+  }: {
+    dimension: AudioDimension,
+    inputSpec: StreamSpec,
+    outputSpec: StreamSpec
   }) {
-    super(fn, dimension)
-    numOutputChannels ??= this.inferNumOutputChannels(numInputs, numChannelsPerInput)
-    const worklet = new AudioWorkletNode(this.audioContext, FUNCTION_WORKLET_NAME, {
-      numberOfInputs: numInputs,
-      outputChannelCount: [numOutputChannels],
-      numberOfOutputs: 1
-    })
-    worklet['__numInputChannels'] = numChannelsPerInput
-    worklet['__numOutputChannels'] = numOutputChannels
+    super(fn, <any>dimension)
+    if (!this.config.state.workletIsAvailable) {
+      throw new Error("Can't use worklet for processing because the worklet failed to load. Verify the `workletPath` configuration setting is set correctly and the file is available.")
+    }
+    // TODO: fix
+    if (outputSpec.hasDefaultNumChannels) {
+      const numChannelsPerOutput = this.inferNumOutputChannels(inputSpec, outputSpec)
+      outputSpec = new StreamSpec({
+        ...outputSpec,
+        numChannelsPerStream: numChannelsPerOutput
+      })
+    }
 
-    const inputs = WorkletExecutionContext.defineAudioGraph(worklet, {
-      numInputs,
-      numChannelsPerInput,
+    const worklet = new AudioWorkletNode(this.audioContext, FUNCTION_WORKLET_NAME, {
+      numberOfInputs: inputSpec.numStreams,
+      outputChannelCount: outputSpec.numChannelsPerStream,
+      numberOfOutputs: outputSpec.numStreams
+    })
+    // TODO: figure this out.
+    // @ts-ignore No index signature.
+    worklet['__numInputChannels'] = inputSpec.numChannelsPerStream[0]
+    // @ts-ignore No index signature.
+    worklet['__numOutputChannels'] = outputSpec.numChannelsPerStream[0]
+
+    const { inputs, outputs } = this._.WorkletExecutionContext.defineAudioGraph(worklet, {
+      inputSpec,
+      outputSpec,
     })
     // NOTE: beginning execution of the user-supplied function must be
     // performed *after* the AudioWorkletNode has all its inputs 
@@ -140,96 +140,138 @@ class WorkletExecutionContext<D extends AudioDimension> extends AudioExecutionCo
     // https://bugzilla.mozilla.org/show_bug.cgi?id=1629478
     const serializedFunction = serializeWorkletMessage(fn, {
       dimension,
-      numInputs,
-      numChannelsPerInput,
-      numOutputChannels,
-      windowSize: 128
+      numInputs: inputSpec.numStreams,
+      numChannelsPerInput: inputSpec.numChannelsPerStream,
+      numOutputChannels: outputSpec.numChannelsPerStream,
+      windowSize: 128  // TODO: make this flexible.
     })
     worklet.port.postMessage(serializedFunction)
 
     this.inputs = inputs
-    this.output = worklet
+    this.outputs = outputs
   }
   protected static defineAudioGraph(workletNode: AudioNode, {
-    numInputs,
-    numChannelsPerInput,
+    inputSpec,
+    outputSpec,
   }: {
-    [k: string]: number
-  }): AudioNode[] {
+    inputSpec: StreamSpec,
+    outputSpec: StreamSpec,
+  }): { inputs: AudioNode[], outputs: AudioNode[] } {
     const inputNodes = []
-    for (let i = 0; i < numInputs; i++) {
+    const outputNodes = []
+    for (const numChannels of inputSpec.numChannelsPerStream) {
       const input = new GainNode(this.audioContext, {
-        channelCount: numChannelsPerInput,
+        channelCount: numChannels,
         // Force channelCount even if the input has more / fewer channels.
         channelCountMode: "explicit"
       })
-      input.connect(workletNode, 0, i)
+      input.connect(workletNode, 0, numChannels)
       inputNodes.push(input)
     }
-    return inputNodes
+    for (const i of range(outputSpec.numStreams)) {
+      const output = new GainNode(this.audioContext)
+      workletNode.connect(output, i, 0)
+      outputNodes.push(output)
+    }
+    // TODO: implement outputs.
+    return { inputs: inputNodes, outputs: outputNodes }
   }
 }
 
-class ScriptProcessorExecutionContext<D extends AudioDimension> extends AudioExecutionContext<D> {
-  numInputs: number
-  numChannelsPerInput: number
-  numOutputChannels: number
+export class ScriptProcessorExecutionContext<D extends AudioDimension> extends AudioExecutionContext<D> {
+  inputs: AudioNode[];
+  outputs: AudioNode[];
+  inputSpec: StreamSpec
+  outputSpec: StreamSpec
   windowSize: number
-
-  protected processor: ScriptProcessorNode
 
   constructor(public fn: Function, {
     dimension,
-    numInputs,
-    numChannelsPerInput,
+    inputSpec,
+    outputSpec,
     windowSize,
-    numOutputChannels
+  }: {
+    dimension: AudioDimension,
+    inputSpec: StreamSpec,
+    outputSpec: StreamSpec,
+    windowSize?: number,
   }) {
-    super(fn, dimension)
-    numOutputChannels ??= this.inferNumOutputChannels(numInputs, numChannelsPerInput)
-    this.numInputs = numInputs
-    this.numChannelsPerInput = numChannelsPerInput
-    this.numOutputChannels = numOutputChannels
-    this.windowSize = windowSize
+    super(fn, <any>dimension)
+    if (inputSpec.totalNumChannels > constants.MAX_CHANNELS) {
+      throw new Error(`When using the ScriptProcessorNode, the total number of input channels must be less than ${constants.MAX_CHANNELS}. Given input spec with channelsPerStream=${inputSpec.numChannelsPerStream}.`)
+    }
+    if (outputSpec.totalNumChannels > constants.MAX_CHANNELS) {
+      throw new Error(`When using the ScriptProcessorNode, the total number of output channels must be less than ${constants.MAX_CHANNELS}. Given output spec with channelsPerStream=${outputSpec.numChannelsPerStream}.`)
+    }
+    if (outputSpec.hasDefaultNumChannels) {
+      const numChannelsPerOutput = this.inferNumOutputChannels(inputSpec, outputSpec)
+      outputSpec = new StreamSpec({
+        ...outputSpec,
+        numChannelsPerStream: numChannelsPerOutput
+      })
+    }
+    this.inputSpec = inputSpec
+    this.outputSpec = outputSpec
 
     const processor = createScriptProcessorNode(
       this.audioContext,
-      windowSize,
-      numChannelsPerInput * numInputs,
-      numOutputChannels
+      windowSize ?? 0,  // The best value will be chosen if == 0
+      inputSpec.totalNumChannels,
+      outputSpec.totalNumChannels
     )
-    const inputs = ScriptProcessorExecutionContext.defineAudioGraph(processor, {
-      numInputs,
-      numChannelsPerInput,
-    })
+    this.windowSize = processor.bufferSize
+    const { inputs, outputs } = this._.ScriptProcessorExecutionContext.defineAudioGraph(processor, { inputSpec, outputSpec })
     this.defineAudioProcessHandler(processor)
 
     this.inputs = inputs
-    this.output = processor
+    this.outputs = outputs
   }
   protected static defineAudioGraph(processorNode: AudioNode, {
-    numInputs,
-    numChannelsPerInput,
+    inputSpec, outputSpec
   }: {
-    [k: string]: number
-  }): AudioNode[] {
-    const totalNumChannels = numInputs * numChannelsPerInput
+    inputSpec: StreamSpec,
+    outputSpec: StreamSpec,
+  }): { inputs: AudioNode[], outputs: AudioNode[] } {
     const inputNodes = []
-    const merger = this.audioContext.createChannelMerger(totalNumChannels)
+    const merger = this.audioContext.createChannelMerger(inputSpec.totalNumChannels)
     // Merger -> Processor
     merger.connect(processorNode)
-    for (let i = 0; i < numInputs; i++) {
-      const input = new GainNode(this.audioContext, { channelCount: numChannelsPerInput })
+    let startChannel = 0
+    for (const numChannels of inputSpec.numChannelsPerStream) {
+      const input = new GainNode(
+        this.audioContext,
+        { channelCount: numChannels }
+      )
       // Flattened channel arrangement:
       // [0_left, 0_right, 1_left, 1_right, 2_left, 2_right] 
-      for (let j = 0; j < numChannelsPerInput; j++) {
+      for (const j of range(numChannels)) {
         // Input -> Merger
-        const destinationChannel = i * numChannelsPerInput + j
+        const destinationChannel = startChannel + j
+        // TODO: is this actually connecting the channels properly? It might 
+        // just be duplicating the channel across the merger inputs.
         input.connect(merger, 0, destinationChannel)
       }
+      startChannel += numChannels
       inputNodes.push(input)
     }
-    return inputNodes
+    // TODO: refactor this logic into a general method for expanding / flattening channels.
+    const outputNodes = []
+    const outputSplitter = this.audioContext.createChannelSplitter(outputSpec.totalNumChannels)
+    processorNode.connect(outputSplitter)
+    startChannel = 0
+    for (const numChannels of outputSpec.numChannelsPerStream) {
+      const outputMerger = this.audioContext.createChannelMerger(numChannels)
+      for (const j of range(numChannels)) {
+        outputSplitter.connect(outputMerger, startChannel + j, j)
+      }
+      startChannel += numChannels
+      outputNodes.push(outputMerger)
+    }
+
+    return {
+      inputs: inputNodes,
+      outputs: outputNodes
+    }
   }
 
   private defineAudioProcessHandler(processor: ScriptProcessorNode) {
@@ -238,9 +280,8 @@ class ScriptProcessorExecutionContext<D extends AudioDimension> extends AudioExe
       sampleRate: this.audioContext.sampleRate,
       getCurrentTime: () => this.audioContext.currentTime,
       getFrameIndex: () => frameIndex,
-      numInputs: this.numInputs,
-      numChannelsPerInput: this.numChannelsPerInput,
-      numOutputChannels: this.numOutputChannels,
+      numChannelsPerInput: this.inputSpec.numChannelsPerStream,
+      numChannelsPerOutput: this.outputSpec.numChannelsPerStream,
       windowSize: this.windowSize,
       dimension: this.dimension
     })
@@ -256,24 +297,29 @@ class ScriptProcessorExecutionContext<D extends AudioDimension> extends AudioExe
     processor.addEventListener(constants.EVENT_AUDIOPROCESS, handler)
   }
   /**
-   * Split out a flattened array of channels into separate inputs.
+   * Split out a flattened array of channels into separate inputs/outputs.
    */
-  protected deinterleaveInputs(flatInputs: Float32Array[]): Float32Array[][] {
-    const inputs = []
-    for (let i = 0; i < this.numInputs; i++) {
+  protected groupChannels(
+    flatChannels: Float32Array[],
+    channelsPerGroup: number[]
+  ): Float32Array[][] {
+    const groups = []
+    let startIndex = 0
+    for (let i = 0; i < channelsPerGroup.length; i++) {
       const input = []
-      for (let c = 0; c < this.numChannelsPerInput; c++) {
-        const flatIndex = i * this.numChannelsPerInput + c
-        input.push(flatInputs[flatIndex])
+      for (let c = 0; c < channelsPerGroup[i]; c++) {
+        const flatIndex = startIndex + c
+        input.push(flatChannels[flatIndex])
       }
-      inputs.push(input)
+      groups.push(input)
+      startIndex += channelsPerGroup[i]
     }
-    return inputs
+    return groups
   }
   private processAudioEvent(
     event: AudioProcessingEvent,
     contextFactory: SignalProcessingContextFactory<D>
-  ): number {
+  ): number[] {
     const inputChunk: Float32Array[] = []
     const outputChunk: Float32Array[] = []
     for (let c = 0; c < event.inputBuffer.numberOfChannels; c++) {
@@ -282,81 +328,100 @@ class ScriptProcessorExecutionContext<D extends AudioDimension> extends AudioExe
     for (let c = 0; c < event.outputBuffer.numberOfChannels; c++) {
       outputChunk.push(event.outputBuffer.getChannelData(c))
     }
-    const inputChunks = this.deinterleaveInputs(inputChunk)
-    return this.processAudioFrame(inputChunks, outputChunk, contextFactory)
+    const inputChunks = this.groupChannels(inputChunk, this.inputSpec.numChannelsPerStream)
+    const outputChunks = this.groupChannels(outputChunk, this.outputSpec.numChannelsPerStream)
+    return this.processAudioFrame(inputChunks, outputChunks, contextFactory)
   }
 }
 
-export class AudioTransformComponent extends BaseComponent {
-  [idx: number]: AudioRateInput
-  readonly output: AudioRateOutput
-  numInputs: number
-  numChannelsPerInput: number
+export class AudioTransformComponent<D extends AudioDimension = "none"> extends BaseComponent {
+  inputSpec: StreamSpec
+  outputSpec: StreamSpec
+  protected executionContext: AudioExecutionContext<D>
 
   constructor(
     public fn: Function,
+    // @ts-ignore Could be initialized with different subtype.
     { dimension = "none",
       windowSize = undefined,
-      inputNames = undefined,
-      numInputs = undefined,
-      numChannelsPerInput = 2,
-      numOutputChannels = undefined,
+      inputSpec,
+      outputSpec,
       useWorklet
     }: {
-      dimension?: AudioDimension,
+      dimension?: D,
       windowSize?: number,
-      inputNames?: ((string | number))[],
-      numInputs?: number,
-      numChannelsPerInput?: number,
-      numOutputChannels?: number,
+      inputSpec?: StreamSpec,
+      outputSpec?: StreamSpec,
       useWorklet?: boolean
     } = {}
   ) {
     super()
-    useWorklet ??= this.config.useWorkletByDefault
     // Properties.
-    if (inputNames != undefined) {
-      if (numInputs != undefined && numInputs != inputNames.length) {
-        throw new Error(`If both numInputs and inputNames are provided, they must match. Given numInputs=${numInputs}, inputNames=[${inputNames}]`)
-      }
-    } else {
-      inputNames = this.inferParamNames(fn, numChannelsPerInput, numInputs)
+    if (inputSpec == undefined) {
+      const names = this.inferParamNames(fn)
+      inputSpec = new StreamSpec({ names })
+    } else if (inputSpec.hasNumberedNames) {
+      inputSpec.names = this.inferParamNames(fn, inputSpec)
     }
-    numInputs ??= inputNames.length
-    this.numInputs = numInputs
-    this.numChannelsPerInput = numChannelsPerInput
+
+    outputSpec ??= new StreamSpec({ numStreams: 1 })
+    useWorklet ??= this.config.useWorkletByDefault
+
     // Handles audio graph creation.
-    const executionContext = AudioExecutionContext.create(fn, {
+    this.executionContext = this._.AudioExecutionContext.create(fn, {
       dimension,
       windowSize,
-      numInputs,
-      numChannelsPerInput,
-      numOutputChannels,
+      inputSpec,
+      outputSpec,
       useWorklet,
     })
 
     // I/O.
-    for (const i of range(numInputs)) {
-      this[inputNames[i]] = this.defineAudioInput(
-        inputNames[i],
-        executionContext.inputs[i]
+    for (const [i, name] of enumerate(inputSpec.names)) {
+      const propName = "$" + name
+      // @ts-ignore No index signature.
+      this[propName] = this.defineAudioInput(
+        propName,
+        this.executionContext.inputs[i]
       )
-      // Numbered alias.
-      this[i] = this.defineInputAlias(i, this[inputNames[i]])
+      // Numbered alias, only present in .inputs.
+      // @ts-ignore No index signature.
+      this.defineInputAlias(i, this[propName])
     }
-    this.output = this.defineAudioOutput('output', executionContext.output)
+    for (const [i, name] of enumerate(outputSpec.names)) {
+      const propName = "$" + name
+      // @ts-ignore No index signature.
+      this[propName] = this.defineAudioOutput(
+        propName,
+        this.executionContext.outputs[i]
+      )
+      // Numbered alias, only present in .outputs
+      // @ts-ignore No index signature.
+      this.defineOutputAlias(i, this[propName])
+    }
+    // TODO: this should be automatic, aliases should not count.
+    if (inputSpec.numStreams == 1) {
+      // @ts-ignore No index signature.
+      this.setDefaultInput(this["$" + inputSpec.names[0]])
+    }
+    if (outputSpec.numStreams == 1) {
+      // @ts-ignore No index signature.
+      this.setDefaultOutput(this["$" + outputSpec.names[0]])
+    }
+    this.inputSpec = inputSpec
+    this.outputSpec = outputSpec
   }
 
   private inferParamNames(
     fn: Function,
-    numChannelsPerInput: number,
-    numInputs?: number,
+    inputSpec?: StreamSpec,
   ): (string | number)[] {
-    const maxSafeInputs = Math.floor(constants.MAX_CHANNELS / numChannelsPerInput)
+    let numInputs = inputSpec?.numStreams
+    const maxSafeInputs = Math.floor(constants.MAX_CHANNELS / constants.DEFAULT_NUM_CHANNELS)
     let descriptor;
     try {
       descriptor = describeFunction(fn)
-    } catch (e) {
+    } catch (e: any) {
       numInputs ??= maxSafeInputs
       console.warn(`Unable to infer the input signature from the given function. Pass inputNames directly in the ${this._className} constructor instead. Defaulting to ${numInputs} inputs, named by their index.\nOriginal error: ${e.message}`)
       return range(numInputs)
@@ -366,10 +431,10 @@ export class AudioTransformComponent extends BaseComponent {
     // use the first few.
     if (numInputs == undefined) {
       if (descriptor.maxArgs > maxSafeInputs) {
-        console.warn(`Given a function that takes up to ${descriptor.maxArgs} inputs.\nBecause only ${constants.MAX_CHANNELS} channels can be processed by each WebAudio node and each input has ${numChannelsPerInput} channels, only values for the first ${maxSafeInputs} inputs will be used. To suppress this warning, pass numInputs directly in the ${this._className} constructor.`)
+        console.warn(`Given a function that takes up to ${descriptor.maxArgs} inputs.\nBecause only ${constants.MAX_CHANNELS} channels can be processed by each WebAudio node and each input has ${constants.DEFAULT_NUM_CHANNELS} channels, only values for the first ${maxSafeInputs} inputs will be used. To suppress this warning, pass numInputs directly in the ${this._className} constructor.`)
         numInputs = maxSafeInputs
       } else {
-        numInputs = descriptor.maxArgs
+        numInputs = <number>descriptor.maxArgs
       }
     } else if (numInputs < descriptor.minArgs) {
       throw new Error(`Given a function with ${descriptor.minArgs} required parameters, but expected no more than the supplied value of numInputs (${numInputs}) to ensure inputs are not undefined during signal processing.`)

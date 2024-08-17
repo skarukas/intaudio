@@ -13,9 +13,9 @@ export class FFTInput extends CompoundInput<{
   phase: AudioRateInput,
   sync: AudioRateInput
 }> {
-  magnitude: AudioRateInput
-  phase: AudioRateInput
-  sync: AudioRateInput
+  magnitude!: AudioRateInput
+  phase!: AudioRateInput
+  sync!: AudioRateInput
   // TODO: add fftSize etc.
   constructor(
     public name: string | number,

@@ -10,8 +10,14 @@ export class BufferComponent extends BaseComponent {
             numberOfInputs: 1,
             numberOfOutputs: 1,
             outputChannelCount: [numChannels],
+            processorOptions: {
+                buffer,
+                bufferId: buffer ? getBufferId(buffer) : undefined
+            }
         });
+        // @ts-ignore Property undefined.
         this.worklet['__numInputChannels'] = numChannels;
+        // @ts-ignore Property undefined.
         this.worklet['__numOutputChannels'] = numChannels;
         // Input
         this.buffer = this.defineControlInput('buffer', buffer, true).ofType(AudioBuffer);

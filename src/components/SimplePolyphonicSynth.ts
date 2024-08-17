@@ -11,7 +11,7 @@ type SoundNode = {
   isPlaying: boolean,
   // Unique identifier to help associate NOTE_OFF events with the correct
   // oscillator.
-  key: string
+  key: string | undefined
 }
 
 export class SimplePolyphonicSynth extends BaseComponent {

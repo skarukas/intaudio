@@ -16,7 +16,7 @@ export class KnobDisplay extends RangeInputDisplay {
 }
 
 export class SliderDisplay extends RangeInputDisplay {
-  private $range: JQuery
+  private $range?: JQuery
 
   #getInputAttrs() {
     return {

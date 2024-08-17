@@ -1,56 +1,54 @@
-import { ChannelStacker } from "./components/ChannelStacker.js";
-import { BundleComponent } from "./components/BundleComponent.js";
 import { TimeMeasure } from "./shared/types.js";
-import { FunctionComponent } from "./components/FunctionComponent.js";
-import { AudioTransformComponent } from "./components/AudioTransformComponent.js";
-import { defineTimeRamp, isFunction, loadFile } from "./shared/util.js";
-import { AudioRateOutput } from "./io/output/AudioRateOutput.js";
-import { BaseComponent, BufferComponent, TimeVaryingSignal } from "./internals.js";
-import { AudioRecordingComponent } from "./components/AudioRecordingComponent.js";
-import { BufferWriterComponent } from "./components/BufferWriterComponent.js";
+import { defineTimeRamp, isFunction, isType, loadFile } from "./shared/util.js";
+import { BufferComponent } from "./internals.js";
+import { StreamSpec } from "./shared/StreamSpec.js";
 export function stackChannels(inputs) {
-    return ChannelStacker.fromInputs(inputs);
+    return this._.ChannelStacker.fromInputs(inputs);
 }
-export function generate(arg, timeMeasure = TimeMeasure.SECONDS) {
-    if (isFunction(arg)) {
-        return new TimeVaryingSignal(arg, timeMeasure);
+export function generate(fn, timeMeasure = TimeMeasure.SECONDS) {
+    if (isFunction(fn)) {
+        return new this._.TimeVaryingSignal(fn, timeMeasure);
     }
     else {
         throw new Error("not supported yet.");
     }
 }
 export function combine(inputs, fn, options = {}) {
-    if (inputs instanceof Array) {
-        return new AudioTransformComponent(fn, options).withInputs(...inputs);
+    const values = inputs instanceof Array ? inputs : Object.values(inputs);
+    // TODO: Also allow cases where the arguments aren't outputs, but values 
+    // themselves.
+    if (values.every(o => o.isControlStream)) {
+        // Needs to learn to handle float input I think.
+        return new this._.FunctionComponent(fn).withInputs(inputs);
     }
     else {
-        // Needs to learn to handle float input I think.
-        return new FunctionComponent(fn).withInputs(inputs);
+        console.log(values);
+        return new this._.AudioTransformComponent(fn, Object.assign(Object.assign({}, options), { inputSpec: new StreamSpec({ numStreams: values.length }) })).withInputs(...values);
     }
 }
 // TODO: make this work for inputs/outputs
 export function bundle(inputs) {
-    return new BundleComponent(inputs);
+    return new this._.BundleComponent(inputs);
 }
 // TODO: Potentially turn this into a component (?).
 export function ramp(units) {
-    return new AudioRateOutput('time', defineTimeRamp(AudioRateOutput.audioContext, units));
+    return new this._.AudioRateOutput('time', defineTimeRamp(this.config.audioContext, units));
 }
 export function read(fname) {
-    return loadFile(BaseComponent.audioContext, fname);
+    return loadFile(this.config.audioContext, fname);
 }
 export function bufferReader(arg) {
     const bufferComponent = new BufferComponent();
-    const buffer = typeof arg == 'string' ? read(arg) : arg;
+    const buffer = isType(arg, String) ? read.call(this, arg) : arg;
     bufferComponent.buffer.setValue(buffer);
     return bufferComponent;
 }
 export function bufferWriter(buffer) {
-    return new BufferWriterComponent(buffer);
+    return new this._.BufferWriterComponent(buffer);
 }
 export function recorder(sources) {
     sources = sources instanceof Array ? sources : [sources];
-    const component = new AudioRecordingComponent(sources.length);
-    sources.map((s, i) => s.connect(component[i]));
+    const component = new this._.AudioRecordingComponent(sources.length);
+    sources.map((s, i) => s.connect(component.inputs[i]));
     return component;
 }

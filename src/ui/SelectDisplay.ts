@@ -1,10 +1,9 @@
 import { SupportsSelect } from "../components/MidiInputDevice.js";
 import { VisualComponent } from "../components/base/VisualComponent.js";
-import { ControlInput } from "../io/input/ControlInput.js";
 import { BaseDisplay } from "./BaseDisplay.js";
 
-export class SelectDisplay< T extends SupportsSelect & VisualComponent> extends BaseDisplay<T> {
-  $select: JQuery<HTMLSelectElement>
+export class SelectDisplay<T extends SupportsSelect & VisualComponent> extends BaseDisplay<T> {
+  $select: JQuery<HTMLSelectElement> | undefined
 
   _display($root: JQuery<HTMLDivElement>) {
     // Create dropdown
@@ -16,6 +15,7 @@ export class SelectDisplay< T extends SupportsSelect & VisualComponent> extends 
     this.populateOptions()
   }
   private populateOptions() {
+    if (this.$select == undefined) return
     this.$select.empty()
     for (const { id, name: value } of this.component.selectOptions) {
       const $option = $(document.createElement('option'))

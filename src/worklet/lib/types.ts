@@ -16,7 +16,7 @@ export function toMultiChannelArray<T>(array: T[]): MultiChannelArray<T> {
     get(target, p, receiver) {
       if (p == "left") return target[0]
       if (p == "right") return target[1]
-      return target[p]
+      return Reflect.get(target, p, receiver)
     }
   })
   return <MultiChannelArray<T>>proxy

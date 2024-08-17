@@ -9,11 +9,29 @@ export class AbstractInput extends ToStringAndUUID {
         this.isRequired = isRequired;
         this.validate = () => null;
     }
+    get defaultInput() {
+        return this;
+    }
+    get isAudioStream() {
+        return this.defaultInput instanceof this._.AudioRateInput;
+    }
+    get isStftStream() {
+        return this.defaultInput instanceof this._.FFTInput;
+    }
+    get isControlStream() {
+        return this.defaultInput instanceof this._.ControlInput;
+    }
     __call__(value = constants.TRIGGER) {
         this.setValue(value);
     }
     trigger() {
         this.setValue(constants.TRIGGER);
+    }
+    toString() {
+        if (this.parent == undefined) {
+            return `${this._className}('${this.name}')`;
+        }
+        return `${this.parent._className}.inputs.${this.name}`;
     }
     ofType(type) {
         this.withValidator(createTypeValidator(type));

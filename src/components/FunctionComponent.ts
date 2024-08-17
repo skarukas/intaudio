@@ -1,26 +1,25 @@
-import { HybridInput } from "../io/input/HybridInput.js"
-import { HybridOutput } from "../io/output/HybridOutput.js"
 import { Connectable } from "../shared/base/Connectable.js"
 import { BaseComponent } from "./base/BaseComponent.js"
 import constants from "../shared/constants.js"
-import { createConstantSource } from "../shared/util.js"
+// @ts-ignore No d.ts file.
 import describeFunction from 'function-descriptor'
-import { AnyFn, Disconnect } from "../shared/types.js"
+import { AnyFn } from "../shared/types.js"
 import { AbstractInput } from "../io/input/AbstractInput.js"
+import { ControlInput } from "../io/input/ControlInput.js"
+import { ControlOutput } from "../io/output/ControlOutput.js"
 
+// TODO: create shared base class with AudioTransformComponent.
 export class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any, T5 = any, R = any> extends BaseComponent {
-  readonly $0: HybridInput<T0>;
-  readonly $1: HybridInput<T1>;
-  readonly $2: HybridInput<T2>;
-  readonly $3: HybridInput<T3>;
-  readonly $4: HybridInput<T4>;
-  readonly $5: HybridInput<T5>;
+  readonly $0?: ControlInput<T0>;
+  readonly $1?: ControlInput<T1>;
+  readonly $2?: ControlInput<T2>;
+  readonly $3?: ControlInput<T3>;
+  readonly $4?: ControlInput<T4>;
+  readonly $5?: ControlInput<T5>;
 
-  output: HybridOutput<R>
+  output: ControlOutput<R>
 
-  protected _orderedFunctionInputs: Array<HybridInput<any>> = []
-  protected _audioProcessor: ScriptProcessorNode
-  protected channelMerger: ChannelMergerNode
+  protected _orderedFunctionInputs: Array<ControlInput<any>> = []
 
   constructor(fn: Function)
   constructor(fn: () => R)
@@ -36,9 +35,6 @@ export class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any,
     const descriptor = describeFunction(fn)
     const parameters = descriptor.parameters
 
-    // TODO: This assumes each input is mono. This should not be a requirement.
-    let numChannelsPerInput = 1 // TODO: Have a way of getting this info
-    this._audioProcessor = this._createScriptProcessor(descriptor.maxArgs, numChannelsPerInput)
     for (let i = 0; i < parameters.length; i++) {
       const arg = parameters[i]
       const inputName = "$" + arg.name
@@ -52,101 +48,35 @@ export class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any,
       }
 
 
-      //
-      const passThroughInput = createConstantSource(this.audioContext)
       // Define input and its alias.
-      this[inputName] = this.defineHybridInput(inputName, passThroughInput.offset, constants.UNSET_VALUE, isRequired)
+      // @ts-ignore Improper index type.
+      this[inputName] = this.defineControlInput(inputName, constants.UNSET_VALUE, isRequired)
+      // @ts-ignore Improper index type.
       this[indexName] = this.defineInputAlias(indexName, this[inputName])
-      for (let c = 0; c < numChannelsPerInput; c++) {
-        const fromChannel = c
-        const toChannel = numChannelsPerInput * i + c
-        passThroughInput.connect(this.channelMerger, fromChannel, toChannel)
-      }
-      //
-
-      // this[inputName] = this._defineHybridInput(inputName, this._audioProcessor, _UNSET_VALUE, isRequired)
+      // @ts-ignore Improper index type.
       this._orderedFunctionInputs.push(this[inputName])
     }
-    let requiredArgs = parameters.filter(a => !a.hasDefault)
+    let requiredArgs = parameters.filter((a: any) => !a.hasDefault)
     if (requiredArgs.length == 1) {
+      // @ts-ignore Improper index type.
       this.setDefaultInput(this["$" + requiredArgs[0].name])
     }
-    // TODO: Change to splitter + merger to make the output size correct.
-    const out = createConstantSource(this.audioContext)
-    this._audioProcessor.connect(out.offset)
-    this.output = this.defineHybridOutput('output', out)
+
+    this.output = this.defineControlOutput('output')
     this.preventIOOverwrites()
   }
-  _createScriptProcessor(numInputs, numChannelsPerInput) {
-    const bufferSize = undefined  // 256
-    let numInputChannels = (numChannelsPerInput * numInputs) || 1
-    // TODO: I don't think the handling of channels is correct here because the 
-    // output still has N channels.
-    this.channelMerger = this.audioContext.createChannelMerger(numInputChannels)
-    let processor = this.audioContext.createScriptProcessor(bufferSize, numInputChannels, numChannelsPerInput)
-    this.channelMerger.connect(processor)
-
-    function _getTrueChannels(buffer) {
-      // Returns an array of length numChannelsPerInput, and the i'th entry
-      // contains the i'th channel for each input.
-      let inputsGroupedByChannel = []
-      for (let c = 0; c < numChannelsPerInput; c++) {
-        let channelData = []
-        for (let i = 0; i < numInputs; i++) {
-          channelData.push(buffer.getChannelData(c * numChannelsPerInput + i))
-        }
-        inputsGroupedByChannel.push(channelData)
-      }
-      return inputsGroupedByChannel
-    }
-    const handler = e => {
-      // Apply the function for each sample in each channel.
-      const inputChannels = _getTrueChannels(e.inputBuffer)
-      let outputChannels = []
-      for (let c = 0; c < numChannelsPerInput; c++) {
-        outputChannels.push(e.outputBuffer.getChannelData(c))
-      }
-      try {
-        this.#parallelApplyAcrossChannels(inputChannels, outputChannels)
-      } catch (e) {
-        processor.removeEventListener('audioprocess', handler)
-        e instanceof Disconnect || console.error(e)
-      }
-    }
-    processor.addEventListener('audioprocess', handler)
-    return processor
-  }
-  #parallelApplyAcrossChannels(inputChannels, outputChannels) {
-    for (let c = 0; c < inputChannels.length; c++) {
-      let outputChannel = outputChannels[c]
-      const inputChannel = inputChannels[c]
-      for (let i = 0; i < outputChannel.length; i++) {
-        // For the current sample and channel, apply the function across the
-        // inputs.
-        const inputs = inputChannel.map(inp => inp[i])
-        const res = this.fn(...inputs)
-        if (typeof res != 'number') {
-          throw new Error("FunctionComponents that operate on audio-rate inputs must return numbers. Given: " + (typeof res))
-        }
-        outputChannel[i] = res
-      }
-    }
-  }
-  inputDidUpdate<T>(input: HybridInput<T>, newValue: T) {
+  inputDidUpdate<T>(input: ControlInput<T>, newValue: T) {
     const args = this._orderedFunctionInputs.map(eachInput => eachInput.value)
     const result = this.fn(...args)
     this.output.setValue(result)
   }
-  process(event) {
-    return this.fn(event)
-  }
-  __call__(...inputs: Array<Connectable | unknown>): this;
-  __call__(inputDict: { [name: string]: Connectable | unknown }): this;
+  override __call__(...inputs: Array<Connectable | unknown>): this;
+  override __call__(inputDict: { [name: string]: Connectable | unknown }): this;
   override __call__(...inputs: any): this {
     return this.withInputs(...inputs)
   }
-  withInputs(...inputs: Array<Connectable | unknown>): this;
-  withInputs(inputDict: { [name: string]: Connectable | unknown }): this;
+  override withInputs(...inputs: Array<Connectable | unknown>): this;
+  override withInputs(inputDict: { [name: string]: Connectable | unknown }): this;
   override withInputs(...inputs: any): this {
     let inputDict: { [name: string]: Connectable | unknown } = {};
     if (inputs[0]?.connect) {  // instanceof Connectable

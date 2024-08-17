@@ -3,6 +3,7 @@ export class ChannelSplitter extends BaseComponent {
     constructor(...inputChannelGroups) {
         super();
         this.outputChannels = [];
+        this.inputChannelGroups = inputChannelGroups;
         this.length = inputChannelGroups.length;
         this.splitter = this.audioContext.createChannelSplitter();
         this.input = this.defineAudioInput('input', this.splitter);

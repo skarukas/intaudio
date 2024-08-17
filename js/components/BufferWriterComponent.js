@@ -8,9 +8,15 @@ export class BufferWriterComponent extends BaseComponent {
         const numChannels = (_a = buffer === null || buffer === void 0 ? void 0 : buffer.numberOfChannels) !== null && _a !== void 0 ? _a : 2;
         this.worklet = new AudioWorkletNode(this.audioContext, BUFFER_WRITER_WORKLET_NAME, {
             numberOfInputs: 2,
-            numberOfOutputs: 0
+            numberOfOutputs: 0,
+            processorOptions: {
+                buffer,
+                bufferId: buffer ? getBufferId(buffer) : undefined
+            }
         });
+        // @ts-ignore Property undefined.
         this.worklet['__numInputChannels'] = numChannels;
+        // @ts-ignore Property undefined.
         this.worklet['__numOutputChannels'] = numChannels;
         this.worklet.port.onmessage = event => {
             this.handleMessage(event.data);

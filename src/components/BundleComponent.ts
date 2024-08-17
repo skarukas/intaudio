@@ -3,7 +3,7 @@ import { ComponentInput } from "../io/input/ComponentInput.js";
 import { ControlInput } from "../io/input/ControlInput.js";
 import { AbstractOutput } from "../io/output/AbstractOutput.js";
 import { Connectable } from "../shared/base/Connectable.js";
-import { CanBeConnectedTo, ObjectOrArrayOf } from "../shared/types.js";
+import { CanBeConnectedTo, ObjectOf, ObjectOrArrayOf } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 import { Component } from "./base/Component.js";
 import { FunctionComponent } from "./FunctionComponent.js";
@@ -12,11 +12,6 @@ import { FunctionComponent } from "./FunctionComponent.js";
  * Represents a group of components that can be operated on independently.
  */
 export class BundleComponent extends BaseComponent implements Component, Iterable<Component> {
-  isBypassed: ControlInput<boolean>;
-  isMuted: ControlInput<boolean>;
-  triggerInput: ControlInput<symbol>;
-  outputs: { [name: string]: AbstractOutput<any>; };
-  inputs: { [name: string]: AbstractInput<any>; };
   protected componentObject: { [key: number | string]: Component }
   protected componentValues: Component[]
 
@@ -33,9 +28,13 @@ export class BundleComponent extends BaseComponent implements Component, Iterabl
       this.componentObject = components
     }
     for (const key in this.componentObject) {
+      // @ts-ignore No index signature.
+      // TODO: export intersection with index signature type.
       this[key] = this.componentObject[key]
       this.defineInputAlias(key, this.componentObject[key].getDefaultInput())
-      this.defineOutputAlias(key, this.componentObject[key].getDefaultOutput())
+      if (this.componentObject[key].defaultOutput) {
+        this.defineOutputAlias(key, this.componentObject[key].defaultOutput)
+      }
     }
   }
   [Symbol.iterator](): Iterator<Component> {
@@ -44,7 +43,7 @@ export class BundleComponent extends BaseComponent implements Component, Iterabl
   getDefaultInput(): ComponentInput<unknown> {
     throw new Error("Method not implemented.");
   }
-  getDefaultOutput(): AbstractOutput<unknown> {
+  get defaultOutput(): AbstractOutput<unknown> {
     throw new Error("Method not implemented.");
   }
   setBypassed(isBypassed?: boolean): void {
@@ -54,9 +53,9 @@ export class BundleComponent extends BaseComponent implements Component, Iterabl
     this.getBundledResult('setMuted', isMuted)
   }
   protected getBundledResult(fnName: string, ...inputs: any[]) {
-    const returnValues = {}
+    const returnValues: ObjectOf<any> = {}
     for (const key in this.componentObject) {
-      returnValues[key] = this.componentObject[key][fnName](...inputs)
+      returnValues[key] = (<any>this.componentObject[key])[fnName](...inputs)
     }
     return new BundleComponent(returnValues)
   }
@@ -81,8 +80,9 @@ export class BundleComponent extends BaseComponent implements Component, Iterabl
   setValues(valueObj: any) {
     return this.getBundledResult('setValues', valueObj)
   }
-  wasConnectedTo(other: Connectable): void {
-    this.getBundledResult('wasConnectedTo', other)
+  wasConnectedTo<T>(source: AbstractOutput<T>): AbstractOutput<T> {
+    this.getBundledResult('wasConnectedTo', source)
+    return source
   }
   // TODO: doesn't work.
   sampleSignal(samplePeriodMs?: number): Component {

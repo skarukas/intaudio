@@ -1,3 +1,4 @@
+import { isType } from "../../shared/util.js"
 import { MemoryBuffer } from "./MemoryBuffer.js"
 import { AudioDimension, SignalProcessingFnInput } from "./types.js"
 
@@ -17,14 +18,14 @@ export class SignalProcessingContext<D extends AudioDimension> {
    * 
    * Only defined when there is no channel dimension in the data, e.g. when `dimension` is `"time"` or `"none"`.
    */
-  channelIndex: number
+  channelIndex: number | undefined
 
   /**
    * The index of the sample currently being processed, between 0 and `windowSize -1`.
    * 
    * Only defined when there is no time dimension in the data, e.g. when `dimension` is `"channel"` or `"none"`.
    */
-  sampleIndex: number
+  sampleIndex: number | undefined
 
   /**
    * The length of the audio frame currently being processed.
@@ -40,10 +41,13 @@ export class SignalProcessingContext<D extends AudioDimension> {
    */
   currentTime: number
 
+  numInputs: number
+  numOutputs: number
+
   protected maxInputLookback: number = 0
   protected maxOutputLookback: number = 0
-  protected fixedInputLookback: number = undefined
-  protected fixedOutputLookback: number = undefined
+  protected fixedInputLookback: number = -1
+  protected fixedOutputLookback: number = -1
 
   constructor(
     protected inputMemory: MemoryBuffer<SignalProcessingFnInput<D>[]>,
@@ -53,16 +57,29 @@ export class SignalProcessingContext<D extends AudioDimension> {
       currentTime,
       frameIndex,
       sampleRate,
+      numInputs,
+      numOutputs,
       channelIndex = undefined,
       sampleIndex = undefined
+    }: {
+      windowSize: number,
+      currentTime: number,
+      frameIndex: number,
+      sampleRate: number,
+      numInputs: number,
+      numOutputs: number,
+      channelIndex?: number,
+      sampleIndex?: number
     }
   ) {
-    this.currentTime = currentTime + (sampleIndex / sampleRate)
+    this.currentTime = currentTime + ((sampleIndex ?? 0) / sampleRate)
     this.windowSize = windowSize
     this.sampleIndex = sampleIndex
     this.channelIndex = channelIndex
     this.frameIndex = frameIndex
     this.sampleRate = sampleRate
+    this.numInputs = numInputs
+    this.numOutputs = numOutputs
   }
   // TODO: consider making this 1-based to make previousInputs(0) be the current.
   previousInputs(t: number = 0): SignalProcessingFnInput<D>[] {
@@ -71,7 +88,7 @@ export class SignalProcessingContext<D extends AudioDimension> {
     this.maxInputLookback = Math.max(t + 1, this.maxInputLookback)
     return this.inputMemory.get(t)
   }
-  previousOutput(t: number = 0): SignalProcessingFnInput<D> {
+  previousOutputs(t: number = 0): SignalProcessingFnInput<D> {
     // Inputs may be float32 which will not represent an int perfectly.
     t = Math.round(t)
     this.maxOutputLookback = Math.max(t + 1, this.maxOutputLookback)
@@ -90,10 +107,12 @@ export class SignalProcessingContext<D extends AudioDimension> {
   execute(
     fn: Function,
     inputs: SignalProcessingFnInput<D>[]
-  ): SignalProcessingFnInput<D> {
+  ): SignalProcessingFnInput<D>[] {
     // Execute the function, making the Context properties and methods available
     // within the user-supplied function.
-    const output = fn.bind(this)(...inputs)
+    const rawOutput = fn.bind(this)(...inputs)
+    // TODO: also fix if rawOutput.length != numOutputs
+    const outputs: any = !isType(rawOutput, Array) || this.numOutputs == 1 && rawOutput.length != 1 ? [rawOutput] : rawOutput
 
     // If the function tried to access past inputs or force-rezised the memory, 
     // resize.
@@ -102,15 +121,15 @@ export class SignalProcessingContext<D extends AudioDimension> {
 
     // Update memory after resizing.
     this.inputMemory.add(inputs)
-    this.outputMemory.add(output)
-    return output
+    this.outputMemory.add(outputs)
+    return outputs
   }
   protected static resizeMemory<T>(
     memory: MemoryBuffer<T>,
     maxLookback: number,
     lookbackOverride: number
   ) {
-    if (lookbackOverride != undefined) {
+    if (lookbackOverride > 0) {
       memory.setSize(lookbackOverride)
     } else if (maxLookback > memory.length) {
       memory.setSize(maxLookback)

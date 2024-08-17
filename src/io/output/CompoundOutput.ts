@@ -1,4 +1,5 @@
 import { Component } from "../../components/base/Component.js";
+import { createMultiChannelView } from "../../shared/multichannel.js";
 import { CanBeConnectedTo, KeysLike, MultiChannel, ObjectOf } from "../../shared/types.js";
 import { MultiChannelArray } from "../../worklet/lib/types.js";
 import { CompoundInput } from "../input/CompoundInput.js";
@@ -14,7 +15,7 @@ export class CompoundOutput<OutputsDict extends ObjectOf<AbstractOutput>>
   implements MultiChannel<AbstractOutput> {
   connect<T extends Component>(destination: T): T;
   connect<T extends CanBeConnectedTo>(destination: T): Component;
-  connect(destination) {
+  connect(destination: CanBeConnectedTo) {
     let { component, input } = this.getDestinationInfo(destination)
     if (input instanceof CompoundInput) {
       // First priority: try to connect all to same-named inputs.
@@ -37,7 +38,7 @@ export class CompoundOutput<OutputsDict extends ObjectOf<AbstractOutput>>
   }
 
   channels: MultiChannelArray<this>;
-  activeChannel: number = undefined
+  activeChannel: number | undefined = undefined
   outputs: OutputsDict = <any>{}
   get keys() {
     return new Set(Object.keys(this.outputs))
@@ -48,16 +49,24 @@ export class CompoundOutput<OutputsDict extends ObjectOf<AbstractOutput>>
   get right(): AbstractOutput<any> {
     return this.channels[1] ?? this.left
   }
+  private _defaultOutput: AbstractOutput | undefined
+  get defaultOutput(): AbstractOutput | undefined {
+    return this._defaultOutput
+  }
   constructor(
     public name: string | number,
     outputs: OutputsDict,
     public parent?: Component,
-    public defaultOutput?: AbstractOutput
+    defaultOutput?: AbstractOutput
   ) {
     super(name, parent)
+    this._defaultOutput = defaultOutput
+
+    let hasMultichannelInput = false
     // Define 'this.outputs' and 'this' interface for underlying inputs.
     Object.keys(outputs).map(name => {
       const output = outputs[name]
+      hasMultichannelInput ||= output instanceof AudioRateOutput
       if (Object.prototype.hasOwnProperty(name)) {
         console.warn(`Cannot create top-level CompoundOutput property '${name}' because it is reserved. Use 'outputs.${name}' instead.`)
       }
@@ -70,6 +79,7 @@ export class CompoundOutput<OutputsDict extends ObjectOf<AbstractOutput>>
         })
       }
     })
+    this.channels = createMultiChannelView(this, hasMultichannelInput)
   }
   protected mapOverOutputs<T>(
     fn: (i: AbstractOutput, name: string | number) => T
@@ -82,6 +92,6 @@ export class CompoundOutput<OutputsDict extends ObjectOf<AbstractOutput>>
   }
   get numOutputChannels() {
     const ic = this.mapOverOutputs(i => i.numOutputChannels)
-    return Math.max(...Object.values(ic))
+    return Math.max(...Object.values(<ObjectOf<number>>ic))
   }
 }

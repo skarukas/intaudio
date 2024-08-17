@@ -7,6 +7,7 @@ export function getNumInputChannels(node: WebAudioConnectable) {
   } else if (node instanceof ChannelMergerNode) {
     return node.numberOfInputs
   }
+  // @ts-ignore Property undefined.
   return node['__numInputChannels'] ?? (node instanceof AudioNode ? node.channelCount : 1)
 }
 
@@ -16,6 +17,7 @@ export function getNumOutputChannels(node: WebAudioConnectable) {
   } else if (node instanceof ChannelMergerNode) {
     return node.numberOfInputs
   }
+  // @ts-ignore Property undefined.
   return node['__numOutputChannels']
     ?? (node instanceof AudioNode ? node.channelCount : 1)
 }
@@ -24,7 +26,7 @@ export function createMultiChannelView<T extends MultiChannel>(
   multiChannelIO: T,
   supportsMultichannel: boolean
 ): MultiChannelArray<T> {
-  let channels = []
+  let channels: T[] = []
   if (!supportsMultichannel) {
     return toMultiChannelArray(channels)
   }
@@ -58,8 +60,8 @@ function createChannelView<T extends MultiChannel>(
 function simpleConnect(
   source: AudioNode,
   destination: WebAudioConnectable,
-  fromChannel: number = undefined,
-  toChannel: number = undefined
+  fromChannel: number = 0,
+  toChannel: number = 0
 ) {
   if (destination instanceof AudioParam) {
     return source.connect(destination, fromChannel)
@@ -82,8 +84,8 @@ export function connectWebAudioChannels(
   audioContext: AudioContext,
   source: AudioNode,
   destination: WebAudioConnectable,
-  fromChannel: number = undefined,
-  toChannel: number = undefined
+  fromChannel: number | undefined = undefined,
+  toChannel: number | undefined = undefined
 ) {
   if (fromChannel != undefined) {
     // Source -> Splitter -> [Dest]

@@ -19,7 +19,6 @@ type O = {
 }
 
 export class ADSR extends BaseComponent<I, O> implements I, O {
-  readonly outputs: { audioOutput: AudioRateOutput }
   readonly attackEvent: ControlInput<any>
   readonly releaseEvent: ControlInput<any>
   readonly attackDurationMs: ControlInput<number>
@@ -52,7 +51,7 @@ export class ADSR extends BaseComponent<I, O> implements I, O {
     this.state = { noteStart: 0, attackFinish: 0, decayFinish: 0 }
     this.preventIOOverwrites()
   }
-  inputDidUpdate(input, newValue) {
+  inputDidUpdate<T>(input: ControlInput<T>, newValue: T) {
     const state = this.state
     if (input == this.attackEvent) {
       state.noteStart = this.now()

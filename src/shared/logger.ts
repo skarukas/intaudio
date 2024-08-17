@@ -1,6 +1,5 @@
 import { AudioRateOutput } from "../io/output/AudioRateOutput.js";
 import { ToStringAndUUID } from "./base/ToStringAndUUID.js";
-import { getNumOutputChannels } from "./multichannel.js";
 import { range } from "./util.js";
 
 type NodeInfo = {
@@ -25,7 +24,7 @@ function getCurrentSignalValue(analyzer: AnalyserNode): number {
 
 export class SignalLogger extends ToStringAndUUID {
   analysers: NodeInfo[] = []
-  protected interval: number
+  protected interval: number | undefined
 
   constructor(public samplePeriodMs: number = 1000) {
     super()
@@ -40,7 +39,7 @@ export class SignalLogger extends ToStringAndUUID {
     }, this.samplePeriodMs)
   }
   stop() {
-    this.interval && clearInterval(this.interval)
+    clearInterval(this.interval)
   }
   /**
    * Register a node to be monitored.

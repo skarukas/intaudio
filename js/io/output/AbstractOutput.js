@@ -13,6 +13,15 @@ export class AbstractOutput extends BaseConnectable {
         this.withValidator(createTypeValidator(type));
         return this;
     }
+    toString() {
+        if (this.parent == undefined) {
+            return `${this._className}('${this.name}')`;
+        }
+        return `${this.parent._className}.outputs.${this.name}`;
+    }
+    get defaultOutput() {
+        return this;
+    }
     /**
      * The validator function can either throw an error or return false.
      */

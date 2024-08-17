@@ -12,6 +12,7 @@ export class ChannelSplitter extends BaseComponent implements Iterable<AudioRate
 
   constructor(...inputChannelGroups: number[][]) {
     super()
+    this.inputChannelGroups = inputChannelGroups
     this.length = inputChannelGroups.length
     this.splitter = this.audioContext.createChannelSplitter()
     this.input = this.defineAudioInput('input', this.splitter)

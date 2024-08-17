@@ -17,13 +17,15 @@ export class VisualComponent extends BaseComponent {
     }
     static adjustSize($root) {
         const maxHeight = $root.children().get().reduce((acc, curr) => {
+            var _b;
             const top = +$(curr).css('top').replace('px', '');
-            const height = $(curr).outerHeight(true);
+            const height = (_b = $(curr).outerHeight(true)) !== null && _b !== void 0 ? _b : 0;
             return Math.max(acc, top + height);
         }, 0);
         const maxWidth = $root.children().get().reduce((acc, curr) => {
+            var _b;
             const left = +$(curr).css('left').replace('px', '');
-            const width = $(curr).outerWidth(true);
+            const width = (_b = $(curr).outerWidth(true)) !== null && _b !== void 0 ? _b : 0;
             return Math.max(acc, left + width);
         }, 0);
         $root.css({
@@ -32,24 +34,29 @@ export class VisualComponent extends BaseComponent {
         });
     }
     static rotate($container, rotateDeg) {
+        var _b, _c;
         $container.css({
             "transform-origin": "top left",
             transform: `rotate(${rotateDeg}deg)`
         });
-        const parentRect = $container.parent().get(0).getBoundingClientRect();
+        const parentRect = (_b = $container.parent().get(0)) === null || _b === void 0 ? void 0 : _b.getBoundingClientRect();
+        const rect = (_c = $container.get(0)) === null || _c === void 0 ? void 0 : _c.getBoundingClientRect();
+        if (rect == undefined || parentRect == undefined) {
+            throw new Error("Both $container and its parent must exist.");
+        }
         const top = +$container.css("top").replace("px", "");
         const left = +$container.css("left").replace("px", "");
-        const rect = $container.get(0).getBoundingClientRect();
         $container.css({
             top: top - rect.top + parentRect.top,
             left: left - rect.left + parentRect.left
         });
     }
     addToDom(iaRootElement, { left = 0, top = 0, width = undefined, height = undefined, rotateDeg = 0 } = {}) {
+        var _b, _c;
         __classPrivateFieldGet(this, _VisualComponent_instances, "m", _VisualComponent_assertDisplayIsUsable).call(this);
         const cls = this.constructor;
-        width !== null && width !== void 0 ? width : (width = cls.defaultWidth);
-        height !== null && height !== void 0 ? height : (height = cls.defaultHeight);
+        width !== null && width !== void 0 ? width : (width = (_b = cls.defaultWidth) !== null && _b !== void 0 ? _b : 0);
+        height !== null && height !== void 0 ? height : (height = (_c = cls.defaultHeight) !== null && _c !== void 0 ? _c : 0);
         // Root.
         this.$root = $(iaRootElement).addClass('ia-root');
         if (!this.$root.length) {

@@ -1,3 +1,4 @@
+import { createMultiChannelView } from "../../shared/multichannel.js";
 import { CompoundInput } from "../input/CompoundInput.js";
 import { AbstractOutput } from "./AbstractOutput.js";
 import { AudioRateOutput } from "./AudioRateOutput.js";
@@ -34,16 +35,21 @@ export class CompoundOutput extends AbstractOutput {
         var _a;
         return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
     }
+    get defaultOutput() {
+        return this._defaultOutput;
+    }
     constructor(name, outputs, parent, defaultOutput) {
         super(name, parent);
         this.name = name;
         this.parent = parent;
-        this.defaultOutput = defaultOutput;
         this.activeChannel = undefined;
         this.outputs = {};
+        this._defaultOutput = defaultOutput;
+        let hasMultichannelInput = false;
         // Define 'this.outputs' and 'this' interface for underlying inputs.
         Object.keys(outputs).map(name => {
             const output = outputs[name];
+            hasMultichannelInput || (hasMultichannelInput = output instanceof AudioRateOutput);
             if (Object.prototype.hasOwnProperty(name)) {
                 console.warn(`Cannot create top-level CompoundOutput property '${name}' because it is reserved. Use 'outputs.${name}' instead.`);
             }
@@ -56,6 +62,7 @@ export class CompoundOutput extends AbstractOutput {
                 });
             }
         });
+        this.channels = createMultiChannelView(this, hasMultichannelInput);
     }
     mapOverOutputs(fn) {
         const res = {};

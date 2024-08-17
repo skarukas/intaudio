@@ -319,6 +319,35 @@ var main$1 = {
   registerAndCreateFactoryFn
 };
 
+var constants = Object.freeze({
+    MUTED_CLASS: "component-muted",
+    BYPASSED_CLASS: "component-bypassed",
+    COMPONENT_CONTAINER_CLASS: "modular-container",
+    KEYBOARD_KEY_CLASS: "keyboard-key",
+    KEYBOARD_KEY_PRESSED_CLASS: "keyboard-key-pressed",
+    BYPASS_INDICATOR_CLASS: "bypass-indicator",
+    MONITOR_VALUE_CLASS: "monitor-value",
+    MONITOR_OUT_OF_BOUNDS_CLASS: "monitor-out-of-bounds",
+    UNINITIALIZED_CLASS: "component-uninitialized",
+    BANG_CLASS: "bang",
+    BANG_PRESSED_CLASS: "bang-pressed",
+    MIDI_LEARN_LISTENING_CLASS: "midi-learn-listening",
+    MIDI_LEARN_ASSIGNED_CLASS: "midi-learn-assigned",
+    EVENT_AUDIOPROCESS: "audioprocess",
+    EVENT_MOUSEDOWN: "mousedown",
+    EVENT_MOUSEUP: "mouseup",
+    TRIGGER: Symbol("trigger"),
+    MIN_PLAYBACK_RATE: 0.0625,
+    MAX_PLAYBACK_RATE: 16.0,
+    MAX_CHANNELS: 32,
+    DEFAULT_NUM_CHANNELS: 2,
+    MAX_ANALYZER_LENGTH: 32768,
+    // Special placeholder for when an input both has no defaultValue and it has 
+    // never been set.
+    // TODO: need special value?
+    UNSET_VALUE: undefined
+});
+
 var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
 function getDefaultExportFromCjs (x) {
@@ -348,6 +377,11 @@ class TypedConfigurable extends CallableInstance$1 {
             writable: true,
             configurable: true
         });
+        Object.defineProperty(this, 'length', {
+            value: this.constructor.length,
+            writable: true,
+            configurable: true
+        });
     }
     __call__(__forbiddenCall) {
         throw new Error(`Object of type ${this.constructor.name} is not a function.`);
@@ -373,32 +407,68 @@ class ToStringAndUUID extends TypedConfigurable {
     }
 }
 
-var constants = Object.freeze({
-    MUTED_CLASS: "component-muted",
-    BYPASSED_CLASS: "component-bypassed",
-    COMPONENT_CONTAINER_CLASS: "modular-container",
-    KEYBOARD_KEY_CLASS: "keyboard-key",
-    KEYBOARD_KEY_PRESSED_CLASS: "keyboard-key-pressed",
-    BYPASS_INDICATOR_CLASS: "bypass-indicator",
-    MONITOR_VALUE_CLASS: "monitor-value",
-    MONITOR_OUT_OF_BOUNDS_CLASS: "monitor-out-of-bounds",
-    UNINITIALIZED_CLASS: "component-uninitialized",
-    BANG_CLASS: "bang",
-    BANG_PRESSED_CLASS: "bang-pressed",
-    MIDI_LEARN_LISTENING_CLASS: "midi-learn-listening",
-    MIDI_LEARN_ASSIGNED_CLASS: "midi-learn-assigned",
-    EVENT_AUDIOPROCESS: "audioprocess",
-    EVENT_MOUSEDOWN: "mousedown",
-    EVENT_MOUSEUP: "mouseup",
-    TRIGGER: Symbol("trigger"),
-    MIN_PLAYBACK_RATE: 0.0625,
-    MAX_PLAYBACK_RATE: 16.0,
-    MAX_CHANNELS: 32,
-    MAX_ANALYZER_LENGTH: 32768,
-    // Special placeholder for when an input both has no defaultValue and it has 
-    // never been set.
-    // TODO: need special value?
-    UNSET_VALUE: undefined
+var __classPrivateFieldSet = (undefined && undefined.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
+    if (kind === "m") throw new TypeError("Private method is not writable");
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
+    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
+};
+var __classPrivateFieldGet$7 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
+    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+};
+var _BaseEvent_defaultIgnored;
+class BaseEvent extends ToStringAndUUID {
+    constructor() {
+        super(...arguments);
+        this._isLocal = false;
+        _BaseEvent_defaultIgnored.set(this, false);
+    }
+    ignoreDefault() {
+        __classPrivateFieldSet(this, _BaseEvent_defaultIgnored, true, "f");
+    }
+    defaultIsIgnored() {
+        return __classPrivateFieldGet$7(this, _BaseEvent_defaultIgnored, "f");
+    }
+}
+_BaseEvent_defaultIgnored = new WeakMap();
+class BypassEvent extends BaseEvent {
+    constructor(shouldBypass) {
+        super();
+        this.shouldBypass = shouldBypass;
+        this._isLocal = true;
+    }
+}
+class MuteEvent extends BaseEvent {
+    constructor(shouldMute) {
+        super();
+        this.shouldMute = shouldMute;
+        this._isLocal = true;
+    }
+}
+var KeyEventType;
+(function (KeyEventType) {
+    KeyEventType["KEY_DOWN"] = "keydown";
+    KeyEventType["KEY_UP"] = "keyup";
+})(KeyEventType || (KeyEventType = {}));
+class KeyEvent extends BaseEvent {
+    constructor(eventType, eventPitch = 64, eventVelocity = 64, key) {
+        super();
+        this.eventType = eventType;
+        this.eventPitch = eventPitch;
+        this.eventVelocity = eventVelocity;
+        this.key = key !== null && key !== void 0 ? key : eventPitch;
+    }
+}
+
+var events = /*#__PURE__*/Object.freeze({
+  __proto__: null,
+  BaseEvent: BaseEvent,
+  BypassEvent: BypassEvent,
+  KeyEvent: KeyEvent,
+  get KeyEventType () { return KeyEventType; },
+  MuteEvent: MuteEvent
 });
 
 class Disconnect extends Error {
@@ -446,19 +516,27 @@ function tryWithFailureMessage(fn, message) {
         throw e;
     }
 }
+function isPlainObject(value) {
+    return (value === null || value === void 0 ? void 0 : value.constructor) === Object;
+}
 function createScriptProcessorNode(context, windowSize, numInputChannels, numOutputChannels) {
     const processor = context.createScriptProcessor(windowSize, numInputChannels, numOutputChannels);
     // Store true values because the constructor settings are not persisted on 
     // the WebAudio object.
+    // @ts-ignore Property undefined.
     processor['__numInputChannels'] = numInputChannels;
+    // @ts-ignore Property undefined.
     processor['__numOutputChannels'] = numOutputChannels;
     return processor;
 }
 function range(n) {
     return Array(n).fill(0).map((v, i) => i);
 }
-function enumerate(arr) {
-    return arr.map((v, i) => [i, v]);
+function* enumerate(arr) {
+    let i = 0;
+    for (const x of arr) {
+        yield [i++, x];
+    }
 }
 function* zip(...iterables) {
     const iterators = iterables.map(iterable => iterable[Symbol.iterator]());
@@ -521,24 +599,28 @@ function wrapValidator(fn) {
         }
     };
 }
+function isType(x, types) {
+    types = types instanceof Array ? types : [types];
+    let res = false;
+    for (let type of types) {
+        if (primitiveClasses.includes(type)) {
+            type = type.name.toLowerCase();
+        }
+        if (typeof type === 'string') {
+            res || (res = typeof x == type);
+        }
+        else {
+            res || (res = x instanceof type);
+        }
+    }
+    return res;
+}
 function createTypeValidator(type) {
-    if (primitiveClasses.includes(type)) {
-        type = type.name.toLowerCase();
-    }
-    if (typeof type === 'string') {
-        return function (value) {
-            if (typeof value != type) {
-                throw new Error(`Expected value to be typeof '${value}', but found type '${typeof value}' instead.`);
-            }
-        };
-    }
-    else {
-        return function (value) {
-            if (!(value instanceof type)) {
-                throw new Error(`Expected value to be instanceof ${type.name}, but found type '${typeof value}' instead.`);
-            }
-        };
-    }
+    return function (value) {
+        if (!isType(value, type)) {
+            throw new Error(`Expected value to be typeof / instanceof '${type}', but found type '${typeof value}' instead. Value: ${value}`);
+        }
+    };
 }
 function defineTimeRamp(audioContext, timeMeasure, node = undefined, mapFn = v => v, durationSec = 1e8) {
     // Continuous ramp representing the AudioContext time.
@@ -583,9 +665,12 @@ function loadFile(audioContext, filePathOrUrl) {
 }
 const registryIdPropname = "__registryId__";
 function getBufferId(buffer) {
+    // @ts-ignore Property undefined.
     if (!buffer[registryIdPropname]) {
+        // @ts-ignore Property undefined.
         buffer[registryIdPropname] = crypto.randomUUID();
     }
+    // @ts-ignore Property undefined.
     return buffer[registryIdPropname];
 }
 function bufferToFloat32Arrays(buffer) {
@@ -630,6 +715,8 @@ var util = /*#__PURE__*/Object.freeze({
   isAlwaysAllowedDatatype: isAlwaysAllowedDatatype,
   isComponent: isComponent,
   isFunction: isFunction,
+  isPlainObject: isPlainObject,
+  isType: isType,
   loadFile: loadFile,
   makeAudioBufferShared: makeAudioBufferShared,
   makeBufferShared: makeBufferShared,
@@ -641,6 +728,52 @@ var util = /*#__PURE__*/Object.freeze({
   zip: zip
 });
 
+/**
+ * A decorator to allow properties to be computed once, only when needed.
+ *
+ * Usage:
+ *
+ * @example
+ * class A {
+ *   \@jit(Math.random)
+ *   iprop1: number
+ *
+ *   \@jit((_, propName) => "expensive computation of " + propName))
+ *   static sprop1: number
+ * }
+ *
+ */
+function lazyProperty(initializer) {
+    return function (target, prop) {
+        initializer = initializer.bind(target);
+        Object.defineProperty(target, prop, {
+            get() {
+                var _a;
+                const secretKey = `__${prop}__`;
+                return (_a = this[secretKey]) !== null && _a !== void 0 ? _a : (this[secretKey] = initializer(this, prop));
+            }
+        });
+    };
+}
+/**
+ * Declare that a function's parameters may be promises, and the function will perform its action once all promises are resolved and return a promise.
+ */
+function resolvePromiseArgs(obj, propName, descriptor) {
+    const func = descriptor.value;
+    descriptor.value = function (...args) {
+        // NOTE: 'this' within func will be unbound, but it is bound in 
+        // descriptor.value. So it must be rebound.
+        if (args.some(a => a instanceof Promise)) {
+            // Wait for all to be resolved, then call the function.
+            return Promise.all(args).then(vals => func.bind(this)(...vals));
+        }
+        else {
+            return func.bind(this)(...args);
+        }
+    };
+    return descriptor;
+}
+
 class AbstractInput extends ToStringAndUUID {
     constructor(name, parent, isRequired) {
         super();
@@ -649,11 +782,29 @@ class AbstractInput extends ToStringAndUUID {
         this.isRequired = isRequired;
         this.validate = () => null;
     }
+    get defaultInput() {
+        return this;
+    }
+    get isAudioStream() {
+        return this.defaultInput instanceof this._.AudioRateInput;
+    }
+    get isStftStream() {
+        return this.defaultInput instanceof this._.FFTInput;
+    }
+    get isControlStream() {
+        return this.defaultInput instanceof this._.ControlInput;
+    }
     __call__(value = constants.TRIGGER) {
         this.setValue(value);
     }
     trigger() {
         this.setValue(constants.TRIGGER);
+    }
+    toString() {
+        if (this.parent == undefined) {
+            return `${this._className}('${this.name}')`;
+        }
+        return `${this.parent._className}.inputs.${this.name}`;
     }
     ofType(type) {
         this.withValidator(createTypeValidator(type));
@@ -668,6 +819,46 @@ class AbstractInput extends ToStringAndUUID {
     }
 }
 
+class BaseConnectable extends ToStringAndUUID {
+    get isAudioStream() {
+        return this.defaultOutput instanceof this._.AudioRateOutput;
+    }
+    get isStftStream() {
+        return this.defaultOutput instanceof this._.FFTOutput;
+    }
+    get isControlStream() {
+        return this.defaultOutput instanceof this._.ControlOutput;
+    }
+    getDestinationInfo(destination) {
+        if (isFunction(destination)) {
+            destination = this.isControlStream ? new this._.FunctionComponent(destination) : new this._.AudioTransformComponent(destination);
+        }
+        let component;
+        let input;
+        if (isType(destination, [AudioNode, AudioParam])) {
+            component = new this._.AudioComponent(destination);
+            input = component.getDefaultInput();
+        }
+        else if (isType(destination, AbstractInput)) {
+            // TODO: can this typing issue be fixed? isType not working with abstract
+            // classes.
+            component = destination.parent;
+            input = destination;
+        }
+        else if (isComponent(destination)) {
+            component = destination;
+            input = component.getDefaultInput();
+        }
+        else {
+            throw new Error("Improper input type for connect(). " + destination);
+        }
+        if (destination instanceof TypedConfigurable && destination.configId != this.configId) {
+            throw new Error(`Unable to connect components from different namespaces. Given ${this} (config ID: ${this.configId}) and ${destination} (config ID: ${destination.configId})`);
+        }
+        return { component, input };
+    }
+}
+
 function toMultiChannelArray(array) {
     const proxy = new Proxy(array, {
         get(target, p, receiver) {
@@ -675,7 +866,7 @@ function toMultiChannelArray(array) {
                 return target[0];
             if (p == "right")
                 return target[1];
-            return target[p];
+            return Reflect.get(target, p, receiver);
         }
     });
     return proxy;
@@ -689,6 +880,7 @@ function getNumInputChannels(node) {
     else if (node instanceof ChannelMergerNode) {
         return node.numberOfInputs;
     }
+    // @ts-ignore Property undefined.
     return (_a = node['__numInputChannels']) !== null && _a !== void 0 ? _a : (node instanceof AudioNode ? node.channelCount : 1);
 }
 function getNumOutputChannels(node) {
@@ -699,6 +891,7 @@ function getNumOutputChannels(node) {
     else if (node instanceof ChannelMergerNode) {
         return node.numberOfInputs;
     }
+    // @ts-ignore Property undefined.
     return (_a = node['__numOutputChannels']) !== null && _a !== void 0 ? _a : (node instanceof AudioNode ? node.channelCount : 1);
 }
 function createMultiChannelView(multiChannelIO, supportsMultichannel) {
@@ -730,7 +923,7 @@ function createChannelView(multiChannelIO, activeChannel) {
 /**
  * Call the correct WebAudio methods to connect channels.
  */
-function simpleConnect(source, destination, fromChannel = undefined, toChannel = undefined) {
+function simpleConnect(source, destination, fromChannel = 0, toChannel = 0) {
     if (destination instanceof AudioParam) {
         return source.connect(destination, fromChannel);
     }
@@ -785,62 +978,59 @@ class AudioRateInput extends AbstractInput {
         return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
     }
     get value() {
-        return this.audioSink["value"]; // TODO: fix? AudioNodes have no value.
+        return this.audioSink instanceof AudioParam ? this.audioSink.value : 0;
     }
     setValue(value) {
         this.validate(value);
         if (value == constants.TRIGGER) {
             value = this.value;
         }
-        this.audioSink["value"] = value;
+        if (this.audioSink instanceof AudioParam && isType(value, Number)) {
+            this.audioSink.setValueAtTime(value, 0);
+        }
     }
 }
-
-/**
- * A decorator to allow properties to be computed once, only when needed.
- *
- * Usage:
- *
- * @example
- * class A {
- *   \@jit(Math.random)
- *   iprop1: number
- *
- *   \@jit((_, propName) => "expensive computation of " + propName))
- *   static sprop1: number
- * }
- *
- */
-function lazyProperty(initializer) {
-    return function (target, prop) {
-        initializer = initializer.bind(target);
-        Object.defineProperty(target, prop, {
-            get() {
-                var _a;
-                const secretKey = `__${prop}__`;
-                return (_a = this[secretKey]) !== null && _a !== void 0 ? _a : (this[secretKey] = initializer(this, prop));
-            }
-        });
-    };
-}
-/**
- * Declare that a function's parameters may be promises, and the function will perform its action once all promises are resolved and return a promise.
- */
-function resolvePromiseArgs(obj, propName, descriptor) {
-    const func = descriptor.value;
-    descriptor.value = function (...args) {
-        // NOTE: 'this' within func will be unbound, but it is bound in 
-        // descriptor.value. So it must be rebound.
-        if (args.some(a => a instanceof Promise)) {
-            // Wait for all to be resolved, then call the function.
-            return Promise.all(args).then(vals => func.bind(this)(...vals));
-        }
-        else {
-            return func.bind(this)(...args);
-        }
-    };
-    return descriptor;
-}
+// TODO: implement AudioParam interface.
+/*
+export class AudioParamControlOutput extends ControlOutput<any> implements AudioParam {
+  connections: AudioParam[]
+  connect(destination: CanBeConnectedTo) {
+    let { component, input } = this.getDestinationInfo(destination)
+    if (input instanceof AudioRateInput) {
+      this.connections.push(destination)
+    } else {
+      throw new Error("The output must be an audio-rate input.")
+    }
+    return destination
+  }
+  protected map(key: keyof AudioParam, args: any): this {
+    for (let connection of this.connections) {
+      connection[key](...args)
+    }
+    return this
+  }
+  cancelAndHoldAtTime(cancelTime: number) {
+    return this.map('cancelAndHoldAtTime', arguments)
+  }
+  cancelScheduledValues(cancelTime: number) {
+    return this.map('cancelScheduledValues', arguments)
+  }
+  exponentialRampToValueAtTime(value: number, endTime: number) {
+    return this.map('exponentialRampToValueAtTime', arguments)
+  }
+  linearRampToValueAtTime(value: number, endTime: number) {
+    return this.map('linearRampToValueAtTime', arguments)
+  }
+  setTargetAtTime(value: number, startTime: number, timeConstant: number) {
+    return this.map('setTargetAtTime', arguments)
+  }
+  setValueAtTime(value: number, startTime: number) {
+    return this.map('setValueAtTime', arguments)
+  }
+  setValueCurveAtTime(values: number[], startTime: number, duration: number) {
+    return this.map('setValueCurveAtTime', arguments)
+  }
+} */
 
 var __decorate$3 = (undefined && undefined.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -848,6 +1038,7 @@ var __decorate$3 = (undefined && undefined.__decorate) || function (decorators, 
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+// TODO: remove this and HybridOutput.
 class HybridInput extends AbstractInput {
     get numInputChannels() {
         return this.activeChannel ? 1 : getNumInputChannels(this.audioSink);
@@ -882,8 +1073,8 @@ class HybridInput extends AbstractInput {
             value = this.value;
         }
         this._value = value;
-        if (isFinite(+value)) {
-            this.audioSink["value"] = +value;
+        if (isFinite(+value) && isType(this.audioSink, AudioParam)) {
+            this.audioSink.setValueAtTime(+value, 0);
         }
         (_a = this.parent) === null || _a === void 0 ? void 0 : _a.propagateUpdatedInput(this, value);
     }
@@ -894,67 +1085,47 @@ __decorate$3([
 
 // A special wrapper for a symbolic input that maps object signals to property assignments.
 // let i = new ComponentInput(parent)
+// TODO: replace this whole class with compound input. This may require 
+// refactoring of some code that relies on this class being a AudioRateInput 
+// and having an audioNode.
 // i.setValue({ input1: "val1", input2: "val2" })  // sets vals on parent.
 class ComponentInput extends AudioRateInput {
+    get defaultInput() {
+        return this._defaultInput;
+    }
     constructor(name, parent, defaultInput) {
         const audioNode = (defaultInput instanceof AudioRateInput || defaultInput instanceof HybridInput) ? defaultInput.audioSink : undefined;
-        super(name, parent, audioNode);
+        super(name, parent, audioNode); // TODO: fix this issue...
         this.name = name;
-        this.defaultInput = defaultInput;
-        this.defaultInput = defaultInput;
-        this._value = defaultInput === null || defaultInput === void 0 ? void 0 : defaultInput.value;
+        this._defaultInput = defaultInput;
+        /* this._value = defaultInput?.value */
     }
     setValue(value) {
+        var _a;
+        /*     console.log("setting value")
+            console.log([value, this.toString()]) */
         this.validate(value);
         // JS objects represent collections of parameter names and values
         const isPlainObject = (value === null || value === void 0 ? void 0 : value.constructor) === Object;
         if (isPlainObject && !value["_raw"]) {
             // Validate each param is defined in the target.
             for (let key in value) {
-                if (!(key in this.parent.inputs)) {
+                if (!(this.parent && key in this.parent.inputs)) {
                     throw new Error(`Given parameter object ${JSON.stringify(value)} but destination ${this.parent} has no input named '${key}'. To pass a raw object without changing properties, set _raw: true on the object.`);
                 }
             }
             for (let key in value) {
-                this.parent.inputs[key].setValue(value[key]);
+                (_a = this.parent) === null || _a === void 0 ? void 0 : _a.inputs[key].setValue(value[key]);
             }
         }
         else if (this.defaultInput == undefined) {
-            throw new Error(`Component ${this.parent} unable to receive input because it has no default input configured. Either connect to one of its named inputs [${Object.keys(this.parent.inputs)}], or send a message as a plain JS object, with one or more input names as keys. Given ${JSON.stringify(value)}`);
+            const inputs = this.parent == undefined ? [] : Object.keys(this.parent.inputs);
+            throw new Error(`Component ${this.parent} unable to receive input because it has no default input configured. Either connect to one of its named inputs [${inputs}], or send a message as a plain JS object, with one or more input names as keys. Given ${JSON.stringify(value)}`);
         }
         else {
             isPlainObject && delete value["_raw"];
             this.defaultInput.setValue(value);
         }
-    }
-}
-
-class BaseConnectable extends ToStringAndUUID {
-    getDestinationInfo(destination) {
-        if (isFunction(destination)) {
-            destination = new this._.FunctionComponent(destination);
-        }
-        let component, input;
-        if ((destination instanceof AudioNode)
-            || (destination instanceof AudioParam)) {
-            component = new this._.AudioComponent(destination);
-            input = component.getDefaultInput();
-        }
-        else if (destination instanceof AbstractInput) {
-            component = destination.parent;
-            input = destination;
-        }
-        else if (isComponent(destination)) {
-            component = destination;
-            input = component.getDefaultInput();
-        }
-        else {
-            throw new Error("Improper input type for connect(). " + destination);
-        }
-        if (destination instanceof TypedConfigurable && destination.configId != this.configId) {
-            throw new Error(`Unable to connect components from different namespaces. Given ${this} (config ID: ${this.configId}) and ${destination} (config ID: ${destination.configId})`);
-        }
-        return { component, input };
     }
 }
 
@@ -971,6 +1142,15 @@ class AbstractOutput extends BaseConnectable {
         this.withValidator(createTypeValidator(type));
         return this;
     }
+    toString() {
+        if (this.parent == undefined) {
+            return `${this._className}('${this.name}')`;
+        }
+        return `${this.parent._className}.outputs.${this.name}`;
+    }
+    get defaultOutput() {
+        return this;
+    }
     /**
      * The validator function can either throw an error or return false.
      */
@@ -979,115 +1159,6 @@ class AbstractOutput extends BaseConnectable {
         return this;
     }
 }
-
-var __decorate$2 = (undefined && undefined.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-class ControlOutput extends AbstractOutput {
-    constructor() {
-        super(...arguments);
-        this.numOutputChannels = 1;
-    }
-    connect(destination) {
-        let { component, input } = this.getDestinationInfo(destination);
-        // TODO: fix... should be "destination" but won't work for non-connectables like Function.
-        /* const connectable = destination instanceof AbstractInput ? destination : component */
-        // Conversion. TODO: figure out how to treat ComponentInput.
-        if (input instanceof AudioRateInput && !(input instanceof ComponentInput)) {
-            const converter = new this._.ControlToAudioConverter();
-            converter.connect(input);
-            input = converter.input;
-        }
-        this.connections.push(input);
-        return component;
-    }
-    setValue(value, rawObject = false) {
-        value = value;
-        this.validate(value);
-        if ((value === null || value === void 0 ? void 0 : value.constructor) === Object && rawObject) {
-            value = Object.assign({ _raw: true }, value);
-        }
-        for (let c of this.connections) {
-            c.setValue(value);
-        }
-        for (const callback of this.callbacks) {
-            callback(value);
-        }
-    }
-    onUpdate(callback) {
-        this.callbacks.push(callback);
-    }
-}
-__decorate$2([
-    resolvePromiseArgs
-], ControlOutput.prototype, "setValue", null);
-
-var __classPrivateFieldSet$1 = (undefined && undefined.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
-    if (kind === "m") throw new TypeError("Private method is not writable");
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
-    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
-};
-var __classPrivateFieldGet$a = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
-    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-};
-var _BaseEvent_defaultIgnored;
-class BaseEvent extends ToStringAndUUID {
-    constructor() {
-        super(...arguments);
-        this._isLocal = false;
-        _BaseEvent_defaultIgnored.set(this, false);
-    }
-    ignoreDefault() {
-        __classPrivateFieldSet$1(this, _BaseEvent_defaultIgnored, true, "f");
-    }
-    defaultIsIgnored() {
-        return __classPrivateFieldGet$a(this, _BaseEvent_defaultIgnored, "f");
-    }
-}
-_BaseEvent_defaultIgnored = new WeakMap();
-class BypassEvent extends BaseEvent {
-    constructor(shouldBypass) {
-        super();
-        this.shouldBypass = shouldBypass;
-        this._isLocal = true;
-    }
-}
-class MuteEvent extends BaseEvent {
-    constructor(shouldMute) {
-        super();
-        this.shouldMute = shouldMute;
-        this._isLocal = true;
-    }
-}
-var KeyEventType;
-(function (KeyEventType) {
-    KeyEventType["KEY_DOWN"] = "keydown";
-    KeyEventType["KEY_UP"] = "keyup";
-})(KeyEventType || (KeyEventType = {}));
-class KeyEvent extends BaseEvent {
-    constructor(eventType, eventPitch = 64, eventVelocity = 64, key) {
-        super();
-        this.eventType = eventType;
-        this.eventPitch = eventPitch;
-        this.eventVelocity = eventVelocity;
-        this.key = key !== null && key !== void 0 ? key : eventPitch;
-    }
-}
-
-var events = /*#__PURE__*/Object.freeze({
-  __proto__: null,
-  BaseEvent: BaseEvent,
-  BypassEvent: BypassEvent,
-  KeyEvent: KeyEvent,
-  get KeyEventType () { return KeyEventType; },
-  MuteEvent: MuteEvent
-});
 
 // TODO: Add a GainNode here to allow muting and mastergain of the component.
 class AudioRateOutput extends AbstractOutput {
@@ -1125,7 +1196,8 @@ class AudioRateOutput extends AbstractOutput {
         let { component, input } = this.getDestinationInfo(destination);
         input = input instanceof ComponentInput ? input.defaultInput : input;
         if (!input) {
-            throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${Object.keys(component.inputs)}]`);
+            const inputs = component == undefined ? [] : Object.keys(component.inputs);
+            throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${inputs}]`);
         }
         if (!(input instanceof AudioRateInput || input instanceof HybridInput)) {
             throw new Error(`Can only connect audio-rate outputs to inputs that support audio-rate signals. Given: ${input}. Use 'AudioRateSignalSampler' to force a conversion.`);
@@ -1180,11 +1252,11 @@ class AudioRateOutput extends AbstractOutput {
             dimension,
             windowSize,
             useWorklet,
-            numChannelsPerInput: this.numOutputChannels,
+            numChannelsPerInput: [this.numOutputChannels],
             numInputs: 1
         };
         const transformer = new this._.AudioTransformComponent(fn, options);
-        return this.connect(transformer[0]); // First input of the function.
+        return this.connect(transformer.inputs[0]); // First input of the function.
     }
     disconnect(destination) {
         // TODO: implement this and utilize it for temporary components / nodes.
@@ -1208,7 +1280,7 @@ class AudioRateOutput extends AbstractOutput {
     }
 }
 
-var __decorate$1 = (undefined && undefined.__decorate) || function (decorators, target, key, desc) {
+var __decorate$2 = (undefined && undefined.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
@@ -1235,9 +1307,54 @@ class ControlInput extends AbstractInput {
         (_a = this.parent) === null || _a === void 0 ? void 0 : _a.propagateUpdatedInput(this, value);
     }
 }
-__decorate$1([
+__decorate$2([
     resolvePromiseArgs
 ], ControlInput.prototype, "setValue", null);
+
+var __decorate$1 = (undefined && undefined.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+class ControlOutput extends AbstractOutput {
+    constructor() {
+        super(...arguments);
+        this.numOutputChannels = 1;
+    }
+    connect(destination) {
+        let { component, input } = this.getDestinationInfo(destination);
+        // TODO: fix... should be "destination" but won't work for non-connectables like Function.
+        /* const connectable = destination instanceof AbstractInput ? destination : component */
+        // Conversion. TODO: figure out how to treat ComponentInput.
+        if (input instanceof AudioRateInput && !(input instanceof ComponentInput)) {
+            const converter = new this._.ControlToAudioConverter();
+            converter.connect(input);
+            input = converter.input;
+        }
+        this.connections.push(input);
+        return component;
+    }
+    setValue(value, rawObject = false) {
+        value = value;
+        this.validate(value);
+        if ((value === null || value === void 0 ? void 0 : value.constructor) === Object && rawObject) {
+            value = Object.assign({ _raw: true }, value);
+        }
+        for (let c of this.connections) {
+            c.setValue(value);
+        }
+        for (const callback of this.callbacks) {
+            callback(value);
+        }
+    }
+    onUpdate(callback) {
+        this.callbacks.push(callback);
+    }
+}
+__decorate$1([
+    resolvePromiseArgs
+], ControlOutput.prototype, "setValue", null);
 
 var __decorate = (undefined && undefined.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -1249,11 +1366,12 @@ var __decorate = (undefined && undefined.__decorate) || function (decorators, ta
 class HybridOutput extends AudioRateOutput {
     connect(destination) {
         let { input } = this.getDestinationInfo(destination);
-        if (input instanceof AudioRateInput || input instanceof HybridInput) {
-            return AudioRateOutput.prototype.connect.bind(this)(destination);
-        }
-        else if (input instanceof ControlInput) {
+        input = input instanceof ComponentInput && input.defaultInput instanceof AudioRateInput ? input.defaultInput : input;
+        if (isType(input, [ControlInput, ComponentInput])) {
             return ControlOutput.prototype.connect.bind(this)(destination);
+        }
+        else if (input instanceof AudioRateInput || input instanceof HybridInput) {
+            return AudioRateOutput.prototype.connect.bind(this)(destination);
         }
         else {
             throw new Error("Unable to connect to " + destination);
@@ -1329,8 +1447,8 @@ class BaseComponent extends BaseConnectable {
             configurable: false
         });
     }
-    defineInputOrOutput(propName, inputOrOutput, inputsOrOutputsArray) {
-        inputsOrOutputsArray[propName] = inputOrOutput;
+    defineInputOrOutput(propName, inputOrOutput, inputsOrOutputsObject) {
+        inputsOrOutputsObject[propName] = inputOrOutput;
         return inputOrOutput;
     }
     defineOutputAlias(name, output) {
@@ -1378,7 +1496,7 @@ class BaseComponent extends BaseConnectable {
         this._defaultOutput = output;
     }
     getDefaultInput() {
-        const name = 'default';
+        const name = '[[default]]';
         if (this._defaultInput) {
             return new this._.ComponentInput(name, this, this._defaultInput);
         }
@@ -1389,7 +1507,7 @@ class BaseComponent extends BaseConnectable {
         }
         return new this._.ComponentInput(name, this);
     }
-    getDefaultOutput() {
+    get defaultOutput() {
         if (this._defaultOutput) {
             return this._defaultOutput;
         }
@@ -1421,6 +1539,7 @@ class BaseComponent extends BaseConnectable {
         }
         if (inputStream == this.triggerInput) {
             // Always execute function, even if it's unsafe.
+            // TODO: should this really pass undefined here? Or call for EVERY input?
             this.inputDidUpdate(undefined, undefined);
         }
         else if (this.allInputsAreDefined()) {
@@ -1431,16 +1550,11 @@ class BaseComponent extends BaseConnectable {
         }
     }
     // Abstract methods.
-    outputAdded(output) { }
-    inputAdded(output) { }
+    outputAdded(destintion) { }
+    inputAdded(source) { }
     onBypassEvent(event) { }
     onMuteEvent(event) { }
     inputDidUpdate(input, newValue) { }
-    processEvent(event) {
-        // Method describing how an incoming event is mutated before passing to the
-        // component outputs.
-        return event;
-    }
     setBypassed(isBypassed = true) {
         this.isBypassed.setValue(isBypassed);
     }
@@ -1449,11 +1563,14 @@ class BaseComponent extends BaseConnectable {
     }
     connect(destination) {
         let { component, input } = this.getDestinationInfo(destination);
-        if (!input || (input instanceof ComponentInput && !input.defaultInput)) {
-            throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${Object.keys(component.inputs)}]`);
+        // || (input instanceof ComponentInput && !input.defaultInput) causes dict 
+        // outputs to not work
+        if (!input) {
+            const inputs = component == undefined ? [] : Object.keys(component.inputs);
+            throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${inputs}]`);
         }
         component && this.outputAdded(input);
-        const output = this.getDefaultOutput();
+        const output = this.defaultOutput;
         if (!output) {
             throw new Error(`No default output found for ${this}, so unable to connect to destination: ${component}. Found named outputs: [${Object.keys(this.outputs)}]`);
         }
@@ -1487,7 +1604,7 @@ class BaseComponent extends BaseConnectable {
         return this.getBySpecs(inputSpecs, this.inputs);
     }
     getChannelsBySpecs(channelSpecs) {
-        const output = this.getDefaultOutput();
+        const output = this.defaultOutput;
         if (!(output instanceof AudioRateOutput || output instanceof HybridOutput)) {
             throw new Error("No default audio-rate output found. Select a specific output to use this operation.");
         }
@@ -1499,7 +1616,7 @@ class BaseComponent extends BaseConnectable {
                     return "0";
                 if (noSpace == "right")
                     return "1";
-                return c;
+                return String(c);
             };
             return spec instanceof Array ? spec.map(toNumber) : toNumber(spec);
         });
@@ -1586,9 +1703,9 @@ class BaseComponent extends BaseConnectable {
         const toNum = (c) => {
             const noSpace = String(c).replace(/s/g, "");
             if (noSpace == "left")
-                return "0";
+                return 0;
             if (noSpace == "right")
-                return "1";
+                return 1;
             return c;
         };
         for (const [key, outputGroup] of zip(keys, outputGroups)) {
@@ -1608,7 +1725,7 @@ class BaseComponent extends BaseConnectable {
     }
     // Delegate the property to the default audio output (if any).
     getAudioOutputProperty(propName) {
-        const output = this.getDefaultOutput();
+        const output = this.defaultOutput;
         if (output instanceof AudioRateOutput) {
             const prop = output[propName];
             return isFunction(prop) ? prop.bind(output) : prop;
@@ -1730,7 +1847,7 @@ function assertValidReturnType(result) {
         throw new Error("Expected mapping function to return valid value(s), but got undefined.");
     }
 }
-function processSamples(fn, inputChunks, outputChunk, contextFactory) {
+function processSamples(fn, inputChunks, outputChunks, contextFactory) {
     var _a, _b;
     const numChannels = (_a = inputChunks[0]) === null || _a === void 0 ? void 0 : _a.length;
     const numSamples = (_b = inputChunks[0][0]) === null || _b === void 0 ? void 0 : _b.length;
@@ -1738,57 +1855,67 @@ function processSamples(fn, inputChunks, outputChunk, contextFactory) {
         for (let i = 0; i < numSamples; i++) {
             const inputs = inputChunks.map(input => input[c][i]);
             const context = contextFactory.getContext({ channelIndex: c, sampleIndex: i });
-            const result = context.execute(fn, inputs);
-            assertValidReturnType(result);
-            outputChunk[c][i] = result;
+            const outputs = context.execute(fn, inputs);
+            for (const [output, dest] of zip(outputs, outputChunks)) {
+                assertValidReturnType(output);
+                dest[c][i] = output;
+            }
         }
     }
-    return undefined;
+    // The number of output channels is the same as the input because this is not
+    // determined by the user's function.
+    return inputChunks.map(x => x.length);
 }
-function processTime(fn, inputChunks, outputChunk, contextFactory) {
+function processTime(fn, inputChunks, outputChunks, contextFactory) {
     var _a;
     const numChannels = (_a = inputChunks[0]) === null || _a === void 0 ? void 0 : _a.length;
     for (let c = 0; c < numChannels; c++) {
         const inputs = inputChunks.map(input => input[c]);
         const context = contextFactory.getContext({ channelIndex: c });
-        const output = context.execute(fn, inputs);
-        assertValidReturnType(output);
-        outputChunk[c].set(output);
+        const outputs = context.execute(fn, inputs);
+        for (const [output, dest] of zip(outputs, outputChunks)) {
+            assertValidReturnType(output);
+            dest[c].set(output);
+        }
     }
-    return undefined;
+    // The number of output channels is the same as the input because this is not
+    // determined by the user's function.
+    return inputChunks.map(x => x.length);
 }
 /**
  * Apply a fuction across the audio chunk (channels and time).
  *
  * @param fn
  * @param inputChunks
- * @param outputChunk
- * @returns The number of channels output by the function.
+ * @param outputChunks
+ * @returns The number of channels for each output of the function.
  */
-function processTimeAndChannels(fn, inputChunks, outputChunk, contextFactory) {
+function processTimeAndChannels(fn, inputChunks, outputChunks, contextFactory) {
     const inputs = inputChunks.map(toMultiChannelArray);
     const context = contextFactory.getContext();
-    const result = context.execute(fn, inputs);
-    assertValidReturnType(result);
-    for (let c = 0; c < result.length; c++) {
-        if (result[c] == undefined) {
-            continue; // This signifies that the channel should be empty.
+    const outputs = context.execute(fn, inputs);
+    assertValidReturnType(outputs);
+    for (const [output, dest] of zip(outputs, outputChunks)) {
+        for (let c = 0; c < output.length; c++) {
+            if (output[c] == undefined) {
+                continue; // This signifies that the channel should be empty.
+            }
+            dest[c].set(output[c]);
         }
-        outputChunk[c].set(result[c]);
     }
-    return result.length;
+    return outputs.map(a => a.length);
 }
 /**
  * Apply a fuction to each sample, across channels.
  *
  * @param fn
  * @param inputChunks
- * @param outputChunk
- * @returns The number of channels output by the function.
+ * @param outputChunks
+ * @returns The number of channels for each output of the function.
  */
-function processChannels(fn, inputChunks, outputChunk, contextFactory) {
+function processChannels(fn, inputChunks, outputChunks, contextFactory) {
     var _a;
-    let numOutputChannels;
+    const numOutputChannels = Array(outputChunks.length).fill(0);
     const numSamples = (_a = inputChunks[0][0]) === null || _a === void 0 ? void 0 : _a.length;
     for (let i = 0; i < numSamples; i++) {
         // Get the i'th sample, across all channels and inputs.
@@ -1797,10 +1924,13 @@ function processChannels(fn, inputChunks, outputChunk, contextFactory) {
             return toMultiChannelArray(inputChannels);
         });
         const context = contextFactory.getContext({ sampleIndex: i });
-        const outputChannels = context.execute((...inputs) => fn(...inputs).map(v => isFinite(v) ? v : 0), inputs);
-        assertValidReturnType(outputChannels);
-        writeColumn(outputChunk, i, outputChannels);
-        numOutputChannels = outputChannels.length;
+        // .map(v => isFinite(v) ? v : 0)
+        const outputChannels = context.execute(fn, inputs);
+        for (const [j, [output, destChunk]] of enumerate(zip(outputChannels, outputChunks))) {
+            assertValidReturnType(outputChannels);
+            writeColumn(destChunk, i, output);
+            numOutputChannels[j] = output.length;
+        }
     }
     return numOutputChannels;
 }
@@ -1840,109 +1970,33 @@ function generateZeroInput(dimension, windowSize, numChannels) {
             throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
     }
 }
-/**
- * Computes x mod y.
- */
-function mod(x, y) {
-    return ((x % y) + y) % y;
+function sum(iter) {
+    let sm = 0;
+    for (const x of iter) {
+        sm += x;
+    }
+    return sm;
 }
-function sum(arr) {
-    return arr.reduce((a, b) => a + b, 0);
-}
-/* Safe version of TypedArray.set that doesn't throw RangeError. */
-function safeArraySet(dest, source, offset) {
-    if (source.length + offset > dest.length) {
-        for (let i = 0; i + offset < dest.length; i++) {
-            dest[i + offset] = source[i];
+const _NO_VALUE = Symbol("_NO_VALUE");
+function allEqual(iter) {
+    let lastValue = _NO_VALUE;
+    for (const x of iter) {
+        if (lastValue != _NO_VALUE && lastValue != x) {
+            return false;
         }
+        lastValue = x;
     }
-    else {
-        dest.set(source, offset);
+    return true;
+}
+IS_WORKLET ? AudioWorkletProcessor : class AudioWorkletProcessor {
+    constructor() {
+        const channel = new MessageChannel();
+        this.port = channel.port1;
+        this.outPort = channel.port2;
     }
-}
-function joinTypedArrays(buffers, ArrayType = Float32Array, maxLength = Infinity) {
-    const lengths = buffers.map(a => a.length);
-    const outSize = Math.min(maxLength, sum(lengths));
-    const result = new ArrayType(outSize);
-    let currOffset = 0;
-    for (let i = 0; i < buffers.length; i++) {
-        if (currOffset >= outSize)
-            break;
-        safeArraySet(result, buffers[i], currOffset);
-        currOffset += lengths[i];
-    }
-    return result;
-}
-function map2d(grid, fn) {
-    return grid.map((arr, i) => arr.map((v, j) => fn(v, i, j)));
-}
+};
 
 const RECORDER_WORKLET_NAME = "recorder-worklet";
-IS_WORKLET ?
-    class RecorderWorklet extends AudioWorkletProcessor {
-        constructor() {
-            super();
-            // Chunks of audio data. Dimensions: [input, channel, chunk]
-            this.floatDataChunks = [];
-            this.isRecording = false;
-            // After how many samples should the method return.
-            this.maxNumSamples = Infinity;
-            this.currNumSamples = 0;
-            this.port.onmessage = (event) => {
-                this.handleMessage(event.data);
-            };
-        }
-        handleMessage(data) {
-            if (data.command == 'start') {
-                this.start(data.numSamples);
-            }
-            else if (data.command == 'stop') {
-                this.stop();
-            }
-            else {
-                throw new Error(`Unrecognized data: ${JSON.stringify(data)}`);
-            }
-        }
-        start(numSamples) {
-            this.floatDataChunks = [];
-            this.maxNumSamples = numSamples !== null && numSamples !== void 0 ? numSamples : Infinity;
-            this.currNumSamples = 0;
-            this.isRecording = true;
-        }
-        stop() {
-            this.isRecording = false;
-            const joinedData = map2d(this.floatDataChunks, chunks => joinTypedArrays(chunks, Float32Array, this.maxNumSamples)).filter(input => input.length);
-            // Remove need for copy by transferring underlying ArrayBuffers to the 
-            // main thread. See https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects#transferring_objects_between_threads 
-            // for more details.
-            const movedObjects = map2d(joinedData, c => c.buffer).flat();
-            this.port.postMessage(joinedData, movedObjects);
-            // Re-initialize; the old data is in an invalid state.
-            this.floatDataChunks = [];
-        }
-        process(inputs, __outputs, __parameters) {
-            var _a, _b;
-            if (this.isRecording) {
-                if (this.currNumSamples > this.maxNumSamples) {
-                    this.stop();
-                    return true;
-                }
-                for (let i = 0; i < inputs.length; i++) {
-                    const input = inputs[i];
-                    const chunks = (_a = this.floatDataChunks[i]) !== null && _a !== void 0 ? _a : [];
-                    this.floatDataChunks[i] = chunks;
-                    for (let c = 0; c < input.length; c++) {
-                        // Create channel if not exists, and append to it.
-                        const chunkArray = (_b = chunks[c]) !== null && _b !== void 0 ? _b : [];
-                        chunkArray.push(new Float32Array(input[c]));
-                        chunks[c] = chunkArray;
-                    }
-                }
-                inputs[0] && (this.currNumSamples += inputs[0][0].length);
-            }
-            return true;
-        }
-    } : null;
 
 class AudioRecordingComponent extends BaseComponent {
     constructor(numberOfInputs = 1) {
@@ -9839,19 +9893,21 @@ class MemoryBuffer {
 }
 
 class SignalProcessingContext {
-    constructor(inputMemory, outputMemory, { windowSize, currentTime, frameIndex, sampleRate, channelIndex = undefined, sampleIndex = undefined }) {
+    constructor(inputMemory, outputMemory, { windowSize, currentTime, frameIndex, sampleRate, numInputs, numOutputs, channelIndex = undefined, sampleIndex = undefined }) {
         this.inputMemory = inputMemory;
         this.outputMemory = outputMemory;
         this.maxInputLookback = 0;
         this.maxOutputLookback = 0;
-        this.fixedInputLookback = undefined;
-        this.fixedOutputLookback = undefined;
-        this.currentTime = currentTime + (sampleIndex / sampleRate);
+        this.fixedInputLookback = -1;
+        this.fixedOutputLookback = -1;
+        this.currentTime = currentTime + ((sampleIndex !== null && sampleIndex !== void 0 ? sampleIndex : 0) / sampleRate);
         this.windowSize = windowSize;
         this.sampleIndex = sampleIndex;
         this.channelIndex = channelIndex;
         this.frameIndex = frameIndex;
         this.sampleRate = sampleRate;
+        this.numInputs = numInputs;
+        this.numOutputs = numOutputs;
     }
     // TODO: consider making this 1-based to make previousInputs(0) be the current.
     previousInputs(t = 0) {
@@ -9860,7 +9916,7 @@ class SignalProcessingContext {
         this.maxInputLookback = Math.max(t + 1, this.maxInputLookback);
         return this.inputMemory.get(t);
     }
-    previousOutput(t = 0) {
+    previousOutputs(t = 0) {
         // Inputs may be float32 which will not represent an int perfectly.
         t = Math.round(t);
         this.maxOutputLookback = Math.max(t + 1, this.maxOutputLookback);
@@ -9879,18 +9935,20 @@ class SignalProcessingContext {
     execute(fn, inputs) {
         // Execute the function, making the Context properties and methods available
         // within the user-supplied function.
-        const output = fn.bind(this)(...inputs);
+        const rawOutput = fn.bind(this)(...inputs);
+        // TODO: also fix if rawOutput.length != numOutputs
+        const outputs = !isType(rawOutput, Array) || this.numOutputs == 1 && rawOutput.length != 1 ? [rawOutput] : rawOutput;
         // If the function tried to access past inputs or force-rezised the memory, 
         // resize.
         SignalProcessingContext.resizeMemory(this.inputMemory, this.maxInputLookback, this.fixedInputLookback);
         SignalProcessingContext.resizeMemory(this.outputMemory, this.maxOutputLookback, this.fixedOutputLookback);
         // Update memory after resizing.
         this.inputMemory.add(inputs);
-        this.outputMemory.add(output);
-        return output;
+        this.outputMemory.add(outputs);
+        return outputs;
     }
     static resizeMemory(memory, maxLookback, lookbackOverride) {
-        if (lookbackOverride != undefined) {
+        if (lookbackOverride > 0) {
             memory.setSize(lookbackOverride);
         }
         else if (maxLookback > memory.length) {
@@ -9904,42 +9962,55 @@ const ALL_CHANNELS = -1;
  * A class collecting all current ongoing memory streams. Because some `dimension` settings process channels in parallel (`"none"` and `"time"`), memory streams are indexed by channel.
  */
 class SignalProcessingContextFactory {
-    constructor({ numInputs, numChannelsPerInput, numOutputChannels, windowSize, dimension, sampleRate = undefined, getFrameIndex = undefined, getCurrentTime = undefined, }) {
+    constructor({ 
+    // TODO: consider using StreamSpec here.
+    numChannelsPerInput, numChannelsPerOutput, windowSize, dimension, getFrameIndex, getCurrentTime, sampleRate, }) {
         this.inputHistory = {};
         this.outputHistory = {};
         this.windowSize = windowSize;
         this.sampleRate = sampleRate;
+        this.numChannelsPerInput = numChannelsPerInput;
+        this.numChannelsPerOutput = numChannelsPerOutput;
         this.getCurrentTime = getCurrentTime;
         this.getFrameIndex = getFrameIndex;
-        const genInput = this.getDefaultInputValueFn({ dimension, numInputs, windowSize, numChannelsPerInput });
-        const genOutput = this.getDefaultOutputValueFn({ dimension, windowSize, numOutputChannels });
+        const genInput = this.getDefaultValueFn({
+            dimension,
+            windowSize,
+            numChannelsPerStream: numChannelsPerInput
+        });
+        const genOutput = this.getDefaultValueFn({
+            dimension,
+            windowSize,
+            numChannelsPerStream: numChannelsPerOutput
+        });
         const hasChannelSpecificProcessing = ["all", "channels"].includes(dimension);
         if (hasChannelSpecificProcessing) {
             this.inputHistory[ALL_CHANNELS] = new MemoryBuffer(genInput);
             this.outputHistory[ALL_CHANNELS] = new MemoryBuffer(genOutput);
         }
         else {
+            if (!allEqual(numChannelsPerInput)) {
+                throw new Error(`Only dimensions 'all' and 'channels' may have inconsistent numbers of input channels. Given dimension=${dimension}, numChannelsPerInput=${numChannelsPerInput}.`);
+            }
+            if (!allEqual(numChannelsPerOutput)) {
+                throw new Error(`Only dimensions 'all' and 'channels' may have inconsistent numbers of output channels. Given dimension=${dimension}, numChannelsPerOutput=${numChannelsPerOutput}.`);
+            }
             // Each channel is processed the same.
-            for (let c = 0; c < numChannelsPerInput; c++) {
+            for (let c = 0; c < numChannelsPerInput[0]; c++) {
                 this.inputHistory[c] = new MemoryBuffer(genInput);
             }
-            for (let c = 0; c < numOutputChannels; c++) {
+            for (let c = 0; c < numChannelsPerOutput[0]; c++) {
                 this.outputHistory[c] = new MemoryBuffer(genOutput);
             }
         }
     }
-    getDefaultInputValueFn({ dimension, numInputs, windowSize, numChannelsPerInput }) {
-        return function genInput() {
-            const defaultInput = [];
-            for (let i = 0; i < numInputs; i++) {
-                defaultInput.push(generateZeroInput(dimension, windowSize, numChannelsPerInput));
+    getDefaultValueFn({ dimension, windowSize, numChannelsPerStream }) {
+        return function genValue() {
+            const defaultValue = [];
+            for (let i = 0; i < numChannelsPerStream.length; i++) {
+                defaultValue.push(generateZeroInput(dimension, windowSize, numChannelsPerStream[i]));
             }
-            return defaultInput;
-        };
-    }
-    getDefaultOutputValueFn({ dimension, windowSize, numOutputChannels }) {
-        return function genOutput() {
-            return generateZeroInput(dimension, windowSize, numOutputChannels);
+            return defaultValue;
         };
     }
     getContext({ channelIndex = ALL_CHANNELS, sampleIndex = undefined } = {}) {
@@ -9949,6 +10020,8 @@ class SignalProcessingContextFactory {
             windowSize: this.windowSize,
             channelIndex,
             sampleIndex,
+            numInputs: this.numChannelsPerInput.length,
+            numOutputs: this.numChannelsPerOutput.length,
             sampleRate: this.sampleRate,
             frameIndex: this.getFrameIndex(),
             currentTime: this.getCurrentTime()
@@ -9965,53 +10038,80 @@ function serializeWorkletMessage(f, { dimension, numInputs, numChannelsPerInput,
         dimension,
         numInputs,
         numChannelsPerInput,
-        numOutputChannels,
+        numChannelsPerOutput: numOutputChannels,
         windowSize,
+        // @ts-ignore
         tracebackString: traceback['stack']
-    };
-}
-function deserializeWorkletMessage(message, sampleRate, getCurrentTime, getFrameIndex) {
-    const originalTraceback = message.tracebackString;
-    const innerFunction = new Function('return ' + message.fnString)();
-    const applyToChunk = getProcessingFunction(message.dimension);
-    const contextFactory = new SignalProcessingContextFactory(Object.assign(Object.assign({}, message), { 
-        // Each environment may get this information from different places.
-        sampleRate,
-        getCurrentTime,
-        getFrameIndex }));
-    return function processFn(inputs, outputs, __parameters) {
-        try {
-            // Apply across dimensions.
-            applyToChunk(innerFunction, inputs, outputs[0], contextFactory);
-        }
-        catch (e) {
-            console.error(`Encountered worklet error while processing the following input frame:`);
-            console.error(inputs);
-            if (e.stack) {
-                e.stack = `${e.stack}\n\nMain thread stack trace: ${originalTraceback}`;
-            }
-            throw e;
-        }
     };
 }
 
 const FUNCTION_WORKLET_NAME = "function-worklet";
-IS_WORKLET ?
-    class OperationWorklet extends AudioWorkletProcessor {
-        constructor() {
-            super();
-            // Receives serialized input sent from postMessage() calls.
-            // This is used to change the processing function at runtime.
-            this.port.onmessage = (event) => {
-                const windowSize = event.data.windowSize;
-                this.processImpl = deserializeWorkletMessage(event.data, sampleRate, () => currentTime, () => Math.floor(currentFrame / windowSize));
-            };
+
+/**
+ * Specifies a configuration of inputs / outputs grouped into channels and the name of each one.
+ *
+ */
+class StreamSpec {
+    get totalNumChannels() {
+        return sum(Object.values(this.numChannelsPerStream));
+    }
+    constructor({ names, numStreams, numChannelsPerStream }) {
+        if (names != undefined
+            && numStreams != undefined
+            && numStreams != names.length
+            || numChannelsPerStream != undefined
+                && numStreams != undefined
+                && numStreams != numChannelsPerStream.length
+            || numChannelsPerStream instanceof Array
+                && names != undefined
+                && numChannelsPerStream.length != names.length) {
+            throw new Error(`If provided, numStreams, inputNames, and numChannelsPerStream must match. Given numStreams=${numStreams}, inputNames=${JSON.stringify(names)}, numChannelsPerStream=${numChannelsPerStream}.`);
         }
-        process(inputs, outputs, parameters) {
-            this.processImpl && this.processImpl(inputs, outputs, parameters);
-            return true;
+        // Store whether the names were auto-generated.
+        this.hasNumberedNames = names == undefined;
+        this.hasDefaultNumChannels = numChannelsPerStream == undefined;
+        if (numChannelsPerStream != undefined) {
+            const info = this.infoFromChannelsPerStream(numChannelsPerStream);
+            numStreams !== null && numStreams !== void 0 ? numStreams : (numStreams = info.numStreams);
+            names !== null && names !== void 0 ? names : (names = info.names);
         }
-    } : null;
+        else if (names != undefined) {
+            const info = this.infoFromNames(names);
+            numStreams !== null && numStreams !== void 0 ? numStreams : (numStreams = info.numStreams);
+            numChannelsPerStream !== null && numChannelsPerStream !== void 0 ? numChannelsPerStream : (numChannelsPerStream = info.numChannelsPerStream);
+        }
+        else if (numStreams != undefined) {
+            const info = this.infoFromNumStreams(numStreams);
+            numChannelsPerStream !== null && numChannelsPerStream !== void 0 ? numChannelsPerStream : (numChannelsPerStream = info.numChannelsPerStream);
+            names !== null && names !== void 0 ? names : (names = info.names);
+        }
+        else {
+            throw new Error("At least one of (names, numStreams, numChannelsPerStream) must be specified.");
+        }
+        // These will all be defined at this point.
+        this.names = names;
+        this.numStreams = numStreams;
+        this.numChannelsPerStream = numChannelsPerStream;
+    }
+    infoFromNames(names) {
+        return {
+            numStreams: names.length,
+            numChannelsPerStream: range(names.length).fill(constants.DEFAULT_NUM_CHANNELS)
+        };
+    }
+    infoFromNumStreams(numStreams) {
+        return {
+            numChannelsPerStream: range(numStreams).fill(constants.DEFAULT_NUM_CHANNELS),
+            names: range(numStreams)
+        };
+    }
+    infoFromChannelsPerStream(numChannelsPerStream) {
+        return {
+            names: range(numChannelsPerStream.length),
+            numStreams: numChannelsPerStream.length
+        };
+    }
+}
 
 class AudioExecutionContext extends ToStringAndUUID {
     constructor(fn, dimension) {
@@ -10020,74 +10120,75 @@ class AudioExecutionContext extends ToStringAndUUID {
         this.dimension = dimension;
         this.applyToChunk = getProcessingFunction(dimension);
     }
-    processAudioFrame(inputChunks, outputChunk, contextFactory) {
-        return this.applyToChunk(this.fn, inputChunks, outputChunk, contextFactory);
+    processAudioFrame(inputChunks, outputChunks, contextFactory) {
+        return this.applyToChunk(this.fn, inputChunks, outputChunks, contextFactory);
     }
     /**
      * Guess the number of output channels by applying the function to a fake input.
      */
-    inferNumOutputChannels(numInputs, numChannelsPerInput, windowSize = 128) {
-        const createChunk = numChannels => range(numChannels).map(_ => new Float32Array(windowSize));
-        const inputChunks = range(numInputs).map(() => createChunk(numChannelsPerInput));
+    inferNumOutputChannels(inputSpec, outputSpec, windowSize = 128) {
+        const createChunk = (numChannels) => range(numChannels).map(_ => new Float32Array(windowSize));
+        const inputChunks = inputSpec.numChannelsPerStream.map(createChunk);
         // The output may have more channels than the input, so be flexible when 
         // testing it so as to not break the implementation.
-        const outputChunk = createChunk(constants.MAX_CHANNELS);
+        const maxChannelsPerOutput = range(outputSpec.numStreams).fill(constants.MAX_CHANNELS);
+        const outputChunks = maxChannelsPerOutput.map(createChunk);
         const contextFactory = new SignalProcessingContextFactory({
             sampleRate: this.audioContext.sampleRate,
             getCurrentTime: () => this.audioContext.currentTime,
             getFrameIndex: () => 0,
-            numInputs,
-            numChannelsPerInput,
-            numOutputChannels: constants.MAX_CHANNELS,
+            numChannelsPerInput: inputSpec.numChannelsPerStream,
+            numChannelsPerOutput: maxChannelsPerOutput,
             windowSize,
             dimension: this.dimension
         });
         // The returned value will be the number of new output channels, if it's 
         // different from the provided buffer size, otherwise undefined.
-        const numOutputChannels = this.processAudioFrame(inputChunks, outputChunk, contextFactory);
-        return numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : numChannelsPerInput;
+        const numChannelsPerOutput = this.processAudioFrame(inputChunks, outputChunks, contextFactory);
+        return numChannelsPerOutput !== null && numChannelsPerOutput !== void 0 ? numChannelsPerOutput : outputSpec.numChannelsPerStream;
     }
-    static create(fn, { useWorklet, dimension, numInputs, numChannelsPerInput, windowSize, numOutputChannels }) {
-        if (useWorklet && !this.config.state.workletIsAvailable) {
-            throw new Error("Can't use worklet for processing because the worklet failed to load. Verify the `workletPath` configuration setting is set correctly and the file is available.");
-        }
-        const totalNumChannels = numInputs * numChannelsPerInput;
-        if (totalNumChannels > constants.MAX_CHANNELS) {
-            throw new Error(`The total number of input channels must be less than ${constants.MAX_CHANNELS}. Given numInputs=${numInputs} and numChannelsPerInput=${numChannelsPerInput}.`);
-        }
+    static create(fn, { useWorklet, dimension, inputSpec, outputSpec, windowSize, }) {
         if (useWorklet) {
-            return new WorkletExecutionContext(fn, {
+            return new this._.WorkletExecutionContext(fn, {
                 dimension,
-                numInputs,
-                numChannelsPerInput,
-                numOutputChannels,
+                inputSpec,
+                outputSpec
             });
         }
         else {
-            return new ScriptProcessorExecutionContext(fn, {
+            return new this._.ScriptProcessorExecutionContext(fn, {
                 dimension,
-                numInputs,
-                numChannelsPerInput,
+                inputSpec,
+                outputSpec,
                 windowSize,
-                numOutputChannels
             });
         }
     }
 }
 class WorkletExecutionContext extends AudioExecutionContext {
-    constructor(fn, { dimension, numInputs, numChannelsPerInput, numOutputChannels, }) {
+    constructor(fn, { dimension, inputSpec, outputSpec }) {
         super(fn, dimension);
-        numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : (numOutputChannels = this.inferNumOutputChannels(numInputs, numChannelsPerInput));
+        if (!this.config.state.workletIsAvailable) {
+            throw new Error("Can't use worklet for processing because the worklet failed to load. Verify the `workletPath` configuration setting is set correctly and the file is available.");
+        }
+        // TODO: fix
+        if (outputSpec.hasDefaultNumChannels) {
+            const numChannelsPerOutput = this.inferNumOutputChannels(inputSpec, outputSpec);
+            outputSpec = new StreamSpec(Object.assign(Object.assign({}, outputSpec), { numChannelsPerStream: numChannelsPerOutput }));
+        }
         const worklet = new AudioWorkletNode(this.audioContext, FUNCTION_WORKLET_NAME, {
-            numberOfInputs: numInputs,
-            outputChannelCount: [numOutputChannels],
-            numberOfOutputs: 1
+            numberOfInputs: inputSpec.numStreams,
+            outputChannelCount: outputSpec.numChannelsPerStream,
+            numberOfOutputs: outputSpec.numStreams
         });
-        worklet['__numInputChannels'] = numChannelsPerInput;
-        worklet['__numOutputChannels'] = numOutputChannels;
-        const inputs = WorkletExecutionContext.defineAudioGraph(worklet, {
-            numInputs,
-            numChannelsPerInput,
+        // TODO: figure this out.
+        // @ts-ignore No index signature.
+        worklet['__numInputChannels'] = inputSpec.numChannelsPerStream[0];
+        // @ts-ignore No index signature.
+        worklet['__numOutputChannels'] = outputSpec.numChannelsPerStream[0];
+        const { inputs, outputs } = this._.WorkletExecutionContext.defineAudioGraph(worklet, {
+            inputSpec,
+            outputSpec,
         });
         // NOTE: beginning execution of the user-supplied function must be
         // performed *after* the AudioWorkletNode has all its inputs 
@@ -10096,65 +10197,97 @@ class WorkletExecutionContext extends AudioExecutionContext {
         // https://bugzilla.mozilla.org/show_bug.cgi?id=1629478
         const serializedFunction = serializeWorkletMessage(fn, {
             dimension,
-            numInputs,
-            numChannelsPerInput,
-            numOutputChannels,
-            windowSize: 128
+            numInputs: inputSpec.numStreams,
+            numChannelsPerInput: inputSpec.numChannelsPerStream,
+            numOutputChannels: outputSpec.numChannelsPerStream,
+            windowSize: 128 // TODO: make this flexible.
         });
         worklet.port.postMessage(serializedFunction);
         this.inputs = inputs;
-        this.output = worklet;
+        this.outputs = outputs;
     }
-    static defineAudioGraph(workletNode, { numInputs, numChannelsPerInput, }) {
+    static defineAudioGraph(workletNode, { inputSpec, outputSpec, }) {
         const inputNodes = [];
-        for (let i = 0; i < numInputs; i++) {
+        const outputNodes = [];
+        for (const numChannels of inputSpec.numChannelsPerStream) {
             const input = new GainNode(this.audioContext, {
-                channelCount: numChannelsPerInput,
+                channelCount: numChannels,
                 // Force channelCount even if the input has more / fewer channels.
                 channelCountMode: "explicit"
             });
-            input.connect(workletNode, 0, i);
+            input.connect(workletNode, 0, numChannels);
             inputNodes.push(input);
         }
-        return inputNodes;
+        for (const i of range(outputSpec.numStreams)) {
+            const output = new GainNode(this.audioContext);
+            workletNode.connect(output, i, 0);
+            outputNodes.push(output);
+        }
+        // TODO: implement outputs.
+        return { inputs: inputNodes, outputs: outputNodes };
     }
 }
 class ScriptProcessorExecutionContext extends AudioExecutionContext {
-    constructor(fn, { dimension, numInputs, numChannelsPerInput, windowSize, numOutputChannels }) {
+    constructor(fn, { dimension, inputSpec, outputSpec, windowSize, }) {
         super(fn, dimension);
         this.fn = fn;
-        numOutputChannels !== null && numOutputChannels !== void 0 ? numOutputChannels : (numOutputChannels = this.inferNumOutputChannels(numInputs, numChannelsPerInput));
-        this.numInputs = numInputs;
-        this.numChannelsPerInput = numChannelsPerInput;
-        this.numOutputChannels = numOutputChannels;
-        this.windowSize = windowSize;
-        const processor = createScriptProcessorNode(this.audioContext, windowSize, numChannelsPerInput * numInputs, numOutputChannels);
-        const inputs = ScriptProcessorExecutionContext.defineAudioGraph(processor, {
-            numInputs,
-            numChannelsPerInput,
-        });
+        if (inputSpec.totalNumChannels > constants.MAX_CHANNELS) {
+            throw new Error(`When using the ScriptProcessorNode, the total number of input channels must be less than ${constants.MAX_CHANNELS}. Given input spec with channelsPerStream=${inputSpec.numChannelsPerStream}.`);
+        }
+        if (outputSpec.totalNumChannels > constants.MAX_CHANNELS) {
+            throw new Error(`When using the ScriptProcessorNode, the total number of output channels must be less than ${constants.MAX_CHANNELS}. Given output spec with channelsPerStream=${outputSpec.numChannelsPerStream}.`);
+        }
+        if (outputSpec.hasDefaultNumChannels) {
+            const numChannelsPerOutput = this.inferNumOutputChannels(inputSpec, outputSpec);
+            outputSpec = new StreamSpec(Object.assign(Object.assign({}, outputSpec), { numChannelsPerStream: numChannelsPerOutput }));
+        }
+        this.inputSpec = inputSpec;
+        this.outputSpec = outputSpec;
+        const processor = createScriptProcessorNode(this.audioContext, windowSize !== null && windowSize !== void 0 ? windowSize : 0, // The best value will be chosen if == 0
+        inputSpec.totalNumChannels, outputSpec.totalNumChannels);
+        this.windowSize = processor.bufferSize;
+        const { inputs, outputs } = this._.ScriptProcessorExecutionContext.defineAudioGraph(processor, { inputSpec, outputSpec });
         this.defineAudioProcessHandler(processor);
         this.inputs = inputs;
-        this.output = processor;
+        this.outputs = outputs;
     }
-    static defineAudioGraph(processorNode, { numInputs, numChannelsPerInput, }) {
-        const totalNumChannels = numInputs * numChannelsPerInput;
+    static defineAudioGraph(processorNode, { inputSpec, outputSpec }) {
         const inputNodes = [];
-        const merger = this.audioContext.createChannelMerger(totalNumChannels);
+        const merger = this.audioContext.createChannelMerger(inputSpec.totalNumChannels);
         // Merger -> Processor
         merger.connect(processorNode);
-        for (let i = 0; i < numInputs; i++) {
-            const input = new GainNode(this.audioContext, { channelCount: numChannelsPerInput });
+        let startChannel = 0;
+        for (const numChannels of inputSpec.numChannelsPerStream) {
+            const input = new GainNode(this.audioContext, { channelCount: numChannels });
             // Flattened channel arrangement:
             // [0_left, 0_right, 1_left, 1_right, 2_left, 2_right] 
-            for (let j = 0; j < numChannelsPerInput; j++) {
+            for (const j of range(numChannels)) {
                 // Input -> Merger
-                const destinationChannel = i * numChannelsPerInput + j;
+                const destinationChannel = startChannel + j;
+                // TODO: is this actually connecting the channels properly? It might 
+                // just be duplicating the channel across the merger inputs.
                 input.connect(merger, 0, destinationChannel);
             }
+            startChannel += numChannels;
             inputNodes.push(input);
         }
-        return inputNodes;
+        // TODO: refactor this logic into a general method for expanding / flattening channels.
+        const outputNodes = [];
+        const outputSplitter = this.audioContext.createChannelSplitter(outputSpec.totalNumChannels);
+        processorNode.connect(outputSplitter);
+        startChannel = 0;
+        for (const numChannels of outputSpec.numChannelsPerStream) {
+            const outputMerger = this.audioContext.createChannelMerger(numChannels);
+            for (const j of range(numChannels)) {
+                outputSplitter.connect(outputMerger, startChannel + j, j);
+            }
+            startChannel += numChannels;
+            outputNodes.push(outputMerger);
+        }
+        return {
+            inputs: inputNodes,
+            outputs: outputNodes
+        };
     }
     defineAudioProcessHandler(processor) {
         let frameIndex = 0;
@@ -10162,9 +10295,8 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
             sampleRate: this.audioContext.sampleRate,
             getCurrentTime: () => this.audioContext.currentTime,
             getFrameIndex: () => frameIndex,
-            numInputs: this.numInputs,
-            numChannelsPerInput: this.numChannelsPerInput,
-            numOutputChannels: this.numOutputChannels,
+            numChannelsPerInput: this.inputSpec.numChannelsPerStream,
+            numChannelsPerOutput: this.outputSpec.numChannelsPerStream,
             windowSize: this.windowSize,
             dimension: this.dimension
         });
@@ -10181,19 +10313,21 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
         processor.addEventListener(constants.EVENT_AUDIOPROCESS, handler);
     }
     /**
-     * Split out a flattened array of channels into separate inputs.
+     * Split out a flattened array of channels into separate inputs/outputs.
      */
-    deinterleaveInputs(flatInputs) {
-        const inputs = [];
-        for (let i = 0; i < this.numInputs; i++) {
+    groupChannels(flatChannels, channelsPerGroup) {
+        const groups = [];
+        let startIndex = 0;
+        for (let i = 0; i < channelsPerGroup.length; i++) {
             const input = [];
-            for (let c = 0; c < this.numChannelsPerInput; c++) {
-                const flatIndex = i * this.numChannelsPerInput + c;
-                input.push(flatInputs[flatIndex]);
+            for (let c = 0; c < channelsPerGroup[i]; c++) {
+                const flatIndex = startIndex + c;
+                input.push(flatChannels[flatIndex]);
             }
-            inputs.push(input);
+            groups.push(input);
+            startIndex += channelsPerGroup[i];
         }
-        return inputs;
+        return groups;
     }
     processAudioEvent(event, contextFactory) {
         const inputChunk = [];
@@ -10204,46 +10338,67 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
         for (let c = 0; c < event.outputBuffer.numberOfChannels; c++) {
             outputChunk.push(event.outputBuffer.getChannelData(c));
         }
-        const inputChunks = this.deinterleaveInputs(inputChunk);
-        return this.processAudioFrame(inputChunks, outputChunk, contextFactory);
+        const inputChunks = this.groupChannels(inputChunk, this.inputSpec.numChannelsPerStream);
+        const outputChunks = this.groupChannels(outputChunk, this.outputSpec.numChannelsPerStream);
+        return this.processAudioFrame(inputChunks, outputChunks, contextFactory);
     }
 }
 class AudioTransformComponent extends BaseComponent {
-    constructor(fn, { dimension = "none", windowSize = undefined, inputNames = undefined, numInputs = undefined, numChannelsPerInput = 2, numOutputChannels = undefined, useWorklet } = {}) {
+    constructor(fn, 
+    // @ts-ignore Could be initialized with different subtype.
+    { dimension = "none", windowSize = undefined, inputSpec, outputSpec, useWorklet } = {}) {
         super();
         this.fn = fn;
-        useWorklet !== null && useWorklet !== void 0 ? useWorklet : (useWorklet = this.config.useWorkletByDefault);
         // Properties.
-        if (inputNames != undefined) {
-            if (numInputs != undefined && numInputs != inputNames.length) {
-                throw new Error(`If both numInputs and inputNames are provided, they must match. Given numInputs=${numInputs}, inputNames=[${inputNames}]`);
-            }
+        if (inputSpec == undefined) {
+            const names = this.inferParamNames(fn);
+            inputSpec = new StreamSpec({ names });
         }
-        else {
-            inputNames = this.inferParamNames(fn, numChannelsPerInput, numInputs);
+        else if (inputSpec.hasNumberedNames) {
+            inputSpec.names = this.inferParamNames(fn, inputSpec);
         }
-        numInputs !== null && numInputs !== void 0 ? numInputs : (numInputs = inputNames.length);
-        this.numInputs = numInputs;
-        this.numChannelsPerInput = numChannelsPerInput;
+        outputSpec !== null && outputSpec !== void 0 ? outputSpec : (outputSpec = new StreamSpec({ numStreams: 1 }));
+        useWorklet !== null && useWorklet !== void 0 ? useWorklet : (useWorklet = this.config.useWorkletByDefault);
         // Handles audio graph creation.
-        const executionContext = AudioExecutionContext.create(fn, {
+        this.executionContext = this._.AudioExecutionContext.create(fn, {
             dimension,
             windowSize,
-            numInputs,
-            numChannelsPerInput,
-            numOutputChannels,
+            inputSpec,
+            outputSpec,
             useWorklet,
         });
         // I/O.
-        for (const i of range(numInputs)) {
-            this[inputNames[i]] = this.defineAudioInput(inputNames[i], executionContext.inputs[i]);
-            // Numbered alias.
-            this[i] = this.defineInputAlias(i, this[inputNames[i]]);
+        for (const [i, name] of enumerate(inputSpec.names)) {
+            const propName = "$" + name;
+            // @ts-ignore No index signature.
+            this[propName] = this.defineAudioInput(propName, this.executionContext.inputs[i]);
+            // Numbered alias, only present in .inputs.
+            // @ts-ignore No index signature.
+            this.defineInputAlias(i, this[propName]);
         }
-        this.output = this.defineAudioOutput('output', executionContext.output);
+        for (const [i, name] of enumerate(outputSpec.names)) {
+            const propName = "$" + name;
+            // @ts-ignore No index signature.
+            this[propName] = this.defineAudioOutput(propName, this.executionContext.outputs[i]);
+            // Numbered alias, only present in .outputs
+            // @ts-ignore No index signature.
+            this.defineOutputAlias(i, this[propName]);
+        }
+        // TODO: this should be automatic, aliases should not count.
+        if (inputSpec.numStreams == 1) {
+            // @ts-ignore No index signature.
+            this.setDefaultInput(this["$" + inputSpec.names[0]]);
+        }
+        if (outputSpec.numStreams == 1) {
+            // @ts-ignore No index signature.
+            this.setDefaultOutput(this["$" + outputSpec.names[0]]);
+        }
+        this.inputSpec = inputSpec;
+        this.outputSpec = outputSpec;
     }
-    inferParamNames(fn, numChannelsPerInput, numInputs) {
-        const maxSafeInputs = Math.floor(constants.MAX_CHANNELS / numChannelsPerInput);
+    inferParamNames(fn, inputSpec) {
+        let numInputs = inputSpec === null || inputSpec === void 0 ? void 0 : inputSpec.numStreams;
+        const maxSafeInputs = Math.floor(constants.MAX_CHANNELS / constants.DEFAULT_NUM_CHANNELS);
         let descriptor;
         try {
             descriptor = describeFunction(fn);
@@ -10257,7 +10412,7 @@ class AudioTransformComponent extends BaseComponent {
         // use the first few.
         if (numInputs == undefined) {
             if (descriptor.maxArgs > maxSafeInputs) {
-                console.warn(`Given a function that takes up to ${descriptor.maxArgs} inputs.\nBecause only ${constants.MAX_CHANNELS} channels can be processed by each WebAudio node and each input has ${numChannelsPerInput} channels, only values for the first ${maxSafeInputs} inputs will be used. To suppress this warning, pass numInputs directly in the ${this._className} constructor.`);
+                console.warn(`Given a function that takes up to ${descriptor.maxArgs} inputs.\nBecause only ${constants.MAX_CHANNELS} channels can be processed by each WebAudio node and each input has ${constants.DEFAULT_NUM_CHANNELS} channels, only values for the first ${maxSafeInputs} inputs will be used. To suppress this warning, pass numInputs directly in the ${this._className} constructor.`);
                 numInputs = maxSafeInputs;
             }
             else {
@@ -10293,25 +10448,18 @@ class AudioTransformComponent extends BaseComponent {
     }
 }
 
-var __classPrivateFieldSet = (undefined && undefined.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
-    if (kind === "m") throw new TypeError("Private method is not writable");
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
-    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
-};
-var __classPrivateFieldGet$9 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+var __classPrivateFieldGet$6 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
 };
-var _AudioRateSignalSampler_instances, _AudioRateSignalSampler_interval, _AudioRateSignalSampler_setInterval;
+var _AudioRateSignalSampler_instances, _AudioRateSignalSampler_setInterval;
 // TODO: make this multi-channel.
 class AudioRateSignalSampler extends BaseComponent {
     // Utility for converting an audio-rate signal into a control signal.
     constructor(samplePeriodMs) {
         super();
         _AudioRateSignalSampler_instances.add(this);
-        _AudioRateSignalSampler_interval.set(this, void 0);
         samplePeriodMs !== null && samplePeriodMs !== void 0 ? samplePeriodMs : (samplePeriodMs = this.config.defaultSamplePeriodMs);
         this._analyzer = this.audioContext.createAnalyser();
         // Inputs
@@ -10329,23 +10477,24 @@ class AudioRateSignalSampler extends BaseComponent {
     }
     stop() {
         // TODO: figure out how to actually stop this...
-        window.clearInterval(__classPrivateFieldGet$9(this, _AudioRateSignalSampler_interval, "f"));
+        window.clearInterval(this.interval);
     }
-    inputAdded(input) {
-        if (__classPrivateFieldGet$9(this, _AudioRateSignalSampler_interval, "f")) {
+    inputAdded(source) {
+        var _a;
+        if (this.interval) {
             throw new Error("AudioToControlConverter can only have one input.");
         }
-        __classPrivateFieldGet$9(this, _AudioRateSignalSampler_instances, "m", _AudioRateSignalSampler_setInterval).call(this, this.samplePeriodMs.value);
+        __classPrivateFieldGet$6(this, _AudioRateSignalSampler_instances, "m", _AudioRateSignalSampler_setInterval).call(this, (_a = this.samplePeriodMs.value) !== null && _a !== void 0 ? _a : this.config.defaultSamplePeriodMs);
     }
     inputDidUpdate(input, newValue) {
         if (input == this.samplePeriodMs) {
             this.stop();
-            __classPrivateFieldGet$9(this, _AudioRateSignalSampler_instances, "m", _AudioRateSignalSampler_setInterval).call(this, newValue);
+            __classPrivateFieldGet$6(this, _AudioRateSignalSampler_instances, "m", _AudioRateSignalSampler_setInterval).call(this, newValue);
         }
     }
 }
-_AudioRateSignalSampler_interval = new WeakMap(), _AudioRateSignalSampler_instances = new WeakSet(), _AudioRateSignalSampler_setInterval = function _AudioRateSignalSampler_setInterval(period) {
-    __classPrivateFieldSet(this, _AudioRateSignalSampler_interval, window.setInterval(() => {
+_AudioRateSignalSampler_instances = new WeakSet(), _AudioRateSignalSampler_setInterval = function _AudioRateSignalSampler_setInterval(period) {
+    this.interval = window.setInterval(() => {
         try {
             const signal = this.getCurrentSignalValue();
             this.controlOutput.setValue(signal);
@@ -10356,7 +10505,7 @@ _AudioRateSignalSampler_interval = new WeakMap(), _AudioRateSignalSampler_instan
                 throw e;
             }
         }
-    }, period), "f");
+    }, period);
 };
 
 class MidiListener extends ToStringAndUUID {
@@ -10386,6 +10535,8 @@ class MidiState {
         }
     }
     static onMidiAccessChange(access, event) {
+        if (!(event instanceof MIDIConnectionEvent))
+            return;
         for (const listener of Object.values(this.accessListeners)) {
             listener(access, event);
         }
@@ -12688,7 +12839,7 @@ class MidiLearn {
         this.onMidiLearnConnection = onMidiLearnConnection;
         this.onMidiMessage = onMidiMessage;
         contextMenuSelector && this.addMidiLearnContextMenu(contextMenuSelector);
-        this.contextMenuSelector = contextMenuSelector;
+        this.$contextMenu = contextMenuSelector ? $(contextMenuSelector) : undefined;
         this.midiMessageListener = new MidiMessageListener(this.midiMessageHandler.bind(this));
     }
     addMidiLearnContextMenu(contextMenuSelector) {
@@ -12709,10 +12860,9 @@ class MidiLearn {
         });
     }
     enterMidiLearnMode() {
+        var _a;
         this.isInMidiLearnMode = true;
-        $(this.contextMenuSelector)
-            .removeClass(constants.MIDI_LEARN_ASSIGNED_CLASS)
-            .addClass(constants.MIDI_LEARN_LISTENING_CLASS);
+        (_a = this.$contextMenu) === null || _a === void 0 ? void 0 : _a.removeClass(constants.MIDI_LEARN_ASSIGNED_CLASS).addClass(constants.MIDI_LEARN_LISTENING_CLASS);
         // Exit on escape.
         window.addEventListener("keydown", (event) => {
             if (event.key == "Escape") {
@@ -12721,26 +12871,31 @@ class MidiLearn {
         }, { once: true });
     }
     exitMidiLearnMode() {
+        var _a;
         this.isInMidiLearnMode = false;
-        $(this.contextMenuSelector).removeClass(constants.MIDI_LEARN_LISTENING_CLASS);
+        (_a = this.$contextMenu) === null || _a === void 0 ? void 0 : _a.removeClass(constants.MIDI_LEARN_LISTENING_CLASS);
     }
     matchesLearnedFilter(input, event) {
-        var _a;
+        var _a, _b, _c, _d, _e;
+        if (event.data == null)
+            return false;
         const inputMatches = ((_a = this.learnedMidiInput) === null || _a === void 0 ? void 0 : _a.id) == input.id;
         const statusMatch = inputMatches && (this.learnMode == MidiLearnMode.INPUT
-            || this.learnedMidiEvent.data[0] == event.data[0]);
+            || ((_c = (_b = this.learnedMidiEvent) === null || _b === void 0 ? void 0 : _b.data) === null || _c === void 0 ? void 0 : _c[0]) == event.data[0]);
         const firstByteMatch = statusMatch && (this.learnMode != MidiLearnMode.FIRST_BYTE
-            || this.learnedMidiEvent.data[1] == event.data[1]);
+            || ((_e = (_d = this.learnedMidiEvent) === null || _d === void 0 ? void 0 : _d.data) === null || _e === void 0 ? void 0 : _e[1]) == event.data[1]);
         return firstByteMatch;
     }
     midiMessageHandler(input, event) {
+        var _a;
+        if (event.data == null)
+            return;
         if (this.isInMidiLearnMode) {
             this.learnedMidiInput = input;
             this.learnedMidiEvent = event;
             this.onMidiLearnConnection(input, event.data);
             this.onMidiMessage(event);
-            $(this.contextMenuSelector)
-                .addClass(constants.MIDI_LEARN_ASSIGNED_CLASS);
+            (_a = this.$contextMenu) === null || _a === void 0 ? void 0 : _a.addClass(constants.MIDI_LEARN_ASSIGNED_CLASS);
             this.exitMidiLearnMode();
         }
         else if (this.matchesLearnedFilter(input, event)) {
@@ -12779,7 +12934,7 @@ class SignalLogger extends ToStringAndUUID {
         }, this.samplePeriodMs);
     }
     stop() {
-        this.interval && clearInterval(this.interval);
+        clearInterval(this.interval);
     }
     /**
      * Register a node to be monitored.
@@ -12869,7 +13024,7 @@ class BaseDisplay {
     }
 }
 
-var __classPrivateFieldGet$8 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+var __classPrivateFieldGet$5 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
@@ -12883,13 +13038,15 @@ class VisualComponent extends BaseComponent {
     }
     static adjustSize($root) {
         const maxHeight = $root.children().get().reduce((acc, curr) => {
+            var _b;
             const top = +$(curr).css('top').replace('px', '');
-            const height = $(curr).outerHeight(true);
+            const height = (_b = $(curr).outerHeight(true)) !== null && _b !== void 0 ? _b : 0;
             return Math.max(acc, top + height);
         }, 0);
         const maxWidth = $root.children().get().reduce((acc, curr) => {
+            var _b;
             const left = +$(curr).css('left').replace('px', '');
-            const width = $(curr).outerWidth(true);
+            const width = (_b = $(curr).outerWidth(true)) !== null && _b !== void 0 ? _b : 0;
             return Math.max(acc, left + width);
         }, 0);
         $root.css({
@@ -12898,24 +13055,29 @@ class VisualComponent extends BaseComponent {
         });
     }
     static rotate($container, rotateDeg) {
+        var _b, _c;
         $container.css({
             "transform-origin": "top left",
             transform: `rotate(${rotateDeg}deg)`
         });
-        const parentRect = $container.parent().get(0).getBoundingClientRect();
+        const parentRect = (_b = $container.parent().get(0)) === null || _b === void 0 ? void 0 : _b.getBoundingClientRect();
+        const rect = (_c = $container.get(0)) === null || _c === void 0 ? void 0 : _c.getBoundingClientRect();
+        if (rect == undefined || parentRect == undefined) {
+            throw new Error("Both $container and its parent must exist.");
+        }
         const top = +$container.css("top").replace("px", "");
         const left = +$container.css("left").replace("px", "");
-        const rect = $container.get(0).getBoundingClientRect();
         $container.css({
             top: top - rect.top + parentRect.top,
             left: left - rect.left + parentRect.left
         });
     }
     addToDom(iaRootElement, { left = 0, top = 0, width = undefined, height = undefined, rotateDeg = 0 } = {}) {
-        __classPrivateFieldGet$8(this, _VisualComponent_instances, "m", _VisualComponent_assertDisplayIsUsable).call(this);
+        var _b, _c;
+        __classPrivateFieldGet$5(this, _VisualComponent_instances, "m", _VisualComponent_assertDisplayIsUsable).call(this);
         const cls = this.constructor;
-        width !== null && width !== void 0 ? width : (width = cls.defaultWidth);
-        height !== null && height !== void 0 ? height : (height = cls.defaultHeight);
+        width !== null && width !== void 0 ? width : (width = (_b = cls.defaultWidth) !== null && _b !== void 0 ? _b : 0);
+        height !== null && height !== void 0 ? height : (height = (_c = cls.defaultHeight) !== null && _c !== void 0 ? _c : 0);
         // Root.
         this.$root = $(iaRootElement).addClass('ia-root');
         if (!this.$root.length) {
@@ -12930,7 +13092,7 @@ class VisualComponent extends BaseComponent {
             .addClass('component')
             .addClass(constants.UNINITIALIZED_CLASS)
             .prop('id', this._uuid);
-        this.$bypassIndicator = __classPrivateFieldGet$8(_a$1, _a$1, "m", _VisualComponent_addBypassIndicator).call(_a$1, this.$container);
+        this.$bypassIndicator = __classPrivateFieldGet$5(_a$1, _a$1, "m", _VisualComponent_addBypassIndicator).call(_a$1, this.$container);
         this.$container.css({ width, height, top, left });
         // Main component
         const $component = this.$container;
@@ -12999,6 +13161,8 @@ class Bang extends VisualComponent {
         });
     }
     handleMidiInput(event) {
+        if (event.data == null)
+            return;
         const midiValue = event.data[2];
         if (midiValue) {
             if (!this.lastMidiValue) {
@@ -13012,12 +13176,15 @@ class Bang extends VisualComponent {
         this.lastMidiValue = midiValue;
     }
     connect(destination) {
-        let { component } = this.getDestinationInfo(destination);
-        if (destination instanceof ControlInput) {
-            this.output.connect(destination);
+        let { component, input } = this.getDestinationInfo(destination);
+        if (input instanceof ControlInput) {
+            this.output.connect(input);
+        }
+        else if (component != undefined) {
+            this.output.connect(component.triggerInput);
         }
         else {
-            this.output.connect(component.triggerInput);
+            throw new Error(`Unable to connect to ${destination} because it is not a ControlInput and has no associated component.`);
         }
         return component;
     }
@@ -13028,46 +13195,6 @@ class Bang extends VisualComponent {
 // Display options. TODO: move to display class?
 Bang.defaultHeight = 48;
 Bang.defaultWidth = 48;
-
-// All audio processing happens within the same worklet, so this can be used to 
-// share objects between worklet processors. They should be keyed by a unique 
-// ID (e.g. generated by crypto.randomUUID() in the main thread).
-const registry = {};
-
-IS_WORKLET ?
-    class BaseBufferWorkletProcessor extends AudioWorkletProcessor {
-        constructor() {
-            super();
-            // Receives serialized input sent from postMessage() calls.
-            // This is used to change the buffer at runtime.
-            this.port.onmessage = (event) => {
-                if (event.data.bufferId) {
-                    // NOTE: this must be set first due to logic in the buffer getter.
-                    this.bufferId = event.data.bufferId;
-                }
-                if (event.data.buffer) {
-                    this.buffer = event.data.buffer;
-                }
-            };
-        }
-        get buffer() {
-            var _a;
-            return (_a = registry[this.bufferId]) !== null && _a !== void 0 ? _a : [];
-        }
-        set buffer(value) {
-            registry[this.bufferId] = value;
-        }
-        get numSamples() {
-            return this.buffer[0].length;
-        }
-        get numChannels() {
-            return this.buffer.length;
-        }
-        toBufferIndex(sampleIdx) {
-            // Transforms the index to be within range.
-            return Math.floor(mod(sampleIdx, this.numSamples));
-        }
-    } : null;
 
 const BUFFER_WORKLET_NAME = "buffer-worklet";
 
@@ -13080,8 +13207,14 @@ class BufferComponent extends BaseComponent {
             numberOfInputs: 1,
             numberOfOutputs: 1,
             outputChannelCount: [numChannels],
+            processorOptions: {
+                buffer,
+                bufferId: buffer ? getBufferId(buffer) : undefined
+            }
         });
+        // @ts-ignore Property undefined.
         this.worklet['__numInputChannels'] = numChannels;
+        // @ts-ignore Property undefined.
         this.worklet['__numOutputChannels'] = numChannels;
         // Input
         this.buffer = this.defineControlInput('buffer', buffer, true).ofType(AudioBuffer);
@@ -13110,10 +13243,60 @@ class BufferComponent extends BaseComponent {
     }
 }
 
+const BUFFER_WRITER_WORKLET_NAME = "buffer-writer-worklet";
+
+class BufferWriterComponent extends BaseComponent {
+    constructor(buffer) {
+        var _a;
+        super();
+        const numChannels = (_a = buffer === null || buffer === void 0 ? void 0 : buffer.numberOfChannels) !== null && _a !== void 0 ? _a : 2;
+        this.worklet = new AudioWorkletNode(this.audioContext, BUFFER_WRITER_WORKLET_NAME, {
+            numberOfInputs: 2,
+            numberOfOutputs: 0,
+            processorOptions: {
+                buffer,
+                bufferId: buffer ? getBufferId(buffer) : undefined
+            }
+        });
+        // @ts-ignore Property undefined.
+        this.worklet['__numInputChannels'] = numChannels;
+        // @ts-ignore Property undefined.
+        this.worklet['__numOutputChannels'] = numChannels;
+        this.worklet.port.onmessage = event => {
+            this.handleMessage(event.data);
+        };
+        const positionGain = this.audioContext.createGain();
+        const valueGain = this.audioContext.createGain();
+        positionGain.connect(this.worklet, undefined, 0);
+        valueGain.connect(this.worklet, undefined, 1);
+        // Input
+        this.position = this.defineAudioInput('position', positionGain);
+        this.valueToWrite = this.defineAudioInput('valueToWrite', valueGain);
+        this.buffer = this.defineControlInput('buffer', buffer, true).ofType(AudioBuffer);
+        buffer && this.setBuffer(buffer);
+    }
+    get bufferId() {
+        return getBufferId(this.buffer.value);
+    }
+    setBuffer(buffer) {
+        this.worklet.port.postMessage({
+            buffer: bufferToFloat32Arrays(buffer),
+            bufferId: this.bufferId
+        });
+    }
+    // Update buffer in-place. This will be called periodically from the worklet 
+    // thread.
+    handleMessage(floatData) {
+        const buffer = this.buffer.value;
+        floatData.map((channel, i) => buffer.copyToChannel(channel, i));
+    }
+}
+
 class ChannelSplitter extends BaseComponent {
     constructor(...inputChannelGroups) {
         super();
         this.outputChannels = [];
+        this.inputChannelGroups = inputChannelGroups;
         this.length = inputChannelGroups.length;
         this.splitter = this.audioContext.createChannelSplitter();
         this.input = this.defineAudioInput('input', this.splitter);
@@ -13156,7 +13339,7 @@ class ChannelSplitter extends BaseComponent {
 
 const PRIVATE_CONSTRUCTOR = Symbol("PRIVATE_CONSTRUCTOR");
 class ChannelStacker extends BaseComponent {
-    constructor(numChannelsPerInput, __privateConstructorCall = undefined) {
+    constructor(numChannelsPerInput, __privateConstructorCall) {
         super();
         this.stackedInputs = [];
         if (__privateConstructorCall !== PRIVATE_CONSTRUCTOR) {
@@ -13183,8 +13366,8 @@ class ChannelStacker extends BaseComponent {
         const inputObj = {};
         for (let i = 0; i < destinations.length; i++) {
             let output = destinations[i];
-            if (output instanceof BaseComponent) {
-                output = output.getDefaultOutput();
+            if (output instanceof BaseComponent && output.defaultOutput) {
+                output = output.defaultOutput;
             }
             if (!(output instanceof HybridOutput || output instanceof AudioRateOutput)) {
                 throw new Error(`A ChannelStacker can only be created from audio-rate outputs. Given ${destinations[i]}, which is not an audio-rate outputs nor a component with a default audio-rate outputs.`);
@@ -13211,23 +13394,14 @@ class ControlToAudioConverter extends BaseComponent {
     }
 }
 
-var __classPrivateFieldGet$7 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
-    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-};
-var _FunctionComponent_instances, _FunctionComponent_parallelApplyAcrossChannels;
+// TODO: create shared base class with AudioTransformComponent.
 class FunctionComponent extends BaseComponent {
     constructor(fn) {
         super();
-        _FunctionComponent_instances.add(this);
         this.fn = fn;
         this._orderedFunctionInputs = [];
         const descriptor = describeFunction(fn);
         const parameters = descriptor.parameters;
-        // TODO: This assumes each input is mono. This should not be a requirement.
-        let numChannelsPerInput = 1; // TODO: Have a way of getting this info
-        this._audioProcessor = this._createScriptProcessor(descriptor.maxArgs, numChannelsPerInput);
         for (let i = 0; i < parameters.length; i++) {
             const arg = parameters[i];
             const inputName = "$" + arg.name;
@@ -13240,76 +13414,26 @@ class FunctionComponent extends BaseComponent {
             else if (arg.destructureType) {
                 throw new Error(`Invalid function for FunctionComponent. Parameters cannot use array or object destructuring. Given: ${arg.rawName}`);
             }
-            //
-            const passThroughInput = createConstantSource(this.audioContext);
             // Define input and its alias.
-            this[inputName] = this.defineHybridInput(inputName, passThroughInput.offset, constants.UNSET_VALUE, isRequired);
+            // @ts-ignore Improper index type.
+            this[inputName] = this.defineControlInput(inputName, constants.UNSET_VALUE, isRequired);
+            // @ts-ignore Improper index type.
             this[indexName] = this.defineInputAlias(indexName, this[inputName]);
-            for (let c = 0; c < numChannelsPerInput; c++) {
-                const fromChannel = c;
-                const toChannel = numChannelsPerInput * i + c;
-                passThroughInput.connect(this.channelMerger, fromChannel, toChannel);
-            }
-            //
-            // this[inputName] = this._defineHybridInput(inputName, this._audioProcessor, _UNSET_VALUE, isRequired)
+            // @ts-ignore Improper index type.
             this._orderedFunctionInputs.push(this[inputName]);
         }
-        let requiredArgs = parameters.filter(a => !a.hasDefault);
+        let requiredArgs = parameters.filter((a) => !a.hasDefault);
         if (requiredArgs.length == 1) {
+            // @ts-ignore Improper index type.
             this.setDefaultInput(this["$" + requiredArgs[0].name]);
         }
-        // TODO: Change to splitter + merger to make the output size correct.
-        const out = createConstantSource(this.audioContext);
-        this._audioProcessor.connect(out.offset);
-        this.output = this.defineHybridOutput('output', out);
+        this.output = this.defineControlOutput('output');
         this.preventIOOverwrites();
-    }
-    _createScriptProcessor(numInputs, numChannelsPerInput) {
-        const bufferSize = undefined; // 256
-        let numInputChannels = (numChannelsPerInput * numInputs) || 1;
-        // TODO: I don't think the handling of channels is correct here because the 
-        // output still has N channels.
-        this.channelMerger = this.audioContext.createChannelMerger(numInputChannels);
-        let processor = this.audioContext.createScriptProcessor(bufferSize, numInputChannels, numChannelsPerInput);
-        this.channelMerger.connect(processor);
-        function _getTrueChannels(buffer) {
-            // Returns an array of length numChannelsPerInput, and the i'th entry
-            // contains the i'th channel for each input.
-            let inputsGroupedByChannel = [];
-            for (let c = 0; c < numChannelsPerInput; c++) {
-                let channelData = [];
-                for (let i = 0; i < numInputs; i++) {
-                    channelData.push(buffer.getChannelData(c * numChannelsPerInput + i));
-                }
-                inputsGroupedByChannel.push(channelData);
-            }
-            return inputsGroupedByChannel;
-        }
-        const handler = e => {
-            // Apply the function for each sample in each channel.
-            const inputChannels = _getTrueChannels(e.inputBuffer);
-            let outputChannels = [];
-            for (let c = 0; c < numChannelsPerInput; c++) {
-                outputChannels.push(e.outputBuffer.getChannelData(c));
-            }
-            try {
-                __classPrivateFieldGet$7(this, _FunctionComponent_instances, "m", _FunctionComponent_parallelApplyAcrossChannels).call(this, inputChannels, outputChannels);
-            }
-            catch (e) {
-                processor.removeEventListener('audioprocess', handler);
-                e instanceof Disconnect || console.error(e);
-            }
-        };
-        processor.addEventListener('audioprocess', handler);
-        return processor;
     }
     inputDidUpdate(input, newValue) {
         const args = this._orderedFunctionInputs.map(eachInput => eachInput.value);
         const result = this.fn(...args);
         this.output.setValue(result);
-    }
-    process(event) {
-        return this.fn(event);
     }
     __call__(...inputs) {
         return this.withInputs(...inputs);
@@ -13332,22 +13456,6 @@ class FunctionComponent extends BaseComponent {
         return this;
     }
 }
-_FunctionComponent_instances = new WeakSet(), _FunctionComponent_parallelApplyAcrossChannels = function _FunctionComponent_parallelApplyAcrossChannels(inputChannels, outputChannels) {
-    for (let c = 0; c < inputChannels.length; c++) {
-        let outputChannel = outputChannels[c];
-        const inputChannel = inputChannels[c];
-        for (let i = 0; i < outputChannel.length; i++) {
-            // For the current sample and channel, apply the function across the
-            // inputs.
-            const inputs = inputChannel.map(inp => inp[i]);
-            const res = this.fn(...inputs);
-            if (typeof res != 'number') {
-                throw new Error("FunctionComponents that operate on audio-rate inputs must return numbers. Given: " + (typeof res));
-            }
-            outputChannel[i] = res;
-        }
-    }
-};
 
 class CompoundInput extends AbstractInput {
     get left() {
@@ -13360,16 +13468,20 @@ class CompoundInput extends AbstractInput {
     get keys() {
         return new Set(Object.keys(this.inputs));
     }
+    get defaultInput() {
+        return this._defaultInput;
+    }
     constructor(name, parent, inputs, defaultInput) {
         super(name, parent, false);
         this.name = name;
         this.parent = parent;
-        this.defaultInput = defaultInput;
         this.activeChannel = undefined;
         this.inputs = {};
+        let hasMultichannelInput = false;
         // Define 'this.inputs' and 'this' interface for underlying inputs.
         Object.keys(inputs).map(name => {
             const input = inputs[name];
+            hasMultichannelInput || (hasMultichannelInput = input instanceof AudioRateInput && input.audioSink instanceof AudioNode);
             if (Object.prototype.hasOwnProperty(name)) {
                 console.warn(`Cannot create top-level CompoundInput property '${name}' because it is reserved. Use 'inputs.${name}' instead.`);
             }
@@ -13382,6 +13494,8 @@ class CompoundInput extends AbstractInput {
                 });
             }
         });
+        this.channels = createMultiChannelView(this, hasMultichannelInput);
+        this._defaultInput = defaultInput;
     }
     mapOverInputs(fn) {
         const res = {};
@@ -13397,8 +13511,18 @@ class CompoundInput extends AbstractInput {
     get value() {
         return this.mapOverInputs(input => input.value);
     }
-    setValue(valueDict) {
-        this.mapOverInputs((input, name) => input.setValue(valueDict[name]));
+    setValue(value) {
+        if (isPlainObject(value) && Object.keys(value).every(k => this.keys.has(k))) {
+            // If each key is a valid value, assign it as such.
+            this.mapOverInputs((input, name) => input.setValue(value[name]));
+        }
+        else if (this.defaultInput) {
+            // Assume it's an input for the default input.
+            this.defaultInput.setValue(value);
+        }
+        else {
+            throw new Error(`The given compound input (${this}) has no default input, so setValue expected a plain JS object with keys equal to a subset of ${[...this.keys]}. Given: ${value} (${JSON.stringify(value)}). Did you intend to call setValue of one of its named inputs (.inputs[inputName])instead?`);
+        }
     }
 }
 
@@ -13435,16 +13559,21 @@ class CompoundOutput extends AbstractOutput {
         var _a;
         return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
     }
+    get defaultOutput() {
+        return this._defaultOutput;
+    }
     constructor(name, outputs, parent, defaultOutput) {
         super(name, parent);
         this.name = name;
         this.parent = parent;
-        this.defaultOutput = defaultOutput;
         this.activeChannel = undefined;
         this.outputs = {};
+        this._defaultOutput = defaultOutput;
+        let hasMultichannelInput = false;
         // Define 'this.outputs' and 'this' interface for underlying inputs.
         Object.keys(outputs).map(name => {
             const output = outputs[name];
+            hasMultichannelInput || (hasMultichannelInput = output instanceof AudioRateOutput);
             if (Object.prototype.hasOwnProperty(name)) {
                 console.warn(`Cannot create top-level CompoundOutput property '${name}' because it is reserved. Use 'outputs.${name}' instead.`);
             }
@@ -13457,6 +13586,7 @@ class CompoundOutput extends AbstractOutput {
                 });
             }
         });
+        this.channels = createMultiChannelView(this, hasMultichannelInput);
     }
     mapOverOutputs(fn) {
         const res = {};
@@ -13486,640 +13616,8 @@ class FFTOutput extends CompoundOutput {
     }
 }
 
-function checkRange(i, min, max) {
-    if (i >= max || i < min) {
-        throw new RangeError(`Index '${i}' is not in range of the view.`);
-    }
-    return true;
-}
-function isIndexInRange(v, length) {
-    const isNumber = typeof v != 'symbol' && Number.isInteger(+v);
-    return isNumber && checkRange(+v, 0, length);
-}
-class ArrayView {
-    get proxy() {
-        var _a;
-        return (_a = this._proxy) !== null && _a !== void 0 ? _a : (this._proxy = new Proxy(this, {
-            get(target, p, receiver) {
-                if (isIndexInRange(p, this.length)) {
-                    return target.get(+p);
-                }
-                else {
-                    return Reflect.get(target, p, receiver);
-                }
-            },
-            set(target, p, newValue, receiver) {
-                if (isIndexInRange(p, this.length)) {
-                    target.set(+p, newValue);
-                    return true;
-                }
-                else {
-                    return Reflect.set(target, p, newValue, receiver);
-                }
-            }
-        }));
-    }
-    constructor(privateConstructor, get, set, length) {
-        this.get = get;
-        this.set = set;
-        this.length = length;
-        if (privateConstructor != ArrayView.PRIVATE_CONSTRUCTOR) {
-            throw new Error("Instances must be constructed using one of the ArrayView.create*() methods.");
-        }
-    }
-    flatMap(callback, thisArg) {
-        return Array.prototype.flat.call(this.proxy, callback, thisArg);
-    }
-    flat(depth) {
-        return Array.prototype.flat.call(this.proxy, depth);
-    }
-    toLocaleString(locales, options) {
-        throw new Error("Method not implemented.");
-    }
-    pop() {
-        if (this.length) {
-            const v = this.get(this.length - 1);
-            this.length -= 1;
-            return v;
-        }
-    }
-    push(...items) {
-        throw new Error("Method not implemented.");
-    }
-    concat(...items) {
-        return Array.prototype.concat.call(this.proxy, ...items);
-    }
-    join(separator) {
-        return Array.prototype.join.call(this.proxy, separator);
-    }
-    reverse() {
-        return ArrayView.createReversedView(this.proxy);
-    }
-    shift() {
-        throw new Error("Method not implemented.");
-    }
-    slice(start, end) {
-        return ArrayView.createSliceView(this.proxy, start, end);
-    }
-    sort(compareFn) {
-        return Array.prototype.sort.call(this.proxy, compareFn);
-    }
-    splice(start, deleteCount, ...rest) {
-        throw new Error("Method not implemented.");
-    }
-    unshift(...items) {
-        throw new Error("Method not implemented.");
-    }
-    indexOf(searchElement, fromIndex) {
-        return Array.prototype.indexOf.call(this.proxy, searchElement, fromIndex);
-    }
-    lastIndexOf(searchElement, fromIndex) {
-        return Array.prototype.lastIndexOf.call(this.proxy, searchElement, fromIndex);
-    }
-    every(predicate, thisArg) {
-        return Array.prototype.every.call(this.proxy, predicate, thisArg);
-    }
-    some(predicate, thisArg) {
-        return Array.prototype.some.call(this.proxy, predicate, thisArg);
-    }
-    forEach(callbackfn, thisArg) {
-        return Array.prototype.forEach.call(this.proxy, callbackfn, thisArg);
-    }
-    map(callbackfn, thisArg) {
-        return Array.prototype.map.call(this.proxy, callbackfn, thisArg);
-    }
-    filter(predicate, thisArg) {
-        return Array.prototype.filter.call(this.proxy, predicate, thisArg);
-    }
-    reduce(callbackfn, initialValue) {
-        return Array.prototype.reduce.call(this.proxy, callbackfn, initialValue);
-    }
-    reduceRight(callbackfn, initialValue) {
-        return Array.prototype.reduceRight.call(this.proxy, callbackfn, initialValue);
-    }
-    find(predicate, thisArg) {
-        return Array.prototype.find.call(this.proxy, predicate, thisArg);
-    }
-    findIndex(predicate, thisArg) {
-        return Array.prototype.findIndex.call(this.proxy, predicate, thisArg);
-    }
-    fill(value, start, end) {
-        return Array.prototype.fill.call(this.proxy, value, start, end);
-    }
-    copyWithin(target, start, end) {
-        return Array.prototype.copyWithin.call(this.proxy, target, start, end);
-    }
-    entries() {
-        return Array.prototype.entries.call(this.proxy);
-    }
-    keys() {
-        return Array.prototype.keys.call(this.proxy);
-    }
-    values() {
-        return Array.prototype.values.call(this.proxy);
-    }
-    includes(searchElement, fromIndex) {
-        return Array.prototype.includes.call(this.proxy, searchElement, fromIndex);
-    }
-    [Symbol.iterator]() {
-        return Array.prototype[Symbol.iterator].call(this.proxy);
-    }
-    toString() {
-        return `ArrayView (${this.length})`;
-    }
-    toArray() {
-        return [...this];
-    }
-    static create(get, set, length) {
-        const view = new ArrayView(ArrayView.PRIVATE_CONSTRUCTOR, get, set, length);
-        return view.proxy;
-    }
-    static createFromDataLocationFn(getDataLocation, length) {
-        return this.create(function get(i) {
-            const data = getDataLocation(i);
-            return data.array[data.index];
-        }, function set(i, v) {
-            const data = getDataLocation(i);
-            data.array[data.index] = v;
-        }, length);
-    }
-    static createConcatView(...arrays) {
-        const lengths = arrays.map(a => a.length);
-        const lengthSum = lengths.reduce((sum, c) => sum + c, 0);
-        function getDataLocation(i) {
-            for (let arrayIndex = 0; arrayIndex < arrays.length; arrayIndex++) {
-                if (i < lengths[arrayIndex]) {
-                    return {
-                        array: arrays[arrayIndex],
-                        index: i
-                    };
-                }
-                else {
-                    i -= lengths[arrayIndex];
-                }
-            }
-            throw new RangeError(`Index '${i}' is not in range of the view.`);
-        }
-        return this.createFromDataLocationFn(getDataLocation, lengthSum);
-    }
-    static createSliceView(array, startIndex, endIndex) {
-        // TODO: validate these numbers.
-        startIndex !== null && startIndex !== void 0 ? startIndex : (startIndex = 0);
-        endIndex !== null && endIndex !== void 0 ? endIndex : (endIndex = array.length);
-        function getDataLocation(i) {
-            const index = i + startIndex;
-            return { array, index };
-        }
-        return this.createFromDataLocationFn(getDataLocation, endIndex - startIndex);
-    }
-    static createReindexedView(array, indices) {
-        function getDataLocation(i) {
-            return { array, index: indices[i] };
-        }
-        return this.createFromDataLocationFn(getDataLocation, indices.length);
-    }
-    static createInterleavedView(...arrays) {
-        let singleArrLength = undefined;
-        const numArrs = arrays.length;
-        for (const arr of arrays) {
-            singleArrLength !== null && singleArrLength !== void 0 ? singleArrLength : (singleArrLength = arr.length);
-            if (arr.length != singleArrLength) {
-                throw new Error(`Each array to interleave must be the same length. Expected ${singleArrLength}, got ${arr.length}`);
-            }
-        }
-        function getDataLocation(i) {
-            const index = Math.floor(i / numArrs);
-            const arrIndex = i % numArrs;
-            return { array: arrays[arrIndex], index };
-        }
-        return this.createFromDataLocationFn(getDataLocation, singleArrLength * numArrs);
-    }
-    static createDeinterleavedViews(array, numViews) {
-        let length = array.length / numViews;
-        if (!Number.isInteger(length)) {
-            throw new Error(`The length of the array must be exactly divisible by numViews. Given numViews=${numViews}, array.length=${array.length}`);
-        }
-        const views = [];
-        for (let viewIndex = 0; viewIndex < numViews; viewIndex++) {
-            function getDataLocation(i) {
-                return { array, index: i * numViews + viewIndex };
-            }
-            const view = this.createFromDataLocationFn(getDataLocation, length);
-            views.push(view);
-        }
-        return views;
-    }
-    static createReversedView(array) {
-        function getDataLocation(i) {
-            return { array, index: array.length - (i + 1) };
-        }
-        return this.createFromDataLocationFn(getDataLocation, array.length);
-    }
-}
-ArrayView.PRIVATE_CONSTRUCTOR = Symbol('PRIVATE_CONSTRUCTOR');
-
-var queue = {};
-
-/**
- * @license MIT
- * @copyright 2020 Eyas Ranjous <eyas.ranjous@gmail.com>
- *
- * @class
- */
-
-let Queue$1 = class Queue {
-  /**
-   * Creates a queue.
-   * @param {array} [elements]
-   */
-  constructor(elements) {
-    this._elements = Array.isArray(elements) ? elements : [];
-    this._offset = 0;
-  }
-
-  /**
-   * Adds an element to the back of the queue.
-   * @public
-   * @param {number|string|object} element
-   */
-  enqueue(element) {
-    this._elements.push(element);
-    return this;
-  }
-
-  /**
-   * Adds an element to the back of the queue.
-   * @public
-   * @param {number|string|object} element
-   */
-  push(element) {
-    return this.enqueue(element);
-  }
-
-  /**
-   * Dequeues the front element in the queue.
-   * @public
-   * @returns {number|string|object}
-   */
-  dequeue() {
-    if (this.size() === 0) return null;
-
-    const first = this.front();
-    this._offset += 1;
-
-    if (this._offset * 2 < this._elements.length) return first;
-
-    // only remove dequeued elements when reaching half size
-    // to decrease latency of shifting elements.
-    this._elements = this._elements.slice(this._offset);
-    this._offset = 0;
-    return first;
-  }
-
-  /**
-   * Dequeues the front element in the queue.
-   * @public
-   * @returns {number|string|object}
-   */
-  pop() {
-    return this.dequeue();
-  }
-
-  /**
-   * Returns the front element of the queue.
-   * @public
-   * @returns {number|string|object}
-   */
-  front() {
-    return this.size() > 0 ? this._elements[this._offset] : null;
-  }
-
-  /**
-   * Returns the back element of the queue.
-   * @public
-   * @returns {number|string|object}
-   */
-  back() {
-    return this.size() > 0 ? this._elements[this._elements.length - 1] : null;
-  }
-
-  /**
-   * Returns the number of elements in the queue.
-   * @public
-   * @returns {number}
-   */
-  size() {
-    return this._elements.length - this._offset;
-  }
-
-  /**
-   * Checks if the queue is empty.
-   * @public
-   * @returns {boolean}
-   */
-  isEmpty() {
-    return this.size() === 0;
-  }
-
-  /**
-   * Returns the remaining elements in the queue as an array.
-   * @public
-   * @returns {array}
-   */
-  toArray() {
-    return this._elements.slice(this._offset);
-  }
-
-  /**
-   * Clears the queue.
-   * @public
-   */
-  clear() {
-    this._elements = [];
-    this._offset = 0;
-  }
-
-  /**
-   * Creates a shallow copy of the queue.
-   * @public
-   * @return {Queue}
-   */
-  clone() {
-    return new Queue(this._elements.slice(this._offset));
-  }
-
-  /**
-   * Creates a queue from an existing array.
-   * @public
-   * @static
-   * @param {array} elements
-   * @return {Queue}
-   */
-  static fromArray(elements) {
-    return new Queue(elements);
-  }
-};
-
-queue.Queue = Queue$1;
-
-const { Queue } = queue;
-
-var Queue_1 = Queue;
-
-/**
- * A Queue that allows adding and popping many elements at a time, without copying the underlying data.
- */
-class ChunkedQueue {
-    constructor() {
-        this.queue = new Queue_1();
-        /**
-         * Records how far into this.queue.front() we've already read.
-         */
-        this.numElementsAlreadyRead = 0;
-        this.length = 0;
-    }
-    getChunk(numElements, defaultValue, removeItems) {
-        let numPoppedElements = 0;
-        let lengthAfterPop = this.length;
-        let numElementsRead = this.numElementsAlreadyRead;
-        const queue = removeItems ? this.queue : this.queue.clone();
-        const arrsToConcat = [];
-        while (numPoppedElements < numElements) {
-            let arr = queue.front();
-            if (arr == undefined) {
-                // Fill rest with default value.
-                arrsToConcat.push(Array(numElements - numPoppedElements).fill(defaultValue));
-                break;
-            }
-            if (numElementsRead) {
-                // Only look after the ones that have been read.
-                arr = ArrayView.createSliceView(arr, numElementsRead);
-            }
-            numPoppedElements += arr.length;
-            if (numPoppedElements <= numElements) {
-                // Safe to remove, as we used up all the elements in the array.
-                queue.pop();
-                numElementsRead = 0;
-            }
-            else {
-                // We don't need to use the whole array. Only look at first (oldest) 
-                // values and keep the array around.
-                const numUnused = numPoppedElements - numElements;
-                numElementsRead += (arr.length - numUnused);
-                arr = ArrayView.createSliceView(arr, 0, arr.length - numUnused);
-            }
-            arrsToConcat.push(arr);
-            lengthAfterPop -= arr.length;
-        }
-        if (removeItems) {
-            this.numElementsAlreadyRead = numElementsRead;
-            this.length = lengthAfterPop;
-        }
-        return ArrayView.createConcatView(...arrsToConcat);
-    }
-    popChunk(numElements, defaultValue) {
-        return this.getChunk(numElements, defaultValue, true);
-    }
-    peekChunk(numElements, defaultValue) {
-        return this.getChunk(numElements, defaultValue, false);
-    }
-    addChunk(arr) {
-        this.queue.push(arr);
-        this.length += arr.length;
-    }
-}
-/**
- * A class that abstracts out the size of actual window received, ensuring all windows have a specific size.
- */
-class AudioStreamScheduler {
-    constructor(windowSize, numInputs, numOutputs, processWindow, getChunkStartIndex = () => 0) {
-        this.windowSize = windowSize;
-        this.numInputs = numInputs;
-        this.numOutputs = numOutputs;
-        this.processWindow = processWindow;
-        this.getChunkStartIndex = getChunkStartIndex;
-    }
-    get inputQueueSize() {
-        return this.inputQueues[0][0].length;
-    }
-    popInputChunk(size) {
-        return map2d(this.inputQueues, queue => queue.popChunk(size, 0));
-    }
-    peekInputChunk(size) {
-        return map2d(this.inputQueues, queue => queue.peekChunk(size, 0));
-    }
-    popOutputChunk(size) {
-        return map2d(this.outputQueues, queue => queue.popChunk(size, 0));
-    }
-    addToOutputQueue(outputs) {
-        map2d(this.outputQueues, (queue, i, c) => queue.addChunk(outputs[i][c]));
-    }
-    addToInputQueue(inputs) {
-        map2d(this.inputQueues, (queue, i, c) => queue.addChunk(inputs[i][c]));
-    }
-    *getScheduledInputBatches() {
-        // Process all the data we can.
-        while (this.inputQueueSize >= this.windowSize) {
-            const inputChunk = this.peekInputChunk(this.windowSize);
-            const startIndex = this.getChunkStartIndex(inputChunk);
-            if (startIndex) {
-                // Pop all elements before it. The next loop will start there.
-                this.popInputChunk(startIndex);
-            }
-            else if (startIndex == -1) {
-                this.popInputChunk(this.windowSize);
-            }
-            else {
-                yield this.popInputChunk(this.windowSize);
-            }
-        }
-    }
-    processScheduledBatches() {
-        let keepAlive;
-        for (const inputBatch of this.getScheduledInputBatches()) {
-            const numChannels = inputBatch[0].length;
-            // Each input batch is of length this.windowSize
-            const outputs = [];
-            for (let i = 0; i < this.numOutputs; i++) {
-                const output = [];
-                for (let c = 0; c < numChannels; c++) {
-                    output.push(new Float32Array(inputBatch[0][0].length));
-                }
-                outputs.push(output);
-            }
-            // If any want to keep-alive, keep alive.
-            keepAlive !== null && keepAlive !== void 0 ? keepAlive : (keepAlive = false);
-            const res = this.processWindow(map2d(inputBatch, v => v.toArray()), outputs);
-            keepAlive || (keepAlive = res);
-            this.addToOutputQueue(outputs);
-        }
-        // If no batches were yet scheduled (keepAlive==undefined), keep alive.
-        return keepAlive !== null && keepAlive !== void 0 ? keepAlive : true;
-    }
-    copyToOutputs(queuedOutputs, outputs) {
-        for (let i = 0; i < outputs.length; i++) {
-            for (let c = 0; c < outputs[i].length; c++) {
-                outputs[i][c].set(queuedOutputs[i][c]);
-            }
-        }
-    }
-    process(inputs, outputs) {
-        var _a, _b;
-        // TODO: fill in dummy values if given input = []
-        if (!(inputs.length && inputs.every(i => i.length) && outputs.length && outputs.every(i => i.length))) {
-            // TODO: how do we handle "input-based" scheduling if there are zero 
-            // inputs?
-            console.error("0-input and 0-channel functions are not supported yet. This frame will be ignored.");
-            return true;
-        }
-        //if (inputs.length == 3) console.log(["inputs", ...inputs[0][0]])
-        // If arrays are overwritten by WebAudio API, we need to copy. 
-        // TODO: maybe remove.
-        // Initalize queues (only happens once).
-        (_a = this.inputQueues) !== null && _a !== void 0 ? _a : (this.inputQueues = map2d(inputs, _ => new ChunkedQueue()));
-        (_b = this.outputQueues) !== null && _b !== void 0 ? _b : (this.outputQueues = map2d(outputs, _ => new ChunkedQueue()));
-        // Add input to input queue.
-        this.addToInputQueue(inputs);
-        // Process output if needed and add the result to the output queue.
-        this.processScheduledBatches();
-        // Pop output from output queue.
-        const queuedOutputs = this.popOutputChunk(inputs[0][0].length);
-        //console.log(queuedOutputs[0][0][0])
-        /* if (queuedOutputs[0][0][0] == 768) {
-          throw new Error("" + queuedOutputs[0][0][0])
-        } */
-        // Write to current outputs.
-        this.copyToOutputs(queuedOutputs, outputs);
-        //if (outputs.length == 3) console.log(["outputs", ...outputs[0][0]])
-        //
-        //console.log(["inputs", inputs[0][0]])
-        return true;
-    }
-}
-/**
- * Uses input / output queuing to abstract sequence length away from the size of arrays passed to process().
- */
-IS_WORKLET ? class BaseWorkletProcessor extends AudioWorkletProcessor {
-    constructor(windowSize, numInputs, numOutputs) {
-        super();
-        this.windowSize = windowSize;
-        this.numInputs = numInputs;
-        this.numOutputs = numOutputs;
-        if (this.numInputs == 0) {
-            throw new RangeError("0-input worklets are not supported yet.");
-        }
-        if (this.constructor.prototype.process != BaseWorkletProcessor.prototype.process) {
-            throw new Error("The process() method must not be overridden. Overwrite processWindow() instead.");
-        }
-        this.scheduler = new AudioStreamScheduler(windowSize, numInputs, numOutputs, this.processWindow.bind(this), this.getInputChunkStartIndex.bind(this));
-    }
-    /**
-     * Abstract method that receives chunks of size this.windowSize.
-     */
-    processWindow(inputs, outputs, parameters) {
-        throw new Error("Not implemented.");
-    }
-    /**
-     * This determines the index in the chunk at which to start the batch, and should be overridden by the subclass.
-     *
-     * This is mainly useful in situations where a specific chunk of data is required for the operation, such as magnitude values from 0 to 1023 in an FFT with a window size of 1024. If this method did not exist, an FFT frame could contain values like `[896 through 1023, 0 through 895]`, which should actually be processed as two separate frames--e.g. it should be delayed by 128 samples to process the frame starting from 0.
-     *
-     * Elements before this index will be discarded, and the batch will not be popped until it is full size. A return value of -1 indicates that the entire chunk should be discarded.
-     */
-    getInputChunkStartIndex(chunk) {
-        return 0;
-    }
-    process(inputs, outputs, parameters // TODO: handle parameters?
-    ) {
-        /* const numChannels = Math.max(
-          ...inputs.map(v => v.length),
-          ...outputs.map(v => v.length)
-        ) */
-        try {
-            const numChannels = Math.max(...inputs.map(input => input.length));
-            const numSamples = Math.max(...inputs.map(input => { var _a; return (_a = input[0]) === null || _a === void 0 ? void 0 : _a.length; }));
-            // Fill in empty ("disconnected" inputs).
-            inputs = inputs.map((input, i) => {
-                if (input.length) {
-                    // Make a *copy*. This is necessary because the Web Audio API reuses
-                    // input buffers between process() calls so otherwise the data will be
-                    // overwritten.
-                    return input.map(c => new Float32Array(c));
-                }
-                console.log("EMPTY! " + i);
-                const emptyChannels = Array(numChannels).fill([]);
-                return emptyChannels.map(_ => new Float32Array(numSamples));
-            });
-            return this.scheduler.process(inputs, outputs);
-        }
-        catch (e) {
-            console.error(`Encountered worklet error while processing the following input frame:`);
-            console.error(inputs);
-            throw e;
-        }
-    }
-} : null;
-/*
-const scheduler = new AudioStreamScheduler(1024, 1, 3, (inputs, outputs) => {
-  map2d(outputs, arr => arr.map((v, k) => arr[k] = inputs[0][0][k]))
-  console.log(["true!", outputs])
-})
-
-const inputs = [[new Float32Array(128)]]
-for (let i = 0; i < 128; i++) {
-  map2d(inputs, arr => arr.map((_, i) => arr[i] = Math.random()))
-  const outputs = [[new Float32Array(128)], [new Float32Array(128)], [new Float32Array(128)]]
-  scheduler.process(inputs, outputs)
-  console.log(outputs)
-}
-
-scheduler.process([[new Float32Array([10, 11, 12, 13])]], [[new Float32Array(4)]])
-scheduler.process([[new Float32Array([14])]], [[new Float32Array(1)]])
-scheduler.process([[new Float32Array([15])]], [[new Float32Array(1)]])
-scheduler.process([[new Float32Array([16, 17])]], [[new Float32Array(2)]])
-scheduler.process([[]], [[new Float32Array([18, 19, 20, 21, 22])]]) */
-
 // fft.js from https://github.com/indutny/fft.js/tree/master
+// @ts-ignore
 (function (t) { function r(e) { if (i[e])
     return i[e].exports; var o = i[e] = { i: e, l: !1, exports: {} }; return t[e].call(o.exports, o, o.exports, r), o.l = !0, o.exports; } var i = {}; return r.m = t, r.c = i, r.i = function (t) { return t; }, r.d = function (t, i, e) { r.o(t, i) || Object.defineProperty(t, i, { configurable: !1, enumerable: !0, get: e }); }, r.n = function (t) { var i = t && t.__esModule ? function () { return t.default; } : function () { return t; }; return r.d(i, "a", i), i; }, r.o = function (t, r) { return Object.prototype.hasOwnProperty.call(t, r); }, r.p = "", r(r.s = 0); })([function (t, r, i) {
         function e(t) { if (this.size = 0 | t, this.size <= 1 || 0 != (this.size & this.size - 1))
@@ -14286,9 +13784,13 @@ class BundleComponent extends BaseComponent {
             this.componentObject = components;
         }
         for (const key in this.componentObject) {
+            // @ts-ignore No index signature.
+            // TODO: export intersection with index signature type.
             this[key] = this.componentObject[key];
             this.defineInputAlias(key, this.componentObject[key].getDefaultInput());
-            this.defineOutputAlias(key, this.componentObject[key].getDefaultOutput());
+            if (this.componentObject[key].defaultOutput) {
+                this.defineOutputAlias(key, this.componentObject[key].defaultOutput);
+            }
         }
     }
     [Symbol.iterator]() {
@@ -14297,7 +13799,7 @@ class BundleComponent extends BaseComponent {
     getDefaultInput() {
         throw new Error("Method not implemented.");
     }
-    getDefaultOutput() {
+    get defaultOutput() {
         throw new Error("Method not implemented.");
     }
     setBypassed(isBypassed) {
@@ -14335,8 +13837,9 @@ class BundleComponent extends BaseComponent {
     setValues(valueObj) {
         return this.getBundledResult('setValues', valueObj);
     }
-    wasConnectedTo(other) {
-        this.getBundledResult('wasConnectedTo', other);
+    wasConnectedTo(source) {
+        this.getBundledResult('wasConnectedTo', source);
+        return source;
     }
     // TODO: doesn't work.
     sampleSignal(samplePeriodMs) {
@@ -14353,6 +13856,7 @@ class IgnoreDuplicates extends BaseComponent {
         this.input = this.defineControlInput('input');
         this.output = this.defineControlOutput('output');
     }
+    // @ts-ignore ControlInput<T> doesn't cover all of base AbstractInput<T>
     inputDidUpdate(input, newValue) {
         if (newValue != this.value) {
             this.output.setValue(newValue);
@@ -14361,16 +13865,9 @@ class IgnoreDuplicates extends BaseComponent {
     }
 }
 
-var __classPrivateFieldGet$6 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
-    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-};
-var _Keyboard_instances, _Keyboard_getKeyId;
 class Keyboard extends VisualComponent {
     constructor(numKeys = 48, lowestPitch = 48) {
         super();
-        _Keyboard_instances.add(this);
         this.display = new this._.KeyboardDisplay(this);
         // Inputs
         this.numKeys = this.defineControlInput('numKeys', numKeys);
@@ -14396,16 +13893,16 @@ class Keyboard extends VisualComponent {
     get highestPitch() {
         return this.lowestPitch.value + this.numKeys.value;
     }
-    _keyDown(keyNumber) {
-        this.midiOutput.setValue(new KeyEvent(KeyEventType.KEY_DOWN, keyNumber, 64, __classPrivateFieldGet$6(this, _Keyboard_instances, "m", _Keyboard_getKeyId).call(this, keyNumber)));
+    getKeyId(keyNumber) {
+        return `${this._uuid}-k${keyNumber}`; // Unique identifier.
     }
-    _keyUp(keyNumber) {
-        this.midiOutput.setValue(new KeyEvent(KeyEventType.KEY_UP, keyNumber, 64, __classPrivateFieldGet$6(this, _Keyboard_instances, "m", _Keyboard_getKeyId).call(this, keyNumber)));
+    keyDown(keyNumber) {
+        this.midiOutput.setValue(new KeyEvent(KeyEventType.KEY_DOWN, keyNumber, 64, this.getKeyId(keyNumber)));
+    }
+    keyUp(keyNumber) {
+        this.midiOutput.setValue(new KeyEvent(KeyEventType.KEY_UP, keyNumber, 64, this.getKeyId(keyNumber)));
     }
 }
-_Keyboard_instances = new WeakSet(), _Keyboard_getKeyId = function _Keyboard_getKeyId(keyNumber) {
-    return `${this._uuid}-k${keyNumber}`; // Unique identifier.
-};
 // Display options. TODO: move to display class?
 Keyboard.defaultHeight = 64;
 Keyboard.defaultWidth = 256;
@@ -14450,6 +13947,8 @@ class SelectDisplay extends BaseDisplay {
         this.populateOptions();
     }
     populateOptions() {
+        if (this.$select == undefined)
+            return;
         this.$select.empty();
         for (const { id, name: value } of this.component.selectOptions) {
             const $option = $(document.createElement('option'))
@@ -14529,8 +14028,8 @@ class MidiInputDevice extends VisualComponent {
         this.display.refresh();
     }
     onMidiAccessChange(access, event) {
-        var _a;
-        if ((event === null || event === void 0 ? void 0 : event.port.type) === "output") {
+        var _a, _b;
+        if (((_a = event === null || event === void 0 ? void 0 : event.port) === null || _a === void 0 ? void 0 : _a.type) === "output") {
             return; // We only care about input changes.
         }
         // Set available inputs.
@@ -14538,11 +14037,11 @@ class MidiInputDevice extends VisualComponent {
         this.availableDevices.setValue(this.deviceMap, true);
         this.selectOptions = MidiInputDevice.buildSelectOptions(this.deviceMap);
         // Set selected input(s).
-        const newId = (_a = this.autoSelectNewDevice(this.deviceMap, event)) !== null && _a !== void 0 ? _a : NO_INPUT_ID;
+        const newId = (_b = this.autoSelectNewDevice(this.deviceMap, event)) !== null && _b !== void 0 ? _b : NO_INPUT_ID;
         this.selectDevice(newId);
     }
     autoSelectNewDevice(deviceMap, event) {
-        var _a;
+        var _a, _b, _c;
         const inputs = Object.values(deviceMap);
         if (this.defaultDeviceBehavior instanceof Function) {
             // Custom selector function.
@@ -14564,18 +14063,18 @@ class MidiInputDevice extends VisualComponent {
                     // The user explicitly selected using "all", so don't box them in.
                     return this.selectedId;
                 }
-                else if ((event === null || event === void 0 ? void 0 : event.port.state) === "connected") {
+                else if (((_a = event === null || event === void 0 ? void 0 : event.port) === null || _a === void 0 ? void 0 : _a.state) === "connected") {
                     // Connect to the new device.
                     return event.port.id;
                 }
-                else if ((event === null || event === void 0 ? void 0 : event.port.state) === "disconnected" && event.port.id !== this.selectedId) {
+                else if (((_b = event === null || event === void 0 ? void 0 : event.port) === null || _b === void 0 ? void 0 : _b.state) === "disconnected" && event.port.id !== this.selectedId) {
                     // Disconnection was irrelevant; keep same device.
                     return this.selectedId;
                 }
                 else {
                     // Disconnection was relevant OR we are choosing an initial device
                     // (event === undefined).
-                    return (_a = inputs[inputs.length - 1]) === null || _a === void 0 ? void 0 : _a.id;
+                    return (_c = inputs[inputs.length - 1]) === null || _c === void 0 ? void 0 : _c.id;
                 }
             case DefaultDeviceBehavior.ALL:
                 return ALL_INPUT_ID;
@@ -14584,6 +14083,8 @@ class MidiInputDevice extends VisualComponent {
         }
     }
     sendMidiMessage(midiInput, e) {
+        if (e.data == null)
+            return;
         if ([midiInput.id, ALL_INPUT_ID].includes(this.selectedId)) {
             const [cmd, key, v] = e.data;
             this.midiOut.setValue([cmd, key, v]);
@@ -14625,6 +14126,8 @@ class RangeInputComponent extends VisualComponent {
         });
     }
     handleMidiUpdate(event) {
+        if (event.data == null)
+            return;
         const uInt8Value = event.data[2]; // Velocity / value.
         const scaledValue = scaleRange(uInt8Value, [0, 127], [this.minValue.value, this.maxValue.value]);
         this.updateValue(scaledValue);
@@ -14651,7 +14154,7 @@ class RangeInputComponent extends VisualComponent {
 RangeInputComponent.Type = RangeType;
 
 // TODO: this has a limited sample rate. Instead, develop an "oscilloscope" 
-var __classPrivateFieldGet$5 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+var __classPrivateFieldGet$4 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
@@ -14699,7 +14202,7 @@ class ScrollingAudioMonitor extends VisualComponent {
                 const dataArray = new Float32Array(128);
                 this._analyzers[i].getFloatTimeDomainData(dataArray);
                 const v = dataArray[0];
-                __classPrivateFieldGet$5(this, _ScrollingAudioMonitor_instances, "m", _ScrollingAudioMonitor_addToMemory).call(this, this._memory[i], v);
+                __classPrivateFieldGet$4(this, _ScrollingAudioMonitor_instances, "m", _ScrollingAudioMonitor_addToMemory).call(this, this._memory[i], v);
                 channelValues.push(v);
             }
             this.display.updateWaveformDisplay();
@@ -14738,7 +14241,7 @@ _ScrollingAudioMonitor_instances = new WeakSet(), _ScrollingAudioMonitor_addToMe
 ScrollingAudioMonitor.defaultHeight = 64;
 ScrollingAudioMonitor.defaultWidth = 256;
 
-var __classPrivateFieldGet$4 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+var __classPrivateFieldGet$3 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
@@ -14759,7 +14262,7 @@ class SimplePolyphonicSynth extends BaseComponent {
         // Output
         this.audioOutput = this.defineAudioOutput('audioOutput', this._masterGainNode);
         for (let i = 0; i < numNotes; i++) {
-            this._soundNodes.push(__classPrivateFieldGet$4(this, _SimplePolyphonicSynth_instances, "m", _SimplePolyphonicSynth_createOscillatorGraph).call(this, this.waveform.value));
+            this._soundNodes.push(__classPrivateFieldGet$3(this, _SimplePolyphonicSynth_instances, "m", _SimplePolyphonicSynth_createOscillatorGraph).call(this, this.waveform.value));
         }
         this.preventIOOverwrites();
     }
@@ -14835,20 +14338,18 @@ class SlowDown extends BaseComponent {
     }
 }
 
-class TimeVaryingSignal extends FunctionComponent {
+class TimeVaryingSignal extends AudioTransformComponent {
     constructor(generatorFn, timeMeasure = TimeMeasure.SECONDS) {
-        super(generatorFn);
-        if (this._orderedFunctionInputs.length != 1) {
-            throw new Error(`A time-varying signal function can only have one argument. Given ${this.fn}`);
-        }
+        super(generatorFn, { inputSpec: new StreamSpec({ numStreams: 1 }) });
         const timeRamp = defineTimeRamp(this.audioContext, timeMeasure);
-        timeRamp.connect(this.channelMerger, 0, 0);
+        timeRamp.connect(this.executionContext.inputs[0]);
         this.preventIOOverwrites();
+        this.output = this.defineOutputAlias('output', this.outputs.$0);
     }
 }
 TimeVaryingSignal.TimeMeasure = TimeMeasure;
 
-var __classPrivateFieldGet$3 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+var __classPrivateFieldGet$2 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
@@ -14870,7 +14371,7 @@ class TypingKeyboardMIDI extends BaseComponent {
         this.setDefaultOutput(this.midiOutput);
         this.preventIOOverwrites();
         this.validateIsSingleton();
-        __classPrivateFieldGet$3(this, _TypingKeyboardMIDI_instances, "m", _TypingKeyboardMIDI_registerKeyHandlers).call(this);
+        __classPrivateFieldGet$2(this, _TypingKeyboardMIDI_instances, "m", _TypingKeyboardMIDI_registerKeyHandlers).call(this);
     }
     inputDidUpdate(input, newValue) {
         if (input == this.octaveInput) {
@@ -14905,7 +14406,7 @@ _a = TypingKeyboardMIDI, _TypingKeyboardMIDI_instances = new WeakSet(), _TypingK
             }
         }
         else {
-            pitch = __classPrivateFieldGet$3(this, _TypingKeyboardMIDI_instances, "m", _TypingKeyboardMIDI_getPitchFromKey).call(this, key, isKeyDown);
+            pitch = __classPrivateFieldGet$2(this, _TypingKeyboardMIDI_instances, "m", _TypingKeyboardMIDI_getPitchFromKey).call(this, key, isKeyDown);
         }
         if (pitch != undefined) {
             keyPressedMap[key] = {
@@ -14939,7 +14440,8 @@ TypingKeyboardMIDI.CHROMATIC_KEY_SEQUENCE = "awsedftgyhujkolp;'"; // C to F
 class Wave extends BaseComponent {
     constructor(wavetableOrType, frequency) {
         super();
-        let waveType, wavetable;
+        let waveType;
+        let wavetable;
         if (wavetableOrType instanceof PeriodicWave) {
             wavetable = wavetableOrType;
             waveType = WaveType.CUSTOM;
@@ -14953,9 +14455,9 @@ class Wave extends BaseComponent {
             periodicWave: wavetable
         });
         this._oscillatorNode.start();
-        this.type = this.defineControlInput('type', waveType);
-        this.waveTable = this.defineControlInput('waveTable', wavetable);
-        this.frequency = this.defineAudioInput('frequency', this._oscillatorNode.frequency);
+        this.type = this.defineControlInput('type', waveType).ofType(String);
+        this.waveTable = this.defineControlInput('waveTable', wavetable).ofType(PeriodicWave);
+        this.frequency = this.defineAudioInput('frequency', this._oscillatorNode.frequency).ofType(Number);
         this.output = this.defineAudioOutput('output', this._oscillatorNode);
     }
     inputDidUpdate(input, newValue) {
@@ -14980,6 +14482,7 @@ class Wave extends BaseComponent {
         return this.fromCoefficients(frequency, realCoefficients, imagCoefficients);
     }
     static fromCoefficients(frequency, real, imaginary) {
+        imaginary !== null && imaginary !== void 0 ? imaginary : (imaginary = [...real].map(_ => 0));
         const wavetable = this.audioContext.createPeriodicWave(real, imaginary);
         return new this._.Wave(wavetable, frequency);
     }
@@ -15033,7 +14536,7 @@ class KeyboardDisplay extends BaseDisplay {
             })
                 .attr('type', 'button')
                 // Keydown handled locally
-                .on(constants.EVENT_MOUSEDOWN, () => this.component._keyDown(pitch));
+                .on(constants.EVENT_MOUSEDOWN, () => this.component.keyDown(pitch));
             this.$keys[pitch] = $key;
             $root.append($key);
         }
@@ -15041,7 +14544,7 @@ class KeyboardDisplay extends BaseDisplay {
         // button (doesn't trigger mouseup on the button).
         // TODO: isn't this inefficient to propogate 48 updates on one keydown...? 
         $root.on(constants.EVENT_MOUSEUP, () => {
-            Object.keys(this.$keys).forEach(k => this.component._keyUp(k));
+            Object.keys(this.$keys).forEach(k => this.component.keyUp(+k));
         });
     }
     showKeyEvent(event) {
@@ -15057,7 +14560,7 @@ class KeyboardDisplay extends BaseDisplay {
     }
 }
 
-var __classPrivateFieldGet$2 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+var __classPrivateFieldGet$1 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
@@ -15081,7 +14584,7 @@ class SliderDisplay extends RangeInputDisplay {
     }
     _display($root, width, height) {
         this.$range = $(document.createElement('input'))
-            .attr(__classPrivateFieldGet$2(this, _SliderDisplay_instances, "m", _SliderDisplay_getInputAttrs).call(this))
+            .attr(__classPrivateFieldGet$1(this, _SliderDisplay_instances, "m", _SliderDisplay_getInputAttrs).call(this))
             .on('input', event => {
             this.component.output.setValue(Number(event.target.value));
         }).css({
@@ -15117,7 +14620,7 @@ _SliderDisplay_instances = new WeakSet(), _SliderDisplay_getInputAttrs = functio
     };
 };
 
-var __classPrivateFieldGet$1 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+var __classPrivateFieldGet = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
@@ -15145,17 +14648,18 @@ class ScrollingAudioMonitorDisplay extends BaseDisplay {
         this.updateWaveformDisplay();
     }
     updateWaveformDisplay() {
+        var _a, _b;
         if (this.$container) {
             const { minValue, maxValue } = this.component.getCurrentValueRange();
             if (minValue != this.currMinValue) {
-                this.$minValueDisplay.text(__classPrivateFieldGet$1(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, minValue));
+                (_a = this.$minValueDisplay) === null || _a === void 0 ? void 0 : _a.text(__classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, minValue));
                 this.currMinValue = minValue;
             }
             if (maxValue != this.currMaxValue) {
-                this.$maxValueDisplay.text(__classPrivateFieldGet$1(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, maxValue));
+                (_b = this.$maxValueDisplay) === null || _b === void 0 ? void 0 : _b.text(__classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_valueToDisplayableText).call(this, maxValue));
                 this.currMaxValue = maxValue;
             }
-            __classPrivateFieldGet$1(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_displayWaveform).call(this, minValue, maxValue);
+            __classPrivateFieldGet(this, _ScrollingAudioMonitorDisplay_instances, "m", _ScrollingAudioMonitorDisplay_displayWaveform).call(this, minValue, maxValue);
         }
     }
     drawSingleWaveform(ctx, values, strokeStyle, toX, toY) {
@@ -15193,20 +14697,27 @@ _ScrollingAudioMonitorDisplay_instances = new WeakSet(), _ScrollingAudioMonitorD
         return value.toFixed(2);
     }
 }, _ScrollingAudioMonitorDisplay_displayWaveform = function _ScrollingAudioMonitorDisplay_displayWaveform(minValue, maxValue) {
+    var _a, _b;
+    if (!this.$canvas) {
+        throw new Error("$canvas must be defined.");
+    }
     let maxX = Number(this.$canvas.attr('width'));
     let memory = this.component._memory;
     let memLength = memory[0].length;
     let entryWidth = maxX / memLength;
     let maxY = Number(this.$canvas.attr('height'));
     const canvas = this.$canvas[0];
-    var ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+        throw new Error("Unable to load 2d Canvas context.");
+    }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     let hasOutOfBoundsValues = false;
     const toX = (i) => i * entryWidth;
     const toY = (v) => {
         const coordValue = scaleRange(v, [minValue, maxValue], [maxY, 0]);
-        hasOutOfBoundsValues = hasOutOfBoundsValues
-            || v && ((coordValue > maxY) || (coordValue < 0));
+        const isOutOfBounds = !!(v && ((coordValue > maxY) || (coordValue < 0)));
+        hasOutOfBoundsValues || (hasOutOfBoundsValues = isOutOfBounds);
         return coordValue;
     };
     // Draw 0 line
@@ -15224,72 +14735,15 @@ _ScrollingAudioMonitorDisplay_instances = new WeakSet(), _ScrollingAudioMonitorD
     }
     // Warn user visually if the range of the signal is not captured.
     if (hasOutOfBoundsValues) {
-        this.$container.addClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS);
+        (_a = this.$container) === null || _a === void 0 ? void 0 : _a.addClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS);
     }
     else {
-        this.$container.removeClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS);
+        (_b = this.$container) === null || _b === void 0 ? void 0 : _b.removeClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS);
     }
 };
 
-var __classPrivateFieldGet = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
-    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-};
-var _AudioParamControlOutput_instances, _AudioParamControlOutput_map;
 // TODO: transform constructors and some functions to take in objects instead 
 // of a list of parameters (can't specify named parameters)
-// TODO: is this old code? Or maybe we should actually expose these functions.
-class AudioParamControlOutput extends ControlOutput {
-    constructor() {
-        super(...arguments);
-        _AudioParamControlOutput_instances.add(this);
-    }
-    connect(destination) {
-        let { component, input } = this.getDestinationInfo(destination);
-        if (input instanceof AudioRateInput) {
-            this.connections.push(destination);
-        }
-        else {
-            throw new Error("The output must be an audio-rate input.");
-        }
-        return destination;
-    }
-    cancelAndHoldAtTime(cancelTime) {
-        __classPrivateFieldGet(this, _AudioParamControlOutput_instances, "m", _AudioParamControlOutput_map).call(this, 'cancelAndHoldAtTime', arguments);
-    }
-    cancelScheduledValues(cancelTime) {
-        __classPrivateFieldGet(this, _AudioParamControlOutput_instances, "m", _AudioParamControlOutput_map).call(this, 'cancelScheduledValues', arguments);
-    }
-    exponentialRampToValueAtTime(value, endTime) {
-        __classPrivateFieldGet(this, _AudioParamControlOutput_instances, "m", _AudioParamControlOutput_map).call(this, 'exponentialRampToValueAtTime', arguments);
-    }
-    linearRampToValueAtTime(value, endTime) {
-        __classPrivateFieldGet(this, _AudioParamControlOutput_instances, "m", _AudioParamControlOutput_map).call(this, 'linearRampToValueAtTime', arguments);
-    }
-    setTargetAtTime(value, startTime, timeConstant) {
-        __classPrivateFieldGet(this, _AudioParamControlOutput_instances, "m", _AudioParamControlOutput_map).call(this, 'setTargetAtTime', arguments);
-    }
-    setValueAtTime(value, startTime) {
-        __classPrivateFieldGet(this, _AudioParamControlOutput_instances, "m", _AudioParamControlOutput_map).call(this, 'setValueAtTime', arguments);
-    }
-    setValueCurveAtTime(values, startTime, duration) {
-        __classPrivateFieldGet(this, _AudioParamControlOutput_instances, "m", _AudioParamControlOutput_map).call(this, 'setValueCurveAtTime', arguments);
-    }
-}
-_AudioParamControlOutput_instances = new WeakSet(), _AudioParamControlOutput_map = function _AudioParamControlOutput_map(fn, args) {
-    for (let connection of this.connections) {
-        connection[fn](...args);
-    }
-};
-/* class ADSRControl extends BaseComponent {
-  constructor(attackDurationMs, decayDurationMs, sustainAmplitude, releaseDurationMs) {
-    this.attackDurationMs = this._defineControlInput('attackDurationMs', attackDurationMs)
-    this.decayDurationMs = this._defineControlInput('decayDurationMs', decayDurationMs)
-    this.sustainAmplitude = this._defineControlInput('sustainAmplitude', sustainAmplitude)
-    this.releaseDurationMs = this._defineControlInput('releaseDurationMs', releaseDurationMs)
-  }
-} */
 
 var internals = /*#__PURE__*/Object.freeze({
   __proto__: null,
@@ -15297,7 +14751,7 @@ var internals = /*#__PURE__*/Object.freeze({
   AbstractInput: AbstractInput,
   AbstractOutput: AbstractOutput,
   AudioComponent: AudioComponent,
-  AudioParamControlOutput: AudioParamControlOutput,
+  AudioExecutionContext: AudioExecutionContext,
   AudioRateInput: AudioRateInput,
   AudioRateOutput: AudioRateOutput,
   AudioRateSignalSampler: AudioRateSignalSampler,
@@ -15310,6 +14764,7 @@ var internals = /*#__PURE__*/Object.freeze({
   BaseDisplay: BaseDisplay,
   BaseEvent: BaseEvent,
   BufferComponent: BufferComponent,
+  BufferWriterComponent: BufferWriterComponent,
   BundleComponent: BundleComponent,
   BypassEvent: BypassEvent,
   ChannelSplitter: ChannelSplitter,
@@ -15323,6 +14778,8 @@ var internals = /*#__PURE__*/Object.freeze({
   get DefaultDeviceBehavior () { return DefaultDeviceBehavior; },
   Disconnect: Disconnect,
   FFTComponent: FFTComponent,
+  FFTInput: FFTInput,
+  FFTOutput: FFTOutput,
   FunctionComponent: FunctionComponent,
   HybridInput: HybridInput,
   HybridOutput: HybridOutput,
@@ -15342,6 +14799,7 @@ var internals = /*#__PURE__*/Object.freeze({
   RangeInputComponent: RangeInputComponent,
   RangeInputDisplay: RangeInputDisplay,
   get RangeType () { return RangeType; },
+  ScriptProcessorExecutionContext: ScriptProcessorExecutionContext,
   ScrollingAudioMonitor: ScrollingAudioMonitor,
   ScrollingAudioMonitorDisplay: ScrollingAudioMonitorDisplay,
   SimplePolyphonicSynth: SimplePolyphonicSynth,
@@ -15355,6 +14813,7 @@ var internals = /*#__PURE__*/Object.freeze({
   VisualComponent: VisualComponent,
   Wave: Wave,
   get WaveType () { return WaveType; },
+  WorkletExecutionContext: WorkletExecutionContext,
   connectWebAudioChannels: connectWebAudioChannels,
   constants: constants,
   createMultiChannelView: createMultiChannelView,
@@ -15367,96 +14826,57 @@ var internals = /*#__PURE__*/Object.freeze({
   util: util
 });
 
-// TODO: add all public classes
-var public_namespace = Object.assign({ 'SimplePolyphonicSynth': SimplePolyphonicSynth, 'Keyboard': Keyboard, 'ADSR': ADSR, 'TypingKeyboardMIDI': TypingKeyboardMIDI }, internals);
-
-const BUFFER_WRITER_WORKLET_NAME = "buffer-writer-worklet";
-
-class BufferWriterComponent extends BaseComponent {
-    constructor(buffer) {
-        var _a;
-        super();
-        const numChannels = (_a = buffer === null || buffer === void 0 ? void 0 : buffer.numberOfChannels) !== null && _a !== void 0 ? _a : 2;
-        this.worklet = new AudioWorkletNode(this.audioContext, BUFFER_WRITER_WORKLET_NAME, {
-            numberOfInputs: 2,
-            numberOfOutputs: 0
-        });
-        this.worklet['__numInputChannels'] = numChannels;
-        this.worklet['__numOutputChannels'] = numChannels;
-        this.worklet.port.onmessage = event => {
-            this.handleMessage(event.data);
-        };
-        const positionGain = this.audioContext.createGain();
-        const valueGain = this.audioContext.createGain();
-        positionGain.connect(this.worklet, undefined, 0);
-        valueGain.connect(this.worklet, undefined, 1);
-        // Input
-        this.position = this.defineAudioInput('position', positionGain);
-        this.valueToWrite = this.defineAudioInput('valueToWrite', valueGain);
-        this.buffer = this.defineControlInput('buffer', buffer, true).ofType(AudioBuffer);
-        buffer && this.setBuffer(buffer);
-    }
-    get bufferId() {
-        return getBufferId(this.buffer.value);
-    }
-    setBuffer(buffer) {
-        this.worklet.port.postMessage({
-            buffer: bufferToFloat32Arrays(buffer),
-            bufferId: this.bufferId
-        });
-    }
-    // Update buffer in-place. This will be called periodically from the worklet 
-    // thread.
-    handleMessage(floatData) {
-        const buffer = this.buffer.value;
-        floatData.map((channel, i) => buffer.copyToChannel(channel, i));
-    }
-}
+// TODO: Specify only a subset for public use
+var public_namespace = Object.assign({}, internals);
 
 function stackChannels(inputs) {
-    return ChannelStacker.fromInputs(inputs);
+    return this._.ChannelStacker.fromInputs(inputs);
 }
-function generate(arg, timeMeasure = TimeMeasure.SECONDS) {
-    if (isFunction(arg)) {
-        return new TimeVaryingSignal(arg, timeMeasure);
+function generate(fn, timeMeasure = TimeMeasure.SECONDS) {
+    if (isFunction(fn)) {
+        return new this._.TimeVaryingSignal(fn, timeMeasure);
     }
     else {
         throw new Error("not supported yet.");
     }
 }
 function combine(inputs, fn, options = {}) {
-    if (inputs instanceof Array) {
-        return new AudioTransformComponent(fn, options).withInputs(...inputs);
+    const values = inputs instanceof Array ? inputs : Object.values(inputs);
+    // TODO: Also allow cases where the arguments aren't outputs, but values 
+    // themselves.
+    if (values.every(o => o.isControlStream)) {
+        // Needs to learn to handle float input I think.
+        return new this._.FunctionComponent(fn).withInputs(inputs);
     }
     else {
-        // Needs to learn to handle float input I think.
-        return new FunctionComponent(fn).withInputs(inputs);
+        console.log(values);
+        return new this._.AudioTransformComponent(fn, Object.assign(Object.assign({}, options), { inputSpec: new StreamSpec({ numStreams: values.length }) })).withInputs(...values);
     }
 }
 // TODO: make this work for inputs/outputs
 function bundle(inputs) {
-    return new BundleComponent(inputs);
+    return new this._.BundleComponent(inputs);
 }
 // TODO: Potentially turn this into a component (?).
 function ramp(units) {
-    return new AudioRateOutput('time', defineTimeRamp(AudioRateOutput.audioContext, units));
+    return new this._.AudioRateOutput('time', defineTimeRamp(this.config.audioContext, units));
 }
 function read(fname) {
-    return loadFile(BaseComponent.audioContext, fname);
+    return loadFile(this.config.audioContext, fname);
 }
 function bufferReader(arg) {
     const bufferComponent = new BufferComponent();
-    const buffer = typeof arg == 'string' ? read(arg) : arg;
+    const buffer = isType(arg, String) ? read.call(this, arg) : arg;
     bufferComponent.buffer.setValue(buffer);
     return bufferComponent;
 }
 function bufferWriter(buffer) {
-    return new BufferWriterComponent(buffer);
+    return new this._.BufferWriterComponent(buffer);
 }
 function recorder(sources) {
     sources = sources instanceof Array ? sources : [sources];
-    const component = new AudioRecordingComponent(sources.length);
-    sources.map((s, i) => s.connect(component[i]));
+    const component = new this._.AudioRecordingComponent(sources.length);
+    sources.map((s, i) => s.connect(component.inputs[i]));
     return component;
 }
 
@@ -15473,7 +14893,17 @@ var topLevel = /*#__PURE__*/Object.freeze({
   stackChannels: stackChannels
 });
 
+// @ts-ignore Missing d.ts
 const withConfig = main$1.registerAndCreateFactoryFn(defaultConfig, public_namespace, Object.assign({}, internals));
-var main = Object.assign(Object.assign(Object.assign({}, public_namespace), topLevel), { internals, audioContext: GLOBAL_AUDIO_CONTEXT, config: defaultConfig, out: new AudioRateInput('out', undefined, GLOBAL_AUDIO_CONTEXT.destination), run: run, withConfig });
+// TODO: This is more of a hack. Make it so every entry of ia is available on 
+// the configured version and correctly bound.
+const boundTopLevel = {};
+for (const prop in topLevel) {
+    boundTopLevel[prop] = topLevel[prop].bind({
+        config: defaultConfig,
+        _: internals
+    });
+}
+var main = Object.assign(Object.assign(Object.assign({}, public_namespace), boundTopLevel), { internals, audioContext: GLOBAL_AUDIO_CONTEXT, config: defaultConfig, out: new AudioRateInput('out', undefined, GLOBAL_AUDIO_CONTEXT.destination), run: run, withConfig });
 
 export { main as default };

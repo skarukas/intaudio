@@ -6,7 +6,7 @@ import { BaseComponent } from "./base/BaseComponent.js"
 
 export class AudioComponent extends BaseComponent {
   readonly input: AudioRateInput
-  readonly output: AudioRateOutput
+  readonly output: AudioRateOutput | undefined
 
   constructor(inputNode: WebAudioConnectable) {
     super()

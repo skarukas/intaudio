@@ -40,7 +40,8 @@ export class AudioRateOutput extends AbstractOutput {
         let { component, input } = this.getDestinationInfo(destination);
         input = input instanceof ComponentInput ? input.defaultInput : input;
         if (!input) {
-            throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${Object.keys(component.inputs)}]`);
+            const inputs = component == undefined ? [] : Object.keys(component.inputs);
+            throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${inputs}]`);
         }
         if (!(input instanceof AudioRateInput || input instanceof HybridInput)) {
             throw new Error(`Can only connect audio-rate outputs to inputs that support audio-rate signals. Given: ${input}. Use 'AudioRateSignalSampler' to force a conversion.`);
@@ -95,11 +96,11 @@ export class AudioRateOutput extends AbstractOutput {
             dimension,
             windowSize,
             useWorklet,
-            numChannelsPerInput: this.numOutputChannels,
+            numChannelsPerInput: [this.numOutputChannels],
             numInputs: 1
         };
         const transformer = new this._.AudioTransformComponent(fn, options);
-        return this.connect(transformer[0]); // First input of the function.
+        return this.connect(transformer.inputs[0]); // First input of the function.
     }
     disconnect(destination) {
         // TODO: implement this and utilize it for temporary components / nodes.

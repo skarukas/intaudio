@@ -23,7 +23,7 @@ let runCalled = false
 
 const config = defaultConfig  // TODO: figure this out
 
-let gestureListeners = []
+let gestureListeners: ((ctx?: AudioContext) => any)[] = []
 /**
  * Register a function to be called once the audio engine is ready and a user gesture has been performed.
  * 

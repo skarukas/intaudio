@@ -1,3 +1,4 @@
+import { enumerate, zip } from "../../shared/util.js";
 import { toMultiChannelArray } from "./types.js";
 export const IS_WORKLET = typeof AudioWorkletProcessor != 'undefined';
 function getColumn(arr, col) {
@@ -17,7 +18,7 @@ function assertValidReturnType(result) {
         throw new Error("Expected mapping function to return valid value(s), but got undefined.");
     }
 }
-function processSamples(fn, inputChunks, outputChunk, contextFactory) {
+function processSamples(fn, inputChunks, outputChunks, contextFactory) {
     var _a, _b;
     const numChannels = (_a = inputChunks[0]) === null || _a === void 0 ? void 0 : _a.length;
     const numSamples = (_b = inputChunks[0][0]) === null || _b === void 0 ? void 0 : _b.length;
@@ -25,57 +26,67 @@ function processSamples(fn, inputChunks, outputChunk, contextFactory) {
         for (let i = 0; i < numSamples; i++) {
             const inputs = inputChunks.map(input => input[c][i]);
             const context = contextFactory.getContext({ channelIndex: c, sampleIndex: i });
-            const result = context.execute(fn, inputs);
-            assertValidReturnType(result);
-            outputChunk[c][i] = result;
+            const outputs = context.execute(fn, inputs);
+            for (const [output, dest] of zip(outputs, outputChunks)) {
+                assertValidReturnType(output);
+                dest[c][i] = output;
+            }
         }
     }
-    return undefined;
+    // The number of output channels is the same as the input because this is not
+    // determined by the user's function.
+    return inputChunks.map(x => x.length);
 }
-function processTime(fn, inputChunks, outputChunk, contextFactory) {
+function processTime(fn, inputChunks, outputChunks, contextFactory) {
     var _a;
     const numChannels = (_a = inputChunks[0]) === null || _a === void 0 ? void 0 : _a.length;
     for (let c = 0; c < numChannels; c++) {
         const inputs = inputChunks.map(input => input[c]);
         const context = contextFactory.getContext({ channelIndex: c });
-        const output = context.execute(fn, inputs);
-        assertValidReturnType(output);
-        outputChunk[c].set(output);
+        const outputs = context.execute(fn, inputs);
+        for (const [output, dest] of zip(outputs, outputChunks)) {
+            assertValidReturnType(output);
+            dest[c].set(output);
+        }
     }
-    return undefined;
+    // The number of output channels is the same as the input because this is not
+    // determined by the user's function.
+    return inputChunks.map(x => x.length);
 }
 /**
  * Apply a fuction across the audio chunk (channels and time).
  *
  * @param fn
  * @param inputChunks
- * @param outputChunk
- * @returns The number of channels output by the function.
+ * @param outputChunks
+ * @returns The number of channels for each output of the function.
  */
-function processTimeAndChannels(fn, inputChunks, outputChunk, contextFactory) {
+function processTimeAndChannels(fn, inputChunks, outputChunks, contextFactory) {
     const inputs = inputChunks.map(toMultiChannelArray);
     const context = contextFactory.getContext();
-    const result = context.execute(fn, inputs);
-    assertValidReturnType(result);
-    for (let c = 0; c < result.length; c++) {
-        if (result[c] == undefined) {
-            continue; // This signifies that the channel should be empty.
+    const outputs = context.execute(fn, inputs);
+    assertValidReturnType(outputs);
+    for (const [output, dest] of zip(outputs, outputChunks)) {
+        for (let c = 0; c < output.length; c++) {
+            if (output[c] == undefined) {
+                continue; // This signifies that the channel should be empty.
+            }
+            dest[c].set(output[c]);
         }
-        outputChunk[c].set(result[c]);
     }
-    return result.length;
+    return outputs.map(a => a.length);
 }
 /**
  * Apply a fuction to each sample, across channels.
  *
  * @param fn
  * @param inputChunks
- * @param outputChunk
- * @returns The number of channels output by the function.
+ * @param outputChunks
+ * @returns The number of channels for each output of the function.
  */
-function processChannels(fn, inputChunks, outputChunk, contextFactory) {
+function processChannels(fn, inputChunks, outputChunks, contextFactory) {
     var _a;
-    let numOutputChannels;
+    const numOutputChannels = Array(outputChunks.length).fill(0);
     const numSamples = (_a = inputChunks[0][0]) === null || _a === void 0 ? void 0 : _a.length;
     for (let i = 0; i < numSamples; i++) {
         // Get the i'th sample, across all channels and inputs.
@@ -84,10 +95,13 @@ function processChannels(fn, inputChunks, outputChunk, contextFactory) {
             return toMultiChannelArray(inputChannels);
         });
         const context = contextFactory.getContext({ sampleIndex: i });
-        const outputChannels = context.execute((...inputs) => fn(...inputs).map(v => isFinite(v) ? v : 0), inputs);
-        assertValidReturnType(outputChannels);
-        writeColumn(outputChunk, i, outputChannels);
-        numOutputChannels = outputChannels.length;
+        // .map(v => isFinite(v) ? v : 0)
+        const outputChannels = context.execute(fn, inputs);
+        for (const [j, [output, destChunk]] of enumerate(zip(outputChannels, outputChunks))) {
+            assertValidReturnType(outputChannels);
+            writeColumn(destChunk, i, output);
+            numOutputChannels[j] = output.length;
+        }
     }
     return numOutputChannels;
 }
@@ -133,8 +147,23 @@ export function generateZeroInput(dimension, windowSize, numChannels) {
 export function mod(x, y) {
     return ((x % y) + y) % y;
 }
-function sum(arr) {
-    return arr.reduce((a, b) => a + b, 0);
+export function sum(iter) {
+    let sm = 0;
+    for (const x of iter) {
+        sm += x;
+    }
+    return sm;
+}
+const _NO_VALUE = Symbol("_NO_VALUE");
+export function allEqual(iter) {
+    let lastValue = _NO_VALUE;
+    for (const x of iter) {
+        if (lastValue != _NO_VALUE && lastValue != x) {
+            return false;
+        }
+        lastValue = x;
+    }
+    return true;
 }
 /* Safe version of TypedArray.set that doesn't throw RangeError. */
 function safeArraySet(dest, source, offset) {
@@ -214,6 +243,16 @@ export function polToCarArray(magnitude, phase, real, imaginary) {
 export function getChannel(arr, c) {
     return arr[c % arr.length];
 }
+export function forEach(arr, fn) {
+    return Array.prototype.forEach.call(arr, fn);
+}
 export function map2d(grid, fn) {
     return grid.map((arr, i) => arr.map((v, j) => fn(v, i, j)));
 }
+export const SafeAudioWorkletProcessor = IS_WORKLET ? AudioWorkletProcessor : class AudioWorkletProcessor {
+    constructor() {
+        const channel = new MessageChannel();
+        this.port = channel.port1;
+        this.outPort = channel.port2;
+    }
+};

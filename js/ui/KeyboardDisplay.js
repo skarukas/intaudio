@@ -21,7 +21,7 @@ export class KeyboardDisplay extends BaseDisplay {
             })
                 .attr('type', 'button')
                 // Keydown handled locally
-                .on(constants.EVENT_MOUSEDOWN, () => this.component._keyDown(pitch));
+                .on(constants.EVENT_MOUSEDOWN, () => this.component.keyDown(pitch));
             this.$keys[pitch] = $key;
             $root.append($key);
         }
@@ -29,7 +29,7 @@ export class KeyboardDisplay extends BaseDisplay {
         // button (doesn't trigger mouseup on the button).
         // TODO: isn't this inefficient to propogate 48 updates on one keydown...? 
         $root.on(constants.EVENT_MOUSEUP, () => {
-            Object.keys(this.$keys).forEach(k => this.component._keyUp(k));
+            Object.keys(this.$keys).forEach(k => this.component.keyUp(+k));
         });
     }
     showKeyEvent(event) {

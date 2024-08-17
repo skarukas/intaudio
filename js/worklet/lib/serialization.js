@@ -9,8 +9,9 @@ export function serializeWorkletMessage(f, { dimension, numInputs, numChannelsPe
         dimension,
         numInputs,
         numChannelsPerInput,
-        numOutputChannels,
+        numChannelsPerOutput: numOutputChannels,
         windowSize,
+        // @ts-ignore
         tracebackString: traceback['stack']
     };
 }
@@ -26,7 +27,7 @@ export function deserializeWorkletMessage(message, sampleRate, getCurrentTime, g
     return function processFn(inputs, outputs, __parameters) {
         try {
             // Apply across dimensions.
-            applyToChunk(innerFunction, inputs, outputs[0], contextFactory);
+            applyToChunk(innerFunction, inputs, outputs, contextFactory);
         }
         catch (e) {
             console.error(`Encountered worklet error while processing the following input frame:`);

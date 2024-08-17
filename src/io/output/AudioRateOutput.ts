@@ -14,9 +14,8 @@ import { AbstractOutput } from "./AbstractOutput.js"
 export class AudioRateOutput
   extends AbstractOutput<number>
   implements MultiChannel<AudioRateOutput>, AudioSignalStream {
-  private _channels: MultiChannelArray<AudioRateOutput> = undefined
+  private _channels: MultiChannelArray<AudioRateOutput> | undefined = undefined
   activeChannel = undefined
-
   private analyzer: AnalyserNode
 
   constructor(
@@ -46,18 +45,19 @@ export class AudioRateOutput
   private connectNodes(
     from: AudioNode,
     to: WebAudioConnectable,
-    fromChannel: number = undefined,
-    toChannel: number = undefined
+    fromChannel: number | undefined = undefined,
+    toChannel: number | undefined = undefined
   ) {
     to && connectWebAudioChannels(this.audioContext, from, to, fromChannel, toChannel)
   }
   connect<T extends Component>(destination: T): T;
-  connect<T extends CanBeConnectedTo>(destination: T): Component;
-  connect(destination) {
+  connect<T extends CanBeConnectedTo>(destination: T): Component | undefined;
+  connect(destination: CanBeConnectedTo) {
     let { component, input } = this.getDestinationInfo(destination)
-    input = input instanceof ComponentInput ? input.defaultInput : input
+    input = input instanceof ComponentInput ? <any>input.defaultInput : input
     if (!input) {
-      throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${Object.keys(component.inputs)}]`)
+      const inputs = component == undefined ? [] : Object.keys(component.inputs)
+      throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${inputs}]`)
     }
     if (!(input instanceof AudioRateInput || input instanceof HybridInput)) {
       throw new Error(`Can only connect audio-rate outputs to inputs that support audio-rate signals. Given: ${input}. Use 'AudioRateSignalSampler' to force a conversion.`)
@@ -118,26 +118,73 @@ export class AudioRateOutput
     }
     return this.connect(new this._.ChannelSplitter(...inputChannelGroups))
   }
-  transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], { windowSize, useWorklet, dimension }?: { windowSize?: number, useWorklet?: boolean, dimension: "all" }): Component;
-  transformAudio(fn: (input: MultiChannelArray<number>) => number[], { useWorklet, dimension }?: { useWorklet?: boolean, dimension: "channels" }): Component;
-  transformAudio(fn: (samples: Float32Array) => (Float32Array | number[]), { windowSize, useWorklet, dimension }?: { windowSize?: number, useWorklet?: boolean, dimension: "time" }): Component;
-  transformAudio(fn: (x: number) => number, { useWorklet, dimension }?: { useWorklet?: boolean, dimension?: "none" }): Component;
+  transformAudio(
+    fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[],
+    {
+      windowSize,
+      useWorklet,
+      dimension
+    }: {
+      windowSize?: number,
+      useWorklet?: boolean,
+      dimension: "all"
+    }
+  ): Component;
+  transformAudio(
+    fn: (input: MultiChannelArray<number>) => number[],
+    {
+      useWorklet,
+      dimension
+    }: {
+      useWorklet?: boolean,
+      dimension: "channels"
+    }
+  ): Component;
+  transformAudio(
+    fn: (samples: Float32Array) => (Float32Array | number[]),
+    {
+      windowSize,
+      useWorklet,
+      dimension
+    }: {
+      windowSize?: number,
+      useWorklet?: boolean,
+      dimension: "time"
+    }
+  ): Component;
+  transformAudio(
+    fn: (x: number) => number,
+    {
+      useWorklet,
+      dimension
+    }: {
+      useWorklet?: boolean,
+      dimension?: "none"
+    }
+  ): Component;
   transformAudio(
     fn: Function,
-    { windowSize, useWorklet, dimension = "none" }:
-      { windowSize?: number, useWorklet?: boolean, dimension?: AudioDimension } = {}
+    {
+      windowSize,
+      useWorklet,
+      dimension = "none"
+    }: {
+      windowSize?: number,
+      useWorklet?: boolean,
+      dimension?: AudioDimension
+    } = {}
   ): Component {
     const options = {
       dimension,
       windowSize,
       useWorklet,
-      numChannelsPerInput: this.numOutputChannels,
+      numChannelsPerInput: [this.numOutputChannels],
       numInputs: 1
     }
     const transformer = new this._.AudioTransformComponent(fn, options)
-    return this.connect(transformer[0])  // First input of the function.
+    return <Component>this.connect(transformer.inputs[0])  // First input of the function.
   }
-  disconnect(destination) {
+  disconnect(destination: CanBeConnectedTo) {
     // TODO: implement this and utilize it for temporary components / nodes.
     console.warn("Disconnect not yet supported.")
   }

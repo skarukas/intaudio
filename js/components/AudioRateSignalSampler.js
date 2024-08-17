@@ -1,15 +1,9 @@
-var __classPrivateFieldSet = (this && this.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
-    if (kind === "m") throw new TypeError("Private method is not writable");
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
-    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
-};
 var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
 };
-var _AudioRateSignalSampler_instances, _AudioRateSignalSampler_interval, _AudioRateSignalSampler_setInterval;
+var _AudioRateSignalSampler_instances, _AudioRateSignalSampler_setInterval;
 import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 // TODO: make this multi-channel.
@@ -18,7 +12,6 @@ export class AudioRateSignalSampler extends BaseComponent {
     constructor(samplePeriodMs) {
         super();
         _AudioRateSignalSampler_instances.add(this);
-        _AudioRateSignalSampler_interval.set(this, void 0);
         samplePeriodMs !== null && samplePeriodMs !== void 0 ? samplePeriodMs : (samplePeriodMs = this.config.defaultSamplePeriodMs);
         this._analyzer = this.audioContext.createAnalyser();
         // Inputs
@@ -36,13 +29,14 @@ export class AudioRateSignalSampler extends BaseComponent {
     }
     stop() {
         // TODO: figure out how to actually stop this...
-        window.clearInterval(__classPrivateFieldGet(this, _AudioRateSignalSampler_interval, "f"));
+        window.clearInterval(this.interval);
     }
-    inputAdded(input) {
-        if (__classPrivateFieldGet(this, _AudioRateSignalSampler_interval, "f")) {
+    inputAdded(source) {
+        var _a;
+        if (this.interval) {
             throw new Error("AudioToControlConverter can only have one input.");
         }
-        __classPrivateFieldGet(this, _AudioRateSignalSampler_instances, "m", _AudioRateSignalSampler_setInterval).call(this, this.samplePeriodMs.value);
+        __classPrivateFieldGet(this, _AudioRateSignalSampler_instances, "m", _AudioRateSignalSampler_setInterval).call(this, (_a = this.samplePeriodMs.value) !== null && _a !== void 0 ? _a : this.config.defaultSamplePeriodMs);
     }
     inputDidUpdate(input, newValue) {
         if (input == this.samplePeriodMs) {
@@ -51,8 +45,8 @@ export class AudioRateSignalSampler extends BaseComponent {
         }
     }
 }
-_AudioRateSignalSampler_interval = new WeakMap(), _AudioRateSignalSampler_instances = new WeakSet(), _AudioRateSignalSampler_setInterval = function _AudioRateSignalSampler_setInterval(period) {
-    __classPrivateFieldSet(this, _AudioRateSignalSampler_interval, window.setInterval(() => {
+_AudioRateSignalSampler_instances = new WeakSet(), _AudioRateSignalSampler_setInterval = function _AudioRateSignalSampler_setInterval(period) {
+    this.interval = window.setInterval(() => {
         try {
             const signal = this.getCurrentSignalValue();
             this.controlOutput.setValue(signal);
@@ -63,5 +57,5 @@ _AudioRateSignalSampler_interval = new WeakMap(), _AudioRateSignalSampler_instan
                 throw e;
             }
         }
-    }, period), "f");
+    }, period);
 };

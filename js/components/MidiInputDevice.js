@@ -67,8 +67,8 @@ export class MidiInputDevice extends VisualComponent {
         this.display.refresh();
     }
     onMidiAccessChange(access, event) {
-        var _a;
-        if ((event === null || event === void 0 ? void 0 : event.port.type) === "output") {
+        var _a, _b;
+        if (((_a = event === null || event === void 0 ? void 0 : event.port) === null || _a === void 0 ? void 0 : _a.type) === "output") {
             return; // We only care about input changes.
         }
         // Set available inputs.
@@ -76,11 +76,11 @@ export class MidiInputDevice extends VisualComponent {
         this.availableDevices.setValue(this.deviceMap, true);
         this.selectOptions = MidiInputDevice.buildSelectOptions(this.deviceMap);
         // Set selected input(s).
-        const newId = (_a = this.autoSelectNewDevice(this.deviceMap, event)) !== null && _a !== void 0 ? _a : NO_INPUT_ID;
+        const newId = (_b = this.autoSelectNewDevice(this.deviceMap, event)) !== null && _b !== void 0 ? _b : NO_INPUT_ID;
         this.selectDevice(newId);
     }
     autoSelectNewDevice(deviceMap, event) {
-        var _a;
+        var _a, _b, _c;
         const inputs = Object.values(deviceMap);
         if (this.defaultDeviceBehavior instanceof Function) {
             // Custom selector function.
@@ -102,18 +102,18 @@ export class MidiInputDevice extends VisualComponent {
                     // The user explicitly selected using "all", so don't box them in.
                     return this.selectedId;
                 }
-                else if ((event === null || event === void 0 ? void 0 : event.port.state) === "connected") {
+                else if (((_a = event === null || event === void 0 ? void 0 : event.port) === null || _a === void 0 ? void 0 : _a.state) === "connected") {
                     // Connect to the new device.
                     return event.port.id;
                 }
-                else if ((event === null || event === void 0 ? void 0 : event.port.state) === "disconnected" && event.port.id !== this.selectedId) {
+                else if (((_b = event === null || event === void 0 ? void 0 : event.port) === null || _b === void 0 ? void 0 : _b.state) === "disconnected" && event.port.id !== this.selectedId) {
                     // Disconnection was irrelevant; keep same device.
                     return this.selectedId;
                 }
                 else {
                     // Disconnection was relevant OR we are choosing an initial device
                     // (event === undefined).
-                    return (_a = inputs[inputs.length - 1]) === null || _a === void 0 ? void 0 : _a.id;
+                    return (_c = inputs[inputs.length - 1]) === null || _c === void 0 ? void 0 : _c.id;
                 }
             case DefaultDeviceBehavior.ALL:
                 return ALL_INPUT_ID;
@@ -122,6 +122,8 @@ export class MidiInputDevice extends VisualComponent {
         }
     }
     sendMidiMessage(midiInput, e) {
+        if (e.data == null)
+            return;
         if ([midiInput.id, ALL_INPUT_ID].includes(this.selectedId)) {
             const [cmd, key, v] = e.data;
             this.midiOut.setValue([cmd, key, v]);

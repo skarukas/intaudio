@@ -10,6 +10,8 @@ export class SelectDisplay extends BaseDisplay {
         this.populateOptions();
     }
     populateOptions() {
+        if (this.$select == undefined)
+            return;
         this.$select.empty();
         for (const { id, name: value } of this.component.selectOptions) {
             const $option = $(document.createElement('option'))

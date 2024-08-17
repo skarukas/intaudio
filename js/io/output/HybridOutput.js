@@ -5,7 +5,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 import { resolvePromiseArgs } from "../../shared/decorators.js";
+import { isType } from "../../shared/util.js";
 import { AudioRateInput } from "../input/AudioRateInput.js";
+import { ComponentInput } from "../input/ComponentInput.js";
 import { ControlInput } from "../input/ControlInput.js";
 import { HybridInput } from "../input/HybridInput.js";
 import { AudioRateOutput } from "./AudioRateOutput.js";
@@ -14,11 +16,12 @@ import { ControlOutput } from "./ControlOutput.js";
 export class HybridOutput extends AudioRateOutput {
     connect(destination) {
         let { input } = this.getDestinationInfo(destination);
-        if (input instanceof AudioRateInput || input instanceof HybridInput) {
-            return AudioRateOutput.prototype.connect.bind(this)(destination);
-        }
-        else if (input instanceof ControlInput) {
+        input = input instanceof ComponentInput && input.defaultInput instanceof AudioRateInput ? input.defaultInput : input;
+        if (isType(input, [ControlInput, ComponentInput])) {
             return ControlOutput.prototype.connect.bind(this)(destination);
+        }
+        else if (input instanceof AudioRateInput || input instanceof HybridInput) {
+            return AudioRateOutput.prototype.connect.bind(this)(destination);
         }
         else {
             throw new Error("Unable to connect to " + destination);

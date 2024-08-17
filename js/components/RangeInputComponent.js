@@ -27,6 +27,8 @@ export class RangeInputComponent extends VisualComponent {
         });
     }
     handleMidiUpdate(event) {
+        if (event.data == null)
+            return;
         const uInt8Value = event.data[2]; // Velocity / value.
         const scaledValue = scaleRange(uInt8Value, [0, 127], [this.minValue.value, this.maxValue.value]);
         this.updateValue(scaledValue);

@@ -1,19 +1,30 @@
 import { AbstractInput } from "../../io/input/AbstractInput.js";
 import { TypedConfigurable } from "../config.js";
-import { isComponent, isFunction } from "../util.js";
+import { isComponent, isFunction, isType } from "../util.js";
 import { ToStringAndUUID } from "./ToStringAndUUID.js";
 export class BaseConnectable extends ToStringAndUUID {
+    get isAudioStream() {
+        return this.defaultOutput instanceof this._.AudioRateOutput;
+    }
+    get isStftStream() {
+        return this.defaultOutput instanceof this._.FFTOutput;
+    }
+    get isControlStream() {
+        return this.defaultOutput instanceof this._.ControlOutput;
+    }
     getDestinationInfo(destination) {
         if (isFunction(destination)) {
-            destination = new this._.FunctionComponent(destination);
+            destination = this.isControlStream ? new this._.FunctionComponent(destination) : new this._.AudioTransformComponent(destination);
         }
-        let component, input;
-        if ((destination instanceof AudioNode)
-            || (destination instanceof AudioParam)) {
+        let component;
+        let input;
+        if (isType(destination, [AudioNode, AudioParam])) {
             component = new this._.AudioComponent(destination);
             input = component.getDefaultInput();
         }
-        else if (destination instanceof AbstractInput) {
+        else if (isType(destination, AbstractInput)) {
+            // TODO: can this typing issue be fixed? isType not working with abstract
+            // classes.
             component = destination.parent;
             input = destination;
         }

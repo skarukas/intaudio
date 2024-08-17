@@ -4,6 +4,7 @@
     "allowJs": true,
     "outDir": "js/",
     "module": "NodeNext",
+    "strict": true,
     "allowSyntheticDefaultImports": true,
     "target": "ES6",
     "lib": [

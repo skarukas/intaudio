@@ -17,6 +17,8 @@ export class Bang extends VisualComponent {
         });
     }
     handleMidiInput(event) {
+        if (event.data == null)
+            return;
         const midiValue = event.data[2];
         if (midiValue) {
             if (!this.lastMidiValue) {
@@ -30,12 +32,15 @@ export class Bang extends VisualComponent {
         this.lastMidiValue = midiValue;
     }
     connect(destination) {
-        let { component } = this.getDestinationInfo(destination);
-        if (destination instanceof ControlInput) {
-            this.output.connect(destination);
+        let { component, input } = this.getDestinationInfo(destination);
+        if (input instanceof ControlInput) {
+            this.output.connect(input);
+        }
+        else if (component != undefined) {
+            this.output.connect(component.triggerInput);
         }
         else {
-            this.output.connect(component.triggerInput);
+            throw new Error(`Unable to connect to ${destination} because it is not a ControlInput and has no associated component.`);
         }
         return component;
     }

@@ -7,6 +7,11 @@ export class TypedConfigurable extends CallableInstance {
             writable: true,
             configurable: true
         });
+        Object.defineProperty(this, 'length', {
+            value: this.constructor.length,
+            writable: true,
+            configurable: true
+        });
     }
     __call__(__forbiddenCall) {
         throw new Error(`Object of type ${this.constructor.name} is not a function.`);

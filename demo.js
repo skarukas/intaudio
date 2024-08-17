@@ -28,7 +28,7 @@ class TestCase {
     this.name = name
   }
   assertEqual(actual, expected, msg = undefined) {
-    this.assertTrue(actual == expected, msg ?? `${actual} != ${expected}`)
+    this.assertTrue(actual == expected, msg ?? `expected ${expected}, got ${actual}`)
   }
   assertFalse(pred, msg) {
     this.assertTrue(!pred, msg)
@@ -166,26 +166,17 @@ const tests = {
     // TODO: This does't work because there's no way to processs 2 signals 
     // together right now.
     // Will have to put the channels side by side or something?
-    let subtractSignals = new ia.FunctionComponent((x, y) => x - y)
+    let subtractSignals = new ia.AudioTransformComponent((x, y) => x - y)
     oscillatorOutput.connect(subtractSignals.$x)
     oscillatorOutput.connect(subtractSignals.$y)
-    let t1 = subtractSignals.sampleSignal(1024)
-    t1.connect(v => this.assertTrue(v == 0, v))
+    this.assertSilentSignal(subtractSignals)
 
-    let t2 = oscillatorOutput
-      .connect(v => v * 300)
-      .sampleSignal(1024)
-    // TODO: fix this! it's broken
-    t2.connect(v => console.log("Current osc value: " + v))
-    console.log(t1)
     setTimeout(() => {
       oscillator.stop()
-      t1.stop()
-      t2.stop()
     }, 5000)
   },
   generateWhiteNoise() {
-    let whiteNoiseSource = new ia.FunctionComponent(() => Math.random() - 0.5)
+    let whiteNoiseSource = ia.generate(() => Math.random() - 0.5)
     whiteNoiseSource.connect(ia.out)
     setTimeout(() => {
       // TODO: doesn't work. Need to add gain node to every audio component...
@@ -213,7 +204,7 @@ const tests = {
     // - Release after another second
     let [a, d, s, r] = [100, 200, 0.1, 1000]
     let envelope = new ia.ADSR(a, d, s, r)
-    let osc = createOscillator()
+    let osc = new ia.AudioComponent(createOscillator())
     let gain = ia.audioContext.createGain()
     gain.gain.value = 0
     let attackBang = new ia.Bang()
@@ -283,7 +274,7 @@ const tests = {
       envelope.releaseEvent.trigger()
       osc.disconnect(ia.out)
     }, 4000)
-    osc.connect(ia.out)
+    new ia.AudioComponent(osc).connect(ia.out)
   },
   timeVaryingSignal($root) {
     let f1 = 880
@@ -334,7 +325,7 @@ const tests = {
   },
   audioParamByDictFailure() {
     let envelope = new ia.ADSR(100, 10, 0.5, 1000)
-    let fn = new ia.FunctionComponent(x => {
+    let fn = new ia.AudioTransformComponent(x => {
       // This is undefined behavior but cannot be prevented.
       return {
         input: x,
@@ -350,6 +341,9 @@ const tests = {
     let slider = new ia.RangeInputComponent()
     slider.addToDom($root, { width: 100, height: 20, rotateDeg: -90 })
     let inputs = []
+    // TODO: this currently fails because an audio event shows up and makes it 
+    // activate twice. Consider making FunctionComponent *only* deal with 
+    //control-rate.
     slider.connect(v => {
       console.log("slider value: " + v)
       inputs.push(v)
@@ -369,6 +363,9 @@ const tests = {
     // Configs (stache) let you create functionally separate component graphs,  
     // with different global settings and AudioContexts.
     let audioContext = new AudioContext()
+    ia.audioContext.__id__ = "default"
+    audioContext.__id__ = "special"
+    audioContext.createBiquadFilter()
     const configId = "my-config"
     let ia2 = ia.withConfig({ audioContext }, configId)
     let synth = new ia2.SimplePolyphonicSynth()
@@ -485,7 +482,7 @@ const tests = {
       const windowSize = 256
       let avg = x + this.previousInputs()[0]
       for (let t = 0; t < windowSize; t++) {
-        avg += this.previousOutput(t) / windowSize
+        avg += this.previousOutputs(t)[0] / windowSize
       }
       return -avg
     }, { useWorklet: true })
@@ -547,7 +544,7 @@ const tests = {
     const delayedNoise = ia.combine(
       [gatedNoise, delaySlider],
       function (noise, delay) {
-        const prevVal = this.previousOutput(delay) * 0.7
+        const prevVal = this.previousOutputs(delay)[0] * 0.7
         return noise + prevVal
       }, { useWorklet: true }
     )
@@ -586,7 +583,7 @@ const tests = {
       [gatedNoise, lfo],
       function (noise, delay) {
         if (Math.random() < 0.00001) return Math.random()
-        const prevVal = this.previousOutput(delay)// * 0.8
+        const prevVal = this.previousOutputs(delay)[0]// * 0.8
         return noise + prevVal
       }, { useWorklet: true }
     )
@@ -873,6 +870,7 @@ const tests = {
   },
   // This is a wishlist example. TODO: implement required functionality.
   combineAllDataTypes($root) {
+    return // Not working yet.
     // Audio player.
     const player = ia.bufferReader("assets/fugue.m4a")
     player.start()
@@ -919,7 +917,7 @@ const tests = {
 
 
 ia.run(() => {
-  const testMatcher = /(fftPassthrough).*/
+  const testMatcher = /().*/
   const testNames = Object.keys(tests).filter(s => s.match(testMatcher))
   console.log("Running tests: " + testNames)
 
@@ -929,7 +927,7 @@ ia.run(() => {
       const testCase = new TestCase(testName)
       tests[testName].bind(testCase)($testRoot)
     } catch (e) {
-      e.msg = `Failed to execute test case ${testName}: ${e.msg}`
+      console.error(`Failed to execute test case ${testName}.`)
       console.error(e)
     }
     ia.util.afterRender(() => {

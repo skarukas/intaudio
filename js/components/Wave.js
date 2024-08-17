@@ -3,7 +3,8 @@ import { BaseComponent } from "./base/BaseComponent.js";
 export class Wave extends BaseComponent {
     constructor(wavetableOrType, frequency) {
         super();
-        let waveType, wavetable;
+        let waveType;
+        let wavetable;
         if (wavetableOrType instanceof PeriodicWave) {
             wavetable = wavetableOrType;
             waveType = WaveType.CUSTOM;
@@ -17,9 +18,9 @@ export class Wave extends BaseComponent {
             periodicWave: wavetable
         });
         this._oscillatorNode.start();
-        this.type = this.defineControlInput('type', waveType);
-        this.waveTable = this.defineControlInput('waveTable', wavetable);
-        this.frequency = this.defineAudioInput('frequency', this._oscillatorNode.frequency);
+        this.type = this.defineControlInput('type', waveType).ofType(String);
+        this.waveTable = this.defineControlInput('waveTable', wavetable).ofType(PeriodicWave);
+        this.frequency = this.defineAudioInput('frequency', this._oscillatorNode.frequency).ofType(Number);
         this.output = this.defineAudioOutput('output', this._oscillatorNode);
     }
     inputDidUpdate(input, newValue) {
@@ -44,6 +45,7 @@ export class Wave extends BaseComponent {
         return this.fromCoefficients(frequency, realCoefficients, imagCoefficients);
     }
     static fromCoefficients(frequency, real, imaginary) {
+        imaginary !== null && imaginary !== void 0 ? imaginary : (imaginary = [...real].map(_ => 0));
         const wavetable = this.audioContext.createPeriodicWave(real, imaginary);
         return new this._.Wave(wavetable, frequency);
     }

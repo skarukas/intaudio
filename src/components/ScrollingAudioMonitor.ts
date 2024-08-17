@@ -9,6 +9,7 @@ import { VisualComponent } from "./base/VisualComponent.js"
 
 // one that captures N samples and displays them all at the same time.
 export class ScrollingAudioMonitor extends VisualComponent<ScrollingAudioMonitorDisplay> {
+  display: ScrollingAudioMonitorDisplay
   hideZeroSignal: ControlInput<boolean>
   samplePeriodMs: ControlInput<number>
   memorySize: ControlInput<number>
@@ -59,7 +60,7 @@ export class ScrollingAudioMonitor extends VisualComponent<ScrollingAudioMonitor
     this.audioOutput = this.defineAudioOutput('audioOutput', this._merger)
     this.setDefaultOutput(this.audioOutput)
     this.controlOutput = this.defineControlOutput('controlOutput')
-    
+
     // Audio routing
     for (let i = 0; i < numChannels; i++) {
       const analyzer = this.audioContext.createAnalyser()
@@ -79,7 +80,7 @@ export class ScrollingAudioMonitor extends VisualComponent<ScrollingAudioMonitor
         this.#addToMemory(this._memory[i], v)
         channelValues.push(v)
       }
-      
+
       this.display.updateWaveformDisplay()
       this.controlOutput.setValue(channelValues)
       requestAnimationFrame(updateSignalValues)

@@ -18,9 +18,13 @@ export class BundleComponent extends BaseComponent {
             this.componentObject = components;
         }
         for (const key in this.componentObject) {
+            // @ts-ignore No index signature.
+            // TODO: export intersection with index signature type.
             this[key] = this.componentObject[key];
             this.defineInputAlias(key, this.componentObject[key].getDefaultInput());
-            this.defineOutputAlias(key, this.componentObject[key].getDefaultOutput());
+            if (this.componentObject[key].defaultOutput) {
+                this.defineOutputAlias(key, this.componentObject[key].defaultOutput);
+            }
         }
     }
     [Symbol.iterator]() {
@@ -29,7 +33,7 @@ export class BundleComponent extends BaseComponent {
     getDefaultInput() {
         throw new Error("Method not implemented.");
     }
-    getDefaultOutput() {
+    get defaultOutput() {
         throw new Error("Method not implemented.");
     }
     setBypassed(isBypassed) {
@@ -67,8 +71,9 @@ export class BundleComponent extends BaseComponent {
     setValues(valueObj) {
         return this.getBundledResult('setValues', valueObj);
     }
-    wasConnectedTo(other) {
-        this.getBundledResult('wasConnectedTo', other);
+    wasConnectedTo(source) {
+        this.getBundledResult('wasConnectedTo', source);
+        return source;
     }
     // TODO: doesn't work.
     sampleSignal(samplePeriodMs) {

@@ -9,8 +9,8 @@ export type SerializedWorkletMessage = {
   fnString: string,
   dimension: AudioDimension,
   numInputs: number,
-  numChannelsPerInput: number,
-  numOutputChannels: number,
+  numChannelsPerInput: number[],
+  numChannelsPerOutput: number[],
   windowSize: number,
   tracebackString: string
 }
@@ -23,6 +23,12 @@ export function serializeWorkletMessage(
     numChannelsPerInput,
     numOutputChannels,
     windowSize
+  }: {
+    dimension: AudioDimension,
+    numInputs: number,
+    numChannelsPerInput: number[],
+    numOutputChannels: number[],
+    windowSize: number
   }
 ): SerializedWorkletMessage {
   const traceback = {}
@@ -32,8 +38,9 @@ export function serializeWorkletMessage(
     dimension,
     numInputs,
     numChannelsPerInput,
-    numOutputChannels,
+    numChannelsPerOutput: numOutputChannels,
     windowSize,
+    // @ts-ignore
     tracebackString: traceback['stack']
   }
 }
@@ -61,8 +68,8 @@ export function deserializeWorkletMessage(
   ) {
     try {
       // Apply across dimensions.
-      applyToChunk(innerFunction, inputs, outputs[0], contextFactory)
-    } catch (e) {
+      applyToChunk(innerFunction, inputs, outputs, contextFactory)
+    } catch (e: any) {
       console.error(`Encountered worklet error while processing the following input frame:`)
       console.error(inputs)
       if (e.stack) {

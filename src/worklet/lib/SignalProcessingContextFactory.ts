@@ -1,7 +1,7 @@
 import { MemoryBuffer } from "./MemoryBuffer.js"
 import { SignalProcessingContext } from "./SignalProcessingContext.js"
 import { AudioDimension, SignalProcessingFnInput } from "./types.js"
-import { generateZeroInput } from "./utils.js"
+import { allEqual, generateZeroInput } from "./utils.js"
 
 const ALL_CHANNELS = -1
 /**
@@ -16,22 +16,23 @@ export class SignalProcessingContextFactory<D extends AudioDimension> {
   } = {}
   windowSize: number
   sampleRate: number
+  numChannelsPerInput: number[]
+  numChannelsPerOutput: number[]
   getFrameIndex: () => number
   getCurrentTime: () => number
 
   constructor({
-    numInputs,
+    // TODO: consider using StreamSpec here.
     numChannelsPerInput,
-    numOutputChannels,
+    numChannelsPerOutput,
     windowSize,
     dimension,
-    sampleRate = undefined,
-    getFrameIndex = undefined,
-    getCurrentTime = undefined,
+    getFrameIndex,
+    getCurrentTime,
+    sampleRate,
   }: {
-    numInputs: number,
-    numChannelsPerInput: number,
-    numOutputChannels: number,
+    numChannelsPerInput: number[],
+    numChannelsPerOutput: number[],
     windowSize: number,
     dimension: D,
     sampleRate: number,
@@ -40,41 +41,66 @@ export class SignalProcessingContextFactory<D extends AudioDimension> {
   }) {
     this.windowSize = windowSize
     this.sampleRate = sampleRate
+    this.numChannelsPerInput = numChannelsPerInput
+    this.numChannelsPerOutput = numChannelsPerOutput
     this.getCurrentTime = getCurrentTime
     this.getFrameIndex = getFrameIndex
 
-    const genInput = this.getDefaultInputValueFn({ dimension, numInputs, windowSize, numChannelsPerInput })
-    const genOutput = this.getDefaultOutputValueFn({ dimension, windowSize, numOutputChannels })
+    const genInput = this.getDefaultValueFn({
+      dimension,
+      windowSize,
+      numChannelsPerStream: numChannelsPerInput
+    })
+    const genOutput = this.getDefaultValueFn({
+      dimension,
+      windowSize,
+      numChannelsPerStream: numChannelsPerOutput
+    })
     const hasChannelSpecificProcessing = ["all", "channels"].includes(dimension)
     if (hasChannelSpecificProcessing) {
       this.inputHistory[ALL_CHANNELS] = <any>new MemoryBuffer(genInput)
       this.outputHistory[ALL_CHANNELS] = <any>new MemoryBuffer(genOutput)
     } else {
+      if (!allEqual(numChannelsPerInput)) {
+        throw new Error(`Only dimensions 'all' and 'channels' may have inconsistent numbers of input channels. Given dimension=${dimension}, numChannelsPerInput=${numChannelsPerInput}.`)
+      }
+      if (!allEqual(numChannelsPerOutput)) {
+        throw new Error(`Only dimensions 'all' and 'channels' may have inconsistent numbers of output channels. Given dimension=${dimension}, numChannelsPerOutput=${numChannelsPerOutput}.`)
+      }
       // Each channel is processed the same.
-      for (let c = 0; c < numChannelsPerInput; c++) {
+      for (let c = 0; c < numChannelsPerInput[0]; c++) {
         this.inputHistory[c] = <any>new MemoryBuffer(genInput)
       }
-      for (let c = 0; c < numOutputChannels; c++) {
+      for (let c = 0; c < numChannelsPerOutput[0]; c++) {
         this.outputHistory[c] = <any>new MemoryBuffer(genOutput)
       }
     }
   }
-  protected getDefaultInputValueFn({ dimension, numInputs, windowSize, numChannelsPerInput }) {
-    return function genInput() {
-      const defaultInput = []
-      for (let i = 0; i < numInputs; i++) {
-        defaultInput.push(generateZeroInput(dimension, windowSize, numChannelsPerInput))
-      }
-      return defaultInput
-    }
+  protected getDefaultValueFn({
+    dimension,
+    windowSize,
+    numChannelsPerStream
+  }: {
+    dimension: AudioDimension,
+    windowSize: number,
+    numChannelsPerStream: number[]
   }
-  protected getDefaultOutputValueFn({ dimension, windowSize, numOutputChannels }) {
-    return function genOutput() {
-      return generateZeroInput(dimension, windowSize, numOutputChannels)
+  ) {
+    return function genValue() {
+      const defaultValue = []
+      for (let i = 0; i < numChannelsPerStream.length; i++) {
+        defaultValue.push(generateZeroInput(dimension, windowSize, numChannelsPerStream[i]))
+      }
+      return defaultValue
     }
   }
 
-  getContext({ channelIndex = ALL_CHANNELS, sampleIndex = undefined } = {}) {
+  getContext(
+    {
+      channelIndex = ALL_CHANNELS, sampleIndex = undefined
+    }: {
+      channelIndex?: number, sampleIndex?: number
+    } = {}) {
     const inputMemory = this.inputHistory[channelIndex]
     const outputMemory = this.outputHistory[channelIndex]
     return new SignalProcessingContext(
@@ -84,6 +110,8 @@ export class SignalProcessingContextFactory<D extends AudioDimension> {
         windowSize: this.windowSize,
         channelIndex,
         sampleIndex,
+        numInputs: this.numChannelsPerInput.length,
+        numOutputs: this.numChannelsPerOutput.length,
         sampleRate: this.sampleRate,
         frameIndex: this.getFrameIndex(),
         currentTime: this.getCurrentTime()

@@ -1,4 +1,4 @@
-import { IS_WORKLET, map2d } from "./utils.js";
+import { map2d, SafeAudioWorkletProcessor } from "./utils.js";
 import { ArrayView } from "./views.js";
 import { Queue } from '@datastructures-js/queue';
 /**
@@ -67,6 +67,8 @@ class ChunkedQueue {
  * A class that abstracts out the size of actual window received, ensuring all windows have a specific size.
  */
 class AudioStreamScheduler {
+    // TODO: consider allocating inputQueues and outputQueues beforehand and 
+    // relying on the numChannelsPerOutput property.
     constructor(windowSize, numInputs, numOutputs, processWindow, getChunkStartIndex = () => 0) {
         this.windowSize = windowSize;
         this.numInputs = numInputs;
@@ -174,7 +176,7 @@ class AudioStreamScheduler {
 /**
  * Uses input / output queuing to abstract sequence length away from the size of arrays passed to process().
  */
-export const BaseWorkletProcessor = IS_WORKLET ? class BaseWorkletProcessor extends AudioWorkletProcessor {
+export class BaseWorkletProcessor extends SafeAudioWorkletProcessor {
     constructor(windowSize, numInputs, numOutputs) {
         super();
         this.windowSize = windowSize;
@@ -191,7 +193,7 @@ export const BaseWorkletProcessor = IS_WORKLET ? class BaseWorkletProcessor exte
     /**
      * Abstract method that receives chunks of size this.windowSize.
      */
-    processWindow(inputs, outputs, parameters) {
+    processWindow(inputs, outputs) {
         throw new Error("Not implemented.");
     }
     /**
@@ -233,7 +235,7 @@ export const BaseWorkletProcessor = IS_WORKLET ? class BaseWorkletProcessor exte
             throw e;
         }
     }
-} : null;
+}
 /*
 const scheduler = new AudioStreamScheduler(1024, 1, 3, (inputs, outputs) => {
   map2d(outputs, arr => arr.map((v, k) => arr[k] = inputs[0][0][k]))

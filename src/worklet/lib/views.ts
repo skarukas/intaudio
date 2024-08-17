@@ -19,18 +19,19 @@ function isIndexInRange(v: string | symbol, length: number) {
 export class ArrayView<T> implements WritableArrayLike<T>, Array<T> {
   protected static PRIVATE_CONSTRUCTOR = Symbol('PRIVATE_CONSTRUCTOR');
   [n: number]: T;  // This is implemented by the Proxy.
-  private _proxy: this
+  private _proxy: this | undefined
   protected get proxy(): this {
+    const length = this.length
     return this._proxy ?? (this._proxy = new Proxy(this, {
       get(target, p, receiver) {
-        if (isIndexInRange(p, this.length)) {
+        if (isIndexInRange(p, length)) {
           return target.get(+<any>p)
         } else {
           return Reflect.get(target, p, receiver)
         }
       },
       set(target, p, newValue, receiver) {
-        if (isIndexInRange(p, this.length)) {
+        if (isIndexInRange(p, length)) {
           target.set(+<any>p, newValue)
           return true
         } else {
@@ -50,10 +51,10 @@ export class ArrayView<T> implements WritableArrayLike<T>, Array<T> {
     }
   }
   flatMap<U, This = undefined>(callback: (this: This, value: T, index: number, array: T[]) => U | ReadonlyArray<U>, thisArg?: This): U[] {
-    return Array.prototype.flat.call(this.proxy, callback, thisArg)
+    return <U[]>Array.prototype.flatMap.call(this.proxy, <any>callback, thisArg)
   }
   flat<A, D extends number = 1>(this: A, depth?: D): FlatArray<A, D>[] {
-    return Array.prototype.flat.call((<any>this).proxy, depth)
+    return <FlatArray<A, D>[]>Array.prototype.flat.call((<any>this).proxy, depth)
   }
   toLocaleString(): string;
   toLocaleString(locales: string | string[], options?: Intl.NumberFormatOptions & Intl.DateTimeFormatOptions): string;
@@ -88,7 +89,7 @@ export class ArrayView<T> implements WritableArrayLike<T>, Array<T> {
     return ArrayView.createSliceView(this.proxy, start, end)
   }
   sort(compareFn?: (a: T, b: T) => number): this {
-    return Array.prototype.sort.call(this.proxy, compareFn)
+    return <this>Array.prototype.sort.call(this.proxy, compareFn)
   }
   splice(start: number, deleteCount?: number): T[];
   splice(start: number, deleteCount: number, ...items: T[]): T[];
@@ -106,7 +107,7 @@ export class ArrayView<T> implements WritableArrayLike<T>, Array<T> {
   }
   every<S extends T>(predicate: (value: T, index: number, array: T[]) => value is S, thisArg?: any): this is S[];
   every(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): boolean;
-  every(predicate: unknown, thisArg?: unknown): boolean {
+  every(predicate: any, thisArg?: unknown): boolean {
     return Array.prototype.every.call(this.proxy, predicate, thisArg)
   }
   some(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): boolean {
@@ -116,38 +117,38 @@ export class ArrayView<T> implements WritableArrayLike<T>, Array<T> {
     return Array.prototype.forEach.call(this.proxy, callbackfn, thisArg)
   }
   map<U>(callbackfn: (value: T, index: number, array: T[]) => U, thisArg?: any): U[] {
-    return Array.prototype.map.call(this.proxy, callbackfn, thisArg)
+    return <U[]>Array.prototype.map.call(this.proxy, callbackfn, thisArg)
   }
   filter<S extends T>(predicate: (value: T, index: number, array: T[]) => value is S, thisArg?: any): S[];
   filter(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): T[];
-  filter(predicate: unknown, thisArg?: unknown): T[] {
+  filter(predicate: any, thisArg?: unknown): T[] {
     return Array.prototype.filter.call(this.proxy, predicate, thisArg)
   }
   reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T): T;
   reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue: T): T;
   reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
-  reduce(callbackfn: unknown, initialValue?: unknown): T | any {
+  reduce(callbackfn: any, initialValue?: unknown): T | any {
     return Array.prototype.reduce.call(this.proxy, callbackfn, initialValue)
   }
   reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T): T;
   reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue: T): T;
   reduceRight<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
-  reduceRight(callbackfn: unknown, initialValue?: unknown): T | any {
+  reduceRight(callbackfn: any, initialValue?: any): T | any {
     return Array.prototype.reduceRight.call(this.proxy, callbackfn, initialValue)
   }
   find<S extends T>(predicate: (value: T, index: number, obj: T[]) => value is S, thisArg?: any): S | undefined;
   find(predicate: (value: T, index: number, obj: T[]) => unknown, thisArg?: any): T | undefined;
-  find(predicate: unknown, thisArg?: unknown): T {
+  find(predicate: any, thisArg?: unknown): T {
     return Array.prototype.find.call(this.proxy, predicate, thisArg)
   }
   findIndex(predicate: (value: T, index: number, obj: T[]) => unknown, thisArg?: any): number {
     return Array.prototype.findIndex.call(this.proxy, predicate, thisArg)
   }
   fill(value: T, start?: number, end?: number): this {
-    return Array.prototype.fill.call(this.proxy, value, start, end)
+    return <this>Array.prototype.fill.call(this.proxy, value, start, end)
   }
   copyWithin(target: number, start: number, end?: number): this {
-    return Array.prototype.copyWithin.call(this.proxy, target, start, end)
+    return <this>Array.prototype.copyWithin.call(this.proxy, target, start, end)
   }
   entries(): IterableIterator<[number, T]> {
     return Array.prototype.entries.call(this.proxy)
@@ -225,7 +226,7 @@ export class ArrayView<T> implements WritableArrayLike<T>, Array<T> {
     startIndex ??= 0
     endIndex ??= array.length
     function getDataLocation(i: number) {
-      const index = i + startIndex
+      const index = i + <number>startIndex
       return { array, index }
     }
     return this.createFromDataLocationFn(getDataLocation, endIndex - startIndex)
@@ -253,7 +254,10 @@ export class ArrayView<T> implements WritableArrayLike<T>, Array<T> {
       const arrIndex = i % numArrs
       return { array: arrays[arrIndex], index }
     }
-    return this.createFromDataLocationFn(getDataLocation, singleArrLength * numArrs)
+    return this.createFromDataLocationFn(
+      getDataLocation,
+      <number>singleArrLength * numArrs
+    )
   }
   static createDeinterleavedViews<T>(
     array: WritableArrayLike<T>,

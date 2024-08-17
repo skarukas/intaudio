@@ -5,12 +5,12 @@ import { BaseDisplay } from "./BaseDisplay.js"
 declare var $: JQueryStatic;
 
 export class ScrollingAudioMonitorDisplay extends BaseDisplay<ScrollingAudioMonitor> {
-  private $canvas: JQuery<HTMLCanvasElement>
-  private $maxValueDisplay: JQuery<HTMLSpanElement>
-  private $minValueDisplay: JQuery<HTMLSpanElement>
-  private $container: JQuery<HTMLDivElement>
-  private currMaxValue: number
-  private currMinValue: number
+  private $canvas?: JQuery<HTMLCanvasElement>
+  private $maxValueDisplay?: JQuery<HTMLSpanElement>
+  private $minValueDisplay?: JQuery<HTMLSpanElement>
+  private $container?: JQuery<HTMLDivElement>
+  private currMaxValue?: number
+  private currMinValue?: number
 
   _display($container: JQuery<HTMLDivElement>, width: number, height: number) {
     let size = {
@@ -32,11 +32,11 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay<ScrollingAudioMoni
     if (this.$container) {
       const { minValue, maxValue } = this.component.getCurrentValueRange()
       if (minValue != this.currMinValue) {
-        this.$minValueDisplay.text(this.#valueToDisplayableText(minValue))
+        this.$minValueDisplay?.text(this.#valueToDisplayableText(minValue))
         this.currMinValue = minValue
       }
       if (maxValue != this.currMaxValue) {
-        this.$maxValueDisplay.text(this.#valueToDisplayableText(maxValue))
+        this.$maxValueDisplay?.text(this.#valueToDisplayableText(maxValue))
         this.currMaxValue = maxValue
       }
       this.#displayWaveform(minValue, maxValue)
@@ -49,7 +49,10 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay<ScrollingAudioMoni
       return value.toFixed(2)
     }
   }
-  #displayWaveform(minValue, maxValue) {
+  #displayWaveform(minValue: number, maxValue: number) {
+    if (!this.$canvas) {
+      throw new Error("$canvas must be defined.")
+    }
     let maxX = Number(this.$canvas.attr('width'))
     let memory = this.component._memory
     let memLength = memory[0].length
@@ -57,14 +60,17 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay<ScrollingAudioMoni
     let maxY = Number(this.$canvas.attr('height'))
     const canvas = this.$canvas[0]
 
-    var ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const ctx = canvas.getContext("2d")
+    if (!ctx) {
+      throw new Error("Unable to load 2d Canvas context.")
+    }
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
     let hasOutOfBoundsValues = false
     const toX = (i: number): number => i * entryWidth
     const toY = (v: number): number => {
       const coordValue = scaleRange(v, [minValue, maxValue], [maxY, 0])
-      hasOutOfBoundsValues = hasOutOfBoundsValues
-        || v && ((coordValue > maxY) || (coordValue < 0))
+      const isOutOfBounds = !!(v && ((coordValue > maxY) || (coordValue < 0)))
+      hasOutOfBoundsValues ||= isOutOfBounds
       return coordValue
     }
     // Draw 0 line
@@ -83,9 +89,9 @@ export class ScrollingAudioMonitorDisplay extends BaseDisplay<ScrollingAudioMoni
 
     // Warn user visually if the range of the signal is not captured.
     if (hasOutOfBoundsValues) {
-      this.$container.addClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS)
+      this.$container?.addClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS)
     } else {
-      this.$container.removeClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS)
+      this.$container?.removeClass(constants.MONITOR_OUT_OF_BOUNDS_CLASS)
     }
   }
   drawSingleWaveform(

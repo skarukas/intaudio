@@ -7,7 +7,7 @@ import { AbstractOutput } from "./AbstractOutput.js"
 
 export class ControlOutput<T> extends AbstractOutput<T> {
   numOutputChannels: number = 1
-  connect<T extends CanBeConnectedTo>(destination: T): Component {
+  connect<T extends CanBeConnectedTo>(destination: T): Component | undefined {
     let { component, input } = this.getDestinationInfo(destination)
     // TODO: fix... should be "destination" but won't work for non-connectables like Function.
     /* const connectable = destination instanceof AbstractInput ? destination : component */

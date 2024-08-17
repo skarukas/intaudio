@@ -5,10 +5,14 @@ import { Constructor, ObjectOf, TimeMeasure, WebAudioConnectable } from "./types
 export function tryWithFailureMessage<T = any>(fn: () => T, message: string): T {
   try {
     return fn()
-  } catch (e) {
+  } catch (e: any) {
     e.message = `${message}\nOriginal error: [${e.message}]`
     throw e
   }
+}
+
+export function isPlainObject(value: unknown) {
+  return value?.constructor === Object
 }
 
 export function createScriptProcessorNode(context: AudioContext, windowSize: number, numInputChannels: number, numOutputChannels: number) {
@@ -19,7 +23,9 @@ export function createScriptProcessorNode(context: AudioContext, windowSize: num
   )
   // Store true values because the constructor settings are not persisted on 
   // the WebAudio object.
+  // @ts-ignore Property undefined.
   processor['__numInputChannels'] = numInputChannels
+  // @ts-ignore Property undefined.
   processor['__numOutputChannels'] = numOutputChannels
 
   return processor
@@ -29,8 +35,11 @@ export function range(n: number): number[] {
   return Array(n).fill(0).map((v, i) => i)
 }
 
-export function enumerate<T>(arr: T[]): [number, T][] {
-  return arr.map((v, i) => [i, v])
+export function* enumerate<T>(arr: Iterable<T>): Generator<[number, T]> {
+  let i = 0
+  for (const x of arr) {
+    yield [i++, x]
+  }
 }
 
 type ZipType<T> = { [K in keyof T]: T[K] extends (infer V)[] ? V : never }
@@ -48,7 +57,7 @@ export function* zip<T extends unknown[][]>(...iterables: T): Generator<ZipType<
 }
 
 export function arrayToObject<T = any>(arr: T[]): ObjectOf<T> {
-  const res = {}
+  const res: ObjectOf<T> = {}
   for (const [i, v] of enumerate(arr)) {
     res[i] = v
   }
@@ -71,8 +80,8 @@ export function isFunction(x: any): boolean {
 }
 
 export function mapLikeToObject(map: any) {
-  const obj = {}
-  map.forEach((v, k) => obj[k] = v)
+  const obj: any = {}
+  map.forEach((v: any, k: any) => obj[k] = v)
   return obj
 }
 
@@ -93,7 +102,7 @@ export function scaleRange(
   return zeroOneScaled * (outMax - outMin) + outMin
 }
 
-export function afterRender(fn) {
+export function afterRender(fn: Function) {
   setTimeout(fn, 100)
 }
 
@@ -111,21 +120,37 @@ export function wrapValidator(fn: (v: any) => boolean | void): (v: any) => void 
   }
 }
 
-export function createTypeValidator(type: Constructor | string): (v: any) => void {
-  if (primitiveClasses.includes(<Constructor>type)) {
-    type = (<Constructor>type).name.toLowerCase()
-  }
-  if (typeof type === 'string') {
-    return function (value: any) {
-      if (typeof value != type) {
-        throw new Error(`Expected value to be typeof '${value}', but found type '${typeof value}' instead.`)
-      }
+export function isType(
+  x: any,
+  types: ((new (...args: any[]) => any) | string)[]
+): boolean
+export function isType<T>(
+  x: any,
+  type: (new (...args: any[]) => T) | string
+): x is T
+export function isType<T>(
+  x: any,
+  types: any
+) {
+  types = types instanceof Array ? types : [types]
+  let res = false
+  for (let type of types) {
+    if (primitiveClasses.includes(<Constructor>type)) {
+      type = (<Constructor>type).name.toLowerCase()
     }
-  } else {
-    return function (value: any) {
-      if (!(value instanceof type)) {
-        throw new Error(`Expected value to be instanceof ${type.name}, but found type '${typeof value}' instead.`)
-      }
+    if (typeof type === 'string') {
+      res ||= (typeof x == type)
+    } else {
+      res ||= (x instanceof type)
+    }
+  }
+  return res
+}
+
+export function createTypeValidator(type: Constructor | string): (v: any) => void {
+  return function (value: any) {
+    if (!isType(value, <any>type)) {
+      throw new Error(`Expected value to be typeof / instanceof '${type}', but found type '${typeof value}' instead. Value: ${value}`)
     }
   }
 }
@@ -133,12 +158,12 @@ export function createTypeValidator(type: Constructor | string): (v: any) => voi
 export function defineTimeRamp(
   audioContext: AudioContext,
   timeMeasure: TimeMeasure,
-  node: ConstantSourceNode = undefined,
+  node: ConstantSourceNode | undefined = undefined,
   mapFn: (v: number) => number = v => v,
   durationSec: number = 1e8,
 ) {
   // Continuous ramp representing the AudioContext time.
-  let multiplier;
+  let multiplier: number
   if (timeMeasure == TimeMeasure.CYCLES) {
     multiplier = 2 * Math.PI
   } else if (timeMeasure == TimeMeasure.SECONDS) {
@@ -178,9 +203,12 @@ export async function loadFile(audioContext: AudioContext, filePathOrUrl: string
 const registryIdPropname = "__registryId__"
 
 export function getBufferId(buffer: AudioBuffer): string {
+  // @ts-ignore Property undefined.
   if (!buffer[registryIdPropname]) {
+    // @ts-ignore Property undefined.
     buffer[registryIdPropname] = crypto.randomUUID()
   }
+  // @ts-ignore Property undefined.
   return buffer[registryIdPropname]
 }
 

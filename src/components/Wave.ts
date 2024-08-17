@@ -18,8 +18,8 @@ export class Wave extends BaseComponent {
     frequency: number
   ) {
     super()
-    let waveType: WaveType,
-      wavetable: PeriodicWave;
+    let waveType: WaveType | undefined
+    let wavetable: PeriodicWave | undefined
     if (wavetableOrType instanceof PeriodicWave) {
       wavetable = wavetableOrType
       waveType = WaveType.CUSTOM
@@ -32,15 +32,15 @@ export class Wave extends BaseComponent {
       periodicWave: wavetable
     })
     this._oscillatorNode.start()
-    this.type = this.defineControlInput('type', waveType)
-    this.waveTable = this.defineControlInput('waveTable', wavetable)
-    this.frequency = this.defineAudioInput('frequency', this._oscillatorNode.frequency)
+    this.type = this.defineControlInput('type', waveType).ofType(String)
+    this.waveTable = this.defineControlInput('waveTable', wavetable).ofType(PeriodicWave)
+    this.frequency = this.defineAudioInput('frequency', this._oscillatorNode.frequency).ofType(Number)
 
     this.output = this.defineAudioOutput('output', this._oscillatorNode)
   }
   inputDidUpdate<T>(input: ControlInput<T>, newValue: T) {
     if (input == this.waveTable) {
-      this._oscillatorNode.setPeriodicWave(newValue)
+      this._oscillatorNode.setPeriodicWave(<PeriodicWave>newValue)
     } else if (input == this.type) {
       // TODO: figure this out.
       this._oscillatorNode.type = <OscillatorType>newValue
@@ -67,6 +67,7 @@ export class Wave extends BaseComponent {
     real: Iterable<number>,
     imaginary?: Iterable<number>
   ) {
+    imaginary ??= [...real].map(_ => 0)
     const wavetable = this.audioContext.createPeriodicWave(real, imaginary)
     return new this._.Wave(wavetable, frequency)
   }

@@ -11,9 +11,10 @@ function isIndexInRange(v, length) {
 export class ArrayView {
     get proxy() {
         var _a;
+        const length = this.length;
         return (_a = this._proxy) !== null && _a !== void 0 ? _a : (this._proxy = new Proxy(this, {
             get(target, p, receiver) {
-                if (isIndexInRange(p, this.length)) {
+                if (isIndexInRange(p, length)) {
                     return target.get(+p);
                 }
                 else {
@@ -21,7 +22,7 @@ export class ArrayView {
                 }
             },
             set(target, p, newValue, receiver) {
-                if (isIndexInRange(p, this.length)) {
+                if (isIndexInRange(p, length)) {
                     target.set(+p, newValue);
                     return true;
                 }
@@ -40,7 +41,7 @@ export class ArrayView {
         }
     }
     flatMap(callback, thisArg) {
-        return Array.prototype.flat.call(this.proxy, callback, thisArg);
+        return Array.prototype.flatMap.call(this.proxy, callback, thisArg);
     }
     flat(depth) {
         return Array.prototype.flat.call(this.proxy, depth);

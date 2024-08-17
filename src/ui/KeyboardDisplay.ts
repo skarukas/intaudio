@@ -1,12 +1,12 @@
 
 import { Keyboard } from "../components/Keyboard.js";
 import constants from "../shared/constants.js";
-import { KeyEventType } from "../shared/events.js"
+import { KeyEvent, KeyEventType } from "../shared/events.js"
 import { BaseDisplay } from "./BaseDisplay.js"
 declare var $: JQueryStatic;
 
 export class KeyboardDisplay extends BaseDisplay<Keyboard> {
-  $keys = {}
+  $keys: { [k: number]: JQuery<HTMLButtonElement> } = {}
   _display($root: JQuery, width: number, height: number) {
     // Obviously this is the wrong keyboard arrangement. TODO: that.
     let keyWidth = width / this.component.numKeys.value
@@ -22,7 +22,7 @@ export class KeyboardDisplay extends BaseDisplay<Keyboard> {
         })
         .attr('type', 'button')
         // Keydown handled locally
-        .on(constants.EVENT_MOUSEDOWN, () => this.component._keyDown(pitch))
+        .on(constants.EVENT_MOUSEDOWN, () => this.component.keyDown(pitch))
       this.$keys[pitch] = $key
       $root.append($key)
     }
@@ -30,10 +30,10 @@ export class KeyboardDisplay extends BaseDisplay<Keyboard> {
     // button (doesn't trigger mouseup on the button).
     // TODO: isn't this inefficient to propogate 48 updates on one keydown...? 
     $root.on(constants.EVENT_MOUSEUP, () => {
-      Object.keys(this.$keys).forEach(k => this.component._keyUp(k))
+      Object.keys(this.$keys).forEach(k => this.component.keyUp(+k))
     })
   }
-  showKeyEvent(event) {
+  showKeyEvent(event: KeyEvent) {
     let $key = this.$keys[event.eventPitch]
     if ($key) {
       if (event.eventType == KeyEventType.KEY_DOWN) {
