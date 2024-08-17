@@ -88,7 +88,7 @@ export class CompoundOutput<OutputsDict extends ObjectOf<AbstractOutput>>
     for (const outputName of this.keys) {
       (<any>res)[outputName] = fn(this.outputs[outputName], outputName)
     }
-    return res
+    return res as KeysLike<OutputsDict, T>
   }
   get numOutputChannels() {
     const ic = this.mapOverOutputs(i => i.numOutputChannels)

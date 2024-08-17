@@ -64,7 +64,7 @@ export class CompoundInput<InputsDict extends ObjectOf<AbstractInput>>
     for (const inputName of this.keys) {
       (<any>res)[inputName] = fn(this.inputs[inputName], inputName)
     }
-    return res
+    return res as KeysLike<InputsDict, T>
   }
   get numInputChannels() {
     const ic = this.mapOverInputs(i => i.numInputChannels)

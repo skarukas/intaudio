@@ -1,4 +1,4 @@
-import { KeysLike } from "../../shared/types.js"
+import { KeysLike, ObjectOf, ObjectOrArrayOf } from "../../shared/types.js"
 import { enumerate, isType, zip } from "../../shared/util.js"
 import { IODatatype } from "./FrameToSignatureConverter.js"
 import { SignalProcessingContextFactory } from "./SignalProcessingContextFactory.js"
@@ -387,11 +387,28 @@ export function getChannel<ArrType extends ArrayLike<any>>(
   return arr[c % arr.length]
 }
 
-export function map<T>(
-  arr: ArrayLike<T>,
-  fn: (v: T, i: number) => void
-) {
-  return Array.prototype.map.call(arr, fn)
+export function map<T, R>(
+  obj: ArrayLike<T>,
+  fn: (v: T, i: number) => R
+): R[]
+export function map<T, R>(
+  obj: ObjectOf<T>,
+  fn: (v: T, i: number | string) => R
+): ObjectOf<R>
+export function map<T, R>(
+  obj: ArrayLike<T> | ObjectOf<T>,
+  fn: (v: T, i: any) => R
+): ObjectOrArrayOf<R> {
+  if (isArrayLike(obj)) {
+    return Array.prototype.map.call(obj, fn) as R[]
+  } else {
+    const res: ObjectOf<R> = {}
+    Object.entries(obj as ObjectOf<T>).forEach(([key, value]) => {
+      const result = fn(value, key)
+      result != undefined && (res[key] = result)
+    })
+    return res
+  }
 }
 
 export function map2d<T, V>(

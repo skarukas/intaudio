@@ -110,6 +110,7 @@ export class BaseComponent extends BaseConnectable {
     setDefaultOutput(output) {
         this._defaultOutput = output;
     }
+    // TODO: replace with getter.
     getDefaultInput() {
         const name = '[[default]]';
         if (this._defaultInput) {
@@ -131,6 +132,9 @@ export class BaseComponent extends BaseConnectable {
         if (ownOutputs.length == 1) {
             return ownOutputs[0];
         }
+    }
+    get defaultInput() {
+        return this.getDefaultInput();
     }
     allInputsAreDefined() {
         let violations = [];

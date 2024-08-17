@@ -197,6 +197,7 @@ export abstract class BaseComponent<
   protected setDefaultOutput(output: AbstractOutput) {
     this._defaultOutput = output
   }
+  // TODO: replace with getter.
   getDefaultInput(): ComponentInput<any> {
     const name = '[[default]]'
     if (this._defaultInput) {
@@ -219,6 +220,9 @@ export abstract class BaseComponent<
     if (ownOutputs.length == 1) {
       return ownOutputs[0]
     }
+  }
+  get defaultInput(): ComponentInput<any> {
+    return this.getDefaultInput()
   }
 
   protected allInputsAreDefined() {
@@ -394,13 +398,15 @@ export abstract class BaseComponent<
   // @ts-ignore "Overload signature not compatible" with no reason given.
   perOutput(
     functions: KeysLike<OutputTypes, (x: Connectable) => Component>
-  ): BundleComponent
+  ): BundleComponent<any>
+  // TODO: Change to BundleComponent<KeysLike<OutputTypes, Component>> if 
+  // possible (there were some typing issues).
   perOutput(
     functions: ((x: Connectable) => Component)[]
-  ): BundleComponent
+  ): BundleComponent<any>
   perOutput(
     functions: ObjectOrArrayOf<((x: Connectable) => Component)>
-  ): BundleComponent {
+  ): BundleComponent<any> {
     if (functions instanceof Array) functions = arrayToObject(functions)
     const result: ObjectOf<Component> = {}
     const keys = Object.keys(functions)

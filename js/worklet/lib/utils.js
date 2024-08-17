@@ -283,8 +283,18 @@ export function polToCarArray(magnitude, phase, real, imaginary) {
 export function getChannel(arr, c) {
     return arr[c % arr.length];
 }
-export function map(arr, fn) {
-    return Array.prototype.map.call(arr, fn);
+export function map(obj, fn) {
+    if (isArrayLike(obj)) {
+        return Array.prototype.map.call(obj, fn);
+    }
+    else {
+        const res = {};
+        Object.entries(obj).forEach(([key, value]) => {
+            const result = fn(value, key);
+            result != undefined && (res[key] = result);
+        });
+        return res;
+    }
 }
 export function map2d(grid, fn) {
     return grid.map((arr, i) => arr.map((v, j) => fn(v, i, j)));

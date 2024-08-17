@@ -5,7 +5,7 @@ if (!ia) {
 }
 
 // Determines which test cases to run.
-const TEST_MATCHER = /(bundleObject).*/
+const TEST_MATCHER = /().*/
 
 ia.run(() => {
   const testNames = Object.keys(tests).filter(s => s.match(TEST_MATCHER))

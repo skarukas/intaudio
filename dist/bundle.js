@@ -1031,8 +1031,18 @@ function allEqual(iter) {
     }
     return true;
 }
-function map(arr, fn) {
-    return Array.prototype.map.call(arr, fn);
+function map(obj, fn) {
+    if (isArrayLike(obj)) {
+        return Array.prototype.map.call(obj, fn);
+    }
+    else {
+        const res = {};
+        Object.entries(obj).forEach(([key, value]) => {
+            const result = fn(value, key);
+            result != undefined && (res[key] = result);
+        });
+        return res;
+    }
 }
 IS_WORKLET ? AudioWorkletProcessor : class AudioWorkletProcessor {
     constructor() {
@@ -1676,6 +1686,15 @@ class BaseConnectable extends ToStringAndUUID {
         if (isFunction(destination)) {
             if (this.isControlStream) {
                 destination = new this._.FunctionComponent(destination);
+            }
+            else if (this instanceof this._.BundleComponent) {
+                // TODO: consider not using the *max* num channels.
+                const numChannelsPerInput = range(this.length).fill(this.numOutputChannels);
+                destination = new this._.AudioTransformComponent(destination, {
+                    inputSpec: new StreamSpec({
+                        numChannelsPerStream: numChannelsPerInput
+                    })
+                });
             }
             else {
                 // TODO: move away from ths unsafe conversion...or make sure it's safe 
@@ -2343,6 +2362,7 @@ class BaseComponent extends BaseConnectable {
     setDefaultOutput(output) {
         this._defaultOutput = output;
     }
+    // TODO: replace with getter.
     getDefaultInput() {
         const name = '[[default]]';
         if (this._defaultInput) {
@@ -2364,6 +2384,9 @@ class BaseComponent extends BaseConnectable {
         if (ownOutputs.length == 1) {
             return ownOutputs[0];
         }
+    }
+    get defaultInput() {
+        return this.getDefaultInput();
     }
     allInputsAreDefined() {
         let violations = [];
@@ -14411,6 +14434,20 @@ class BundleComponent extends BaseComponent {
                 this.defineOutputAlias(key, this.componentObject[key].defaultOutput);
             }
         }
+        this.input = this.defineCompoundInput('input', map(this.componentObject, c => c.defaultInput));
+        this.setDefaultInput(this.input);
+        this.output = this.defineCompoundOutput('output', map(this.componentObject, c => c.defaultOutput));
+        this.setDefaultOutput(this.output);
+        this.length = this.componentValues.length;
+    }
+    get isControlStream() {
+        return this.componentValues.every(c => c.isControlStream);
+    }
+    get isAudioStream() {
+        return this.componentValues.every(c => c.isAudioStream);
+    }
+    get isStftStream() {
+        return this.componentValues.every(c => c.isStftStream);
     }
     [Symbol.iterator]() {
         return this.componentValues[Symbol.iterator]();
@@ -14419,7 +14456,13 @@ class BundleComponent extends BaseComponent {
         throw new Error("Method not implemented.");
     }
     get defaultOutput() {
-        throw new Error("Method not implemented.");
+        return undefined;
+    }
+    get numOutputChannels() {
+        return Math.max(...this.componentValues.map(c => c.numOutputChannels)) || 0;
+    }
+    get numInputChannels() {
+        return Math.max(...this.componentValues.map(c => c.numInputChannels)) || 0;
     }
     setBypassed(isBypassed) {
         this.getBundledResult('setBypassed', isBypassed);
@@ -14436,7 +14479,8 @@ class BundleComponent extends BaseComponent {
     }
     connect(destination) {
         let { component } = this.getDestinationInfo(destination);
-        if (component instanceof FunctionComponent) {
+        if (isType(component, FunctionComponent)
+            || isType(component, AudioTransformComponent)) {
             try {
                 return component.withInputs(this.componentObject);
             }

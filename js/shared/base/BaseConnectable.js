@@ -1,7 +1,7 @@
 import { AbstractInput } from "../../io/input/AbstractInput.js";
 import { TypedConfigurable } from "../config.js";
 import { StreamSpec } from "../StreamSpec.js";
-import { isComponent, isFunction, isType } from "../util.js";
+import { isComponent, isFunction, isType, range } from "../util.js";
 import { ToStringAndUUID } from "./ToStringAndUUID.js";
 export class BaseConnectable extends ToStringAndUUID {
     get isAudioStream() {
@@ -17,6 +17,15 @@ export class BaseConnectable extends ToStringAndUUID {
         if (isFunction(destination)) {
             if (this.isControlStream) {
                 destination = new this._.FunctionComponent(destination);
+            }
+            else if (this instanceof this._.BundleComponent) {
+                // TODO: consider not using the *max* num channels.
+                const numChannelsPerInput = range(this.length).fill(this.numOutputChannels);
+                destination = new this._.AudioTransformComponent(destination, {
+                    inputSpec: new StreamSpec({
+                        numChannelsPerStream: numChannelsPerInput
+                    })
+                });
             }
             else {
                 // TODO: move away from ths unsafe conversion...or make sure it's safe 

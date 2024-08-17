@@ -5,7 +5,7 @@ import { AbstractOutput } from "../../io/output/AbstractOutput.js";
 import { TypedConfigurable } from "../config.js";
 import { StreamSpec } from "../StreamSpec.js";
 import { CanBeConnectedTo, WebAudioConnectable } from "../types.js";
-import { isComponent, isFunction, isType } from "../util.js";
+import { isComponent, isFunction, isType, range } from "../util.js";
 import { Connectable } from "./Connectable.js";
 import { ToStringAndUUID } from "./ToStringAndUUID.js";
 
@@ -31,6 +31,17 @@ export abstract class BaseConnectable extends ToStringAndUUID implements Connect
     if (isFunction(destination)) {
       if (this.isControlStream) {
         destination = new this._.FunctionComponent(<Function>destination)
+      } else if (this instanceof this._.BundleComponent) {
+        // TODO: consider not using the *max* num channels.
+        const numChannelsPerInput = range(this.length).fill(this.numOutputChannels)
+        destination = new this._.AudioTransformComponent(
+          <Function>destination,
+          {
+            inputSpec: new StreamSpec({
+              numChannelsPerStream: numChannelsPerInput
+            })
+          }
+        )
       } else {
         // TODO: move away from ths unsafe conversion...or make sure it's safe 
         // by ensuring it's either BaseComponent or AudioRateOutput?

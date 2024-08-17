@@ -21,7 +21,7 @@ export type AnyInput = { [name: string | number | symbol]: AbstractInput }
 export type AnyOutput = { [name: string | number | symbol]: AbstractOutput }
 export type ObjectOf<T> = { [key: number | string]: T }
 export type ObjectOrArrayOf<T> = T[] | ObjectOf<T>
-export type KeysLike<T, V> = { [K in keyof T]?: V }
+export type KeysLike<T, V> = { [K in keyof T]: V }
 export type Bundle<T> = T & { [Symbol.iterator](): Iterator<T> }
 export type Constructor<T = any> = {
   new?(): T;

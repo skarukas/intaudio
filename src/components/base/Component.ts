@@ -19,6 +19,7 @@ export interface Component<
 
   outputs: OutputTypes;
   inputs: InputTypes;
+  get defaultInput(): ComponentInput<unknown>
   getDefaultInput(): ComponentInput<unknown>
   //outputAdded<T>(output: AbstractOutput<T>): void;
   //inputAdded<T>(input: AbstractInput<T>): void;

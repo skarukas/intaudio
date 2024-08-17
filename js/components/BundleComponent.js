@@ -1,3 +1,6 @@
+import { isType } from "../shared/util.js";
+import { map } from "../worklet/lib/utils.js";
+import { AudioTransformComponent } from "./AudioTransformComponent.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 import { FunctionComponent } from "./FunctionComponent.js";
 /**
@@ -26,6 +29,20 @@ export class BundleComponent extends BaseComponent {
                 this.defineOutputAlias(key, this.componentObject[key].defaultOutput);
             }
         }
+        this.input = this.defineCompoundInput('input', map(this.componentObject, c => c.defaultInput));
+        this.setDefaultInput(this.input);
+        this.output = this.defineCompoundOutput('output', map(this.componentObject, c => c.defaultOutput));
+        this.setDefaultOutput(this.output);
+        this.length = this.componentValues.length;
+    }
+    get isControlStream() {
+        return this.componentValues.every(c => c.isControlStream);
+    }
+    get isAudioStream() {
+        return this.componentValues.every(c => c.isAudioStream);
+    }
+    get isStftStream() {
+        return this.componentValues.every(c => c.isStftStream);
     }
     [Symbol.iterator]() {
         return this.componentValues[Symbol.iterator]();
@@ -34,7 +51,13 @@ export class BundleComponent extends BaseComponent {
         throw new Error("Method not implemented.");
     }
     get defaultOutput() {
-        throw new Error("Method not implemented.");
+        return undefined;
+    }
+    get numOutputChannels() {
+        return Math.max(...this.componentValues.map(c => c.numOutputChannels)) || 0;
+    }
+    get numInputChannels() {
+        return Math.max(...this.componentValues.map(c => c.numInputChannels)) || 0;
     }
     setBypassed(isBypassed) {
         this.getBundledResult('setBypassed', isBypassed);
@@ -51,7 +74,8 @@ export class BundleComponent extends BaseComponent {
     }
     connect(destination) {
         let { component } = this.getDestinationInfo(destination);
-        if (component instanceof FunctionComponent) {
+        if (isType(component, FunctionComponent)
+            || isType(component, AudioTransformComponent)) {
             try {
                 return component.withInputs(this.componentObject);
             }
