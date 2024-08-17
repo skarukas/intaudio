@@ -1,7 +1,9 @@
+import { BaseComponent } from "../../components/base/BaseComponent.js";
 import { Component } from "../../components/base/Component.js";
 import { AbstractInput } from "../../io/input/AbstractInput.js";
 import { AbstractOutput } from "../../io/output/AbstractOutput.js";
 import { TypedConfigurable } from "../config.js";
+import { StreamSpec } from "../StreamSpec.js";
 import { CanBeConnectedTo, WebAudioConnectable } from "../types.js";
 import { isComponent, isFunction, isType } from "../util.js";
 import { Connectable } from "./Connectable.js";
@@ -27,7 +29,21 @@ export abstract class BaseConnectable extends ToStringAndUUID implements Connect
     destination: CanBeConnectedTo
   ): { component: Component | undefined, input: AbstractInput } {
     if (isFunction(destination)) {
-      destination = this.isControlStream ? new this._.FunctionComponent(<Function>destination) : new this._.AudioTransformComponent(<Function>destination)
+      if (this.isControlStream) {
+        destination = new this._.FunctionComponent(<Function>destination)
+      } else {
+        // TODO: move away from ths unsafe conversion...or make sure it's safe 
+        // by ensuring it's either BaseComponent or AudioRateOutput?
+        const numInputChannels = (<unknown>this as BaseComponent).numOutputChannels
+        destination = new this._.AudioTransformComponent(
+          <Function>destination,
+          {
+            inputSpec: new StreamSpec({
+              numChannelsPerStream: [numInputChannels]
+            })
+          }
+        )
+      }
     }
     let component: Component | undefined
     let input: AbstractInput

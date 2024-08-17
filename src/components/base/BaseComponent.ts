@@ -449,8 +449,11 @@ export abstract class BaseComponent<
         ) {
           throw new Error("Array and rest specs not currently supported.")
         }
-        const res = functions[key](outputGroup[0])
-        res && (result[toNum(key)] = res)
+        const res = functions[key](outputGroup[0]) as any
+        // NOTE: res.defaultOutput?.left is used because sometimes the output 
+        // from the function may be multichannel.
+        // TODO: reconsider.
+        res && (result[toNum(key)] = res.defaultOutput?.left)
       }
       // Otherwise, leave it out. TODO: Throw error if not explicitly null
       // or undefined?

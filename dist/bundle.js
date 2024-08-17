@@ -819,6 +819,849 @@ class AbstractInput extends ToStringAndUUID {
     }
 }
 
+function toMultiChannelArray(array) {
+    const proxy = new Proxy(array, {
+        get(target, p, receiver) {
+            if (p == "left")
+                return target[0];
+            if (p == "right")
+                return target[1];
+            return Reflect.get(target, p, receiver);
+        }
+    });
+    return proxy;
+}
+
+const IS_WORKLET = typeof AudioWorkletProcessor != 'undefined';
+function getColumn(arr, col) {
+    const result = [];
+    for (let i = 0; i < arr.length; i++) {
+        result.push(arr[i][col]);
+    }
+    return result;
+}
+function writeColumn(arr, col, values) {
+    for (let i = 0; i < arr.length; i++) {
+        arr[i][col] = values[i];
+    }
+}
+function assertValidReturnType(result) {
+    if (result === undefined) {
+        throw new Error("Expected mapping function to return valid value(s), but got undefined.");
+    }
+}
+function processSamples(fn, inputChunks, outputChunks, contextFactory) {
+    var _a, _b;
+    const numChannels = (_a = inputChunks[0]) === null || _a === void 0 ? void 0 : _a.length;
+    const numSamples = (_b = inputChunks[0][0]) === null || _b === void 0 ? void 0 : _b.length;
+    for (let c = 0; c < numChannels; c++) {
+        for (let i = 0; i < numSamples; i++) {
+            const inputs = inputChunks.map(input => input[c][i]);
+            const context = contextFactory.getContext({ channelIndex: c, sampleIndex: i });
+            const outputs = context.execute(fn, inputs);
+            for (const [output, dest] of zip(outputs, outputChunks)) {
+                assertValidReturnType(output);
+                dest[c][i] = output;
+            }
+        }
+    }
+    // The number of output channels is the same as the input because this is not
+    // determined by the user's function.
+    return outputChunks.map(_ => numChannels);
+}
+function processTime(fn, inputChunks, outputChunks, contextFactory) {
+    var _a;
+    const numChannels = (_a = inputChunks[0]) === null || _a === void 0 ? void 0 : _a.length;
+    for (let c = 0; c < numChannels; c++) {
+        const inputs = inputChunks.map(input => input[c]);
+        const context = contextFactory.getContext({ channelIndex: c });
+        const outputs = context.execute(fn, inputs);
+        for (const [output, dest] of zip(outputs, outputChunks)) {
+            assertValidReturnType(output);
+            dest[c].set(output);
+        }
+    }
+    // The number of output channels is the same as the input because this is not
+    // determined by the user's function.
+    return outputChunks.map(_ => numChannels);
+}
+/**
+ * Apply a fuction across the audio chunk (channels and time).
+ *
+ * @param fn
+ * @param inputChunks
+ * @param outputChunks
+ * @returns The number of channels for each output of the function.
+ */
+function processTimeAndChannels(fn, inputChunks, outputChunks, contextFactory) {
+    const inputs = inputChunks.map(toMultiChannelArray);
+    const context = contextFactory.getContext();
+    const outputs = context.execute(fn, inputs);
+    assertValidReturnType(outputs);
+    for (const [output, dest] of zip(outputs, outputChunks)) {
+        for (let c = 0; c < output.length; c++) {
+            if (output[c] == undefined) {
+                continue; // This signifies that the channel should be empty.
+            }
+            dest[c].set(output[c]);
+        }
+    }
+    return outputs.map(a => a.length);
+}
+/**
+ * Apply a fuction to each sample, across channels.
+ *
+ * @param fn
+ * @param inputChunks
+ * @param outputChunks
+ * @returns The number of channels for each output of the function.
+ */
+function processChannels(fn, inputChunks, outputChunks, contextFactory) {
+    var _a;
+    const numOutputChannels = Array(outputChunks.length).fill(0);
+    const numSamples = (_a = inputChunks[0][0]) === null || _a === void 0 ? void 0 : _a.length;
+    for (let i = 0; i < numSamples; i++) {
+        // Get the i'th sample, across all channels and inputs.
+        const inputs = inputChunks.map(input => {
+            const inputChannels = getColumn(input, i);
+            return toMultiChannelArray(inputChannels);
+        });
+        const context = contextFactory.getContext({ sampleIndex: i });
+        const outputChannels = context.execute(fn, inputs);
+        for (const [j, [output, destChunk]] of enumerate(zip(outputChannels, outputChunks))) {
+            // TODO: add NaN logic to postprocessing instead.
+            writeColumn(destChunk, i, map(output, v => isFinite(v) ? v : 0));
+            numOutputChannels[j] = output.length;
+        }
+    }
+    return numOutputChannels;
+}
+function getProcessingFunction(dimension) {
+    switch (dimension) {
+        case "all":
+            return processTimeAndChannels;
+        case "channels":
+            return processChannels;
+        case "time":
+            return processTime;
+        case "none":
+            return processSamples;
+        default:
+            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
+    }
+}
+function mapOverChannels(dimension, data, fn) {
+    switch (dimension) {
+        case "all":
+            return map(data, fn);
+        case "channels":
+            const channels = data;
+            return map(channels, c => fn([c]));
+        case "time":
+            return fn(data);
+        case "none":
+            return fn([data]);
+        default:
+            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
+    }
+}
+// Lightweight check that the structure is correct.
+function isCorrectOutput(dimension, output, type) {
+    const typeValidation = type.__NEW__validateAny(output);
+    switch (dimension) {
+        case "all":
+            return typeValidation && isArrayLike(output) && isArrayLike(output[0]);
+        case "channels":
+            // NOTE: Channels can be undefined, a special case that means empty data.
+            return output == undefined || typeValidation && isArrayLike(output);
+        case "time":
+            return typeValidation && isArrayLike(output);
+        case "none":
+            return typeValidation;
+        default:
+            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
+    }
+}
+function propertyIsDefined(obj, property) {
+    return typeof obj === 'object'
+        && obj !== null
+        && property in obj
+        && obj[property] != undefined;
+}
+function isArrayLike(value) {
+    return isType(value, Array) || propertyIsDefined(value, 'length') && propertyIsDefined(value, 0);
+}
+/**
+ * Returns a structure filled with zeroes that represents the shape of a single input or the output.
+ */
+function generateZeroInput(dimension, windowSize, numChannels) {
+    switch (dimension) {
+        case "all":
+            const frame = [];
+            for (let i = 0; i < numChannels; i++) {
+                frame.push(new Float32Array(windowSize));
+            }
+            return toMultiChannelArray(frame);
+        case "channels":
+            const channels = Array(windowSize).fill(0);
+            return toMultiChannelArray(channels);
+        case "time":
+            return new Float32Array(windowSize);
+        case "none":
+            return 0;
+        default:
+            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
+    }
+}
+function sum(iter) {
+    let sm = 0;
+    for (const x of iter) {
+        sm += x;
+    }
+    return sm;
+}
+const _NO_VALUE = Symbol("_NO_VALUE");
+function allEqual(iter) {
+    let lastValue = _NO_VALUE;
+    for (const x of iter) {
+        if (lastValue != _NO_VALUE && lastValue != x) {
+            return false;
+        }
+        lastValue = x;
+    }
+    return true;
+}
+function map(arr, fn) {
+    return Array.prototype.map.call(arr, fn);
+}
+IS_WORKLET ? AudioWorkletProcessor : class AudioWorkletProcessor {
+    constructor() {
+        const channel = new MessageChannel();
+        this.port = channel.port1;
+        this.outPort = channel.port2;
+    }
+};
+
+function checkRange(i, min, max) {
+    if (i >= max || i < min) {
+        throw new RangeError(`Index '${i}' is not in range of the view.`);
+    }
+    return true;
+}
+function isIndexInRange(v, length) {
+    const isNumber = typeof v != 'symbol' && Number.isInteger(+v);
+    return isNumber && checkRange(+v, 0, length);
+}
+class ArrayView {
+    get proxy() {
+        var _a;
+        const length = this.length;
+        return (_a = this._proxy) !== null && _a !== void 0 ? _a : (this._proxy = new Proxy(this, {
+            get(target, p, receiver) {
+                if (isIndexInRange(p, length)) {
+                    return target.get(+p);
+                }
+                else {
+                    return Reflect.get(target, p, receiver);
+                }
+            },
+            set(target, p, newValue, receiver) {
+                if (isIndexInRange(p, length)) {
+                    target.set(+p, newValue);
+                    return true;
+                }
+                else {
+                    return Reflect.set(target, p, newValue, receiver);
+                }
+            }
+        }));
+    }
+    constructor(privateConstructor, get, set, length) {
+        this.get = get;
+        this.set = set;
+        this.length = length;
+        if (privateConstructor != ArrayView.PRIVATE_CONSTRUCTOR) {
+            throw new Error("Instances must be constructed using one of the ArrayView.create*() methods.");
+        }
+    }
+    flatMap(callback, thisArg) {
+        return Array.prototype.flatMap.call(this.proxy, callback, thisArg);
+    }
+    flat(depth) {
+        return Array.prototype.flat.call(this.proxy, depth);
+    }
+    toLocaleString(locales, options) {
+        throw new Error("Method not implemented.");
+    }
+    pop() {
+        if (this.length) {
+            const v = this.get(this.length - 1);
+            this.length -= 1;
+            return v;
+        }
+    }
+    push(...items) {
+        throw new Error("Method not implemented.");
+    }
+    concat(...items) {
+        return Array.prototype.concat.call(this.proxy, ...items);
+    }
+    join(separator) {
+        return Array.prototype.join.call(this.proxy, separator);
+    }
+    reverse() {
+        return ArrayView.createReversedView(this.proxy);
+    }
+    shift() {
+        throw new Error("Method not implemented.");
+    }
+    slice(start, end) {
+        return ArrayView.createSliceView(this.proxy, start, end);
+    }
+    sort(compareFn) {
+        return Array.prototype.sort.call(this.proxy, compareFn);
+    }
+    splice(start, deleteCount, ...rest) {
+        throw new Error("Method not implemented.");
+    }
+    unshift(...items) {
+        throw new Error("Method not implemented.");
+    }
+    indexOf(searchElement, fromIndex) {
+        return Array.prototype.indexOf.call(this.proxy, searchElement, fromIndex);
+    }
+    lastIndexOf(searchElement, fromIndex) {
+        return Array.prototype.lastIndexOf.call(this.proxy, searchElement, fromIndex);
+    }
+    every(predicate, thisArg) {
+        return Array.prototype.every.call(this.proxy, predicate, thisArg);
+    }
+    some(predicate, thisArg) {
+        return Array.prototype.some.call(this.proxy, predicate, thisArg);
+    }
+    forEach(callbackfn, thisArg) {
+        return Array.prototype.forEach.call(this.proxy, callbackfn, thisArg);
+    }
+    map(callbackfn, thisArg) {
+        return Array.prototype.map.call(this.proxy, callbackfn, thisArg);
+    }
+    filter(predicate, thisArg) {
+        return Array.prototype.filter.call(this.proxy, predicate, thisArg);
+    }
+    reduce(callbackfn, initialValue) {
+        return Array.prototype.reduce.call(this.proxy, callbackfn, initialValue);
+    }
+    reduceRight(callbackfn, initialValue) {
+        return Array.prototype.reduceRight.call(this.proxy, callbackfn, initialValue);
+    }
+    find(predicate, thisArg) {
+        return Array.prototype.find.call(this.proxy, predicate, thisArg);
+    }
+    findIndex(predicate, thisArg) {
+        return Array.prototype.findIndex.call(this.proxy, predicate, thisArg);
+    }
+    fill(value, start, end) {
+        return Array.prototype.fill.call(this.proxy, value, start, end);
+    }
+    copyWithin(target, start, end) {
+        return Array.prototype.copyWithin.call(this.proxy, target, start, end);
+    }
+    entries() {
+        return Array.prototype.entries.call(this.proxy);
+    }
+    keys() {
+        return Array.prototype.keys.call(this.proxy);
+    }
+    values() {
+        return Array.prototype.values.call(this.proxy);
+    }
+    includes(searchElement, fromIndex) {
+        return Array.prototype.includes.call(this.proxy, searchElement, fromIndex);
+    }
+    [Symbol.iterator]() {
+        return Array.prototype[Symbol.iterator].call(this.proxy);
+    }
+    toString() {
+        return `ArrayView (${this.length})`;
+    }
+    toArray() {
+        return [...this];
+    }
+    static create(get, set, length) {
+        const view = new ArrayView(ArrayView.PRIVATE_CONSTRUCTOR, get, set, length);
+        return view.proxy;
+    }
+    static createFromDataLocationFn(getDataLocation, length) {
+        return this.create(function get(i) {
+            const data = getDataLocation(i);
+            return data.array[data.index];
+        }, function set(i, v) {
+            const data = getDataLocation(i);
+            data.array[data.index] = v;
+        }, length);
+    }
+    static createConcatView(...arrays) {
+        const lengths = arrays.map(a => a.length);
+        const lengthSum = lengths.reduce((sum, c) => sum + c, 0);
+        function getDataLocation(i) {
+            for (let arrayIndex = 0; arrayIndex < arrays.length; arrayIndex++) {
+                if (i < lengths[arrayIndex]) {
+                    return {
+                        array: arrays[arrayIndex],
+                        index: i
+                    };
+                }
+                else {
+                    i -= lengths[arrayIndex];
+                }
+            }
+            throw new RangeError(`Index '${i}' is not in range of the view.`);
+        }
+        return this.createFromDataLocationFn(getDataLocation, lengthSum);
+    }
+    static createSliceView(array, startIndex, endIndex) {
+        // TODO: validate these numbers.
+        startIndex !== null && startIndex !== void 0 ? startIndex : (startIndex = 0);
+        endIndex !== null && endIndex !== void 0 ? endIndex : (endIndex = array.length);
+        function getDataLocation(i) {
+            const index = i + startIndex;
+            return { array, index };
+        }
+        return this.createFromDataLocationFn(getDataLocation, endIndex - startIndex);
+    }
+    static createReindexedView(array, indices) {
+        function getDataLocation(i) {
+            return { array, index: indices[i] };
+        }
+        return this.createFromDataLocationFn(getDataLocation, indices.length);
+    }
+    static createInterleavedView(...arrays) {
+        let singleArrLength = undefined;
+        const numArrs = arrays.length;
+        for (const arr of arrays) {
+            singleArrLength !== null && singleArrLength !== void 0 ? singleArrLength : (singleArrLength = arr.length);
+            if (arr.length != singleArrLength) {
+                throw new Error(`Each array to interleave must be the same length. Expected ${singleArrLength}, got ${arr.length}`);
+            }
+        }
+        function getDataLocation(i) {
+            const index = Math.floor(i / numArrs);
+            const arrIndex = i % numArrs;
+            return { array: arrays[arrIndex], index };
+        }
+        return this.createFromDataLocationFn(getDataLocation, singleArrLength * numArrs);
+    }
+    static createDeinterleavedViews(array, numViews) {
+        let length = array.length / numViews;
+        if (!Number.isInteger(length)) {
+            throw new Error(`The length of the array must be exactly divisible by numViews. Given numViews=${numViews}, array.length=${array.length}`);
+        }
+        const views = [];
+        for (let viewIndex = 0; viewIndex < numViews; viewIndex++) {
+            function getDataLocation(i) {
+                return { array, index: i * numViews + viewIndex };
+            }
+            const view = this.createFromDataLocationFn(getDataLocation, length);
+            views.push(view);
+        }
+        return views;
+    }
+    static createReversedView(array) {
+        function getDataLocation(i) {
+            return { array, index: array.length - (i + 1) };
+        }
+        return this.createFromDataLocationFn(getDataLocation, array.length);
+    }
+}
+ArrayView.PRIVATE_CONSTRUCTOR = Symbol('PRIVATE_CONSTRUCTOR');
+
+// NOTE: IODatatypes always process one channel at a time.
+class IODatatype {
+    constructor() {
+        this.name = this.constructor.name;
+    }
+    toString() {
+        return `${this.name} (${this.dataspecString})`;
+    }
+    static create(dtype, name) {
+        switch (dtype.toLowerCase()) {
+            case "fft":
+            case "stft":
+                return new stft();
+            case "audio":
+                return new audio();
+            case "control":
+                return new control(name);
+            default:
+                throw new Error(`Unrecognized dtype ${dtype}. Supported datatypes: ['stft', 'audio', 'control']`);
+        }
+    }
+}
+class stft extends IODatatype {
+    constructor(windowSize) {
+        super();
+        this.windowSize = windowSize;
+        this.dataspecString = '{ magnitude: ArrayLike<number>, phase: ArrayLike<number> }';
+        this.numAudioStreams = 3;
+    }
+    channelFromAudioData(frame) {
+        if (!isType(frame.audioStreams[0], Array)) {
+            throw new Error("STFT data must be arrays.");
+        }
+        // NOTE: Ignore the first audio stream (sync).
+        return {
+            magnitude: frame.audioStreams[1],
+            phase: frame.audioStreams[2]
+            // Other FFT traits to give the user?
+        };
+    }
+    __NEW__validateAny(value) {
+        return value.magnitude != undefined && value.phase != undefined;
+    }
+    __NEW__toAudioData(value, sampleIndex) {
+        const sync = sampleIndex == undefined ?
+            range(value.magnitude.length)
+            : sampleIndex;
+        return {
+            audioStreams: [
+                sync,
+                value.magnitude,
+                value.phase
+            ]
+        };
+    }
+    __OLD__validate(value, { checkLength }) {
+        if (value == undefined) {
+            throw new Error("Expected STFT data, got undefined.");
+        }
+        if (value.magnitude == undefined || value.phase == undefined) {
+            throw new Error("STFT data must have keys magnitude and phase. Given: " + value);
+        }
+        for (let key of ["magnitude", "phase"]) {
+            const arr = value[key];
+            if (!isArrayLike(value)) {
+                throw new Error(`Each STFT value must be an ArrayLike collection of numbers. Given ${key} value with no length property or numeric values.`);
+            }
+            if (checkLength && arr.length != this.windowSize) {
+                throw new Error(`Returned size must be equal to the input FFT windowSize. Expected ${this.windowSize}, given ${key}.length=${arr.length}.`);
+            }
+        }
+    }
+    __OLD__channelToAudioData(value) {
+        return {
+            audioStreams: [
+                range(value.magnitude.length), // sync signal.
+                value.magnitude,
+                value.phase
+            ].map(toMultiChannelArray)
+        };
+    }
+}
+class audio extends IODatatype {
+    constructor() {
+        super(...arguments);
+        this.dataspecString = 'ArrayLike<number>';
+        this.numAudioStreams = 1;
+    }
+    __NEW__validateAny(value) {
+        return isType(value, Number) || isArrayLike(value);
+    }
+    __NEW__toAudioData(value, sampleIndex) {
+        throw new Error("Method not implemented.");
+    }
+    __OLD__validate(channel) {
+        if (!isArrayLike(channel)) {
+            throw new Error(`Each audio channel must be an ArrayLike collection of numbers. Given value with no length property or numeric values.`);
+        }
+        if (channel[0] != undefined && !isType(channel[0], Number)) {
+            throw new Error(`Audio data must be numbers, given ${channel} (typeof ${typeof channel})`);
+        }
+    }
+    channelFromAudioData(frame) {
+        return frame.audioStreams[0];
+    }
+    __OLD__channelToAudioData(channel) {
+        if (!(channel instanceof Array)) {
+            throw new Error(`Audio data must be an array, given type ${typeof channel}.`);
+        }
+        channel = channel.map(v => isFinite(+v) ? v : 0);
+        return {
+            audioStreams: [toMultiChannelArray(channel)]
+        };
+    }
+}
+class control extends IODatatype {
+    __NEW__validateAny(value) {
+        throw new Error("control is not a valid return type.");
+    }
+    __NEW__toAudioData(value, sampleIndex) {
+        throw new Error("control is not a valid return type.");
+    }
+    __OLD__validate(value) {
+        throw new Error("control is not a valid return type.");
+    }
+    constructor(parameterKey) {
+        super();
+        this.parameterKey = parameterKey;
+        this.dataspecString = 'any';
+        this.numAudioStreams = 0;
+    }
+    channelFromAudioData(frame) {
+        if (frame.parameters == undefined) {
+            throw new Error(`undefined parameters, expected key ${this.parameterKey}`);
+        }
+        return frame.parameters[this.parameterKey];
+    }
+    __OLD__channelToAudioData(value) {
+        // TODO: how would someone specify the output name?
+        return {
+            audioStreams: [],
+            parameters: { [this.parameterKey]: value }
+        };
+    }
+}
+// TODO: use named outputs.
+/**
+ * Converts a frame of audio data + metadata to and from function I/O types exposed to the user-defined function. The frame may be of any dimension.
+ */
+class FrameToSignatureConverter {
+    constructor(dimension, inputSpec, outputSpec) {
+        this.dimension = dimension;
+        this.inputSpec = inputSpec;
+        this.outputSpec = outputSpec;
+    }
+    /**
+     * Convert raw audio frame data into user-friendly function inputs.
+     */
+    prepareInputs(frame) {
+        // TODO: fix this function.
+        let streamIndex = 0;
+        const inputs = [];
+        for (const { type } of this.inputSpec) {
+            // TODO: figure out how to pass multiple streams to a channel...
+            const inputStreams = ArrayView.createSliceView(frame.audioStreams, streamIndex, streamIndex + type.numAudioStreams);
+            const input = mapOverChannels(this.dimension, frame.audioStreams, channel => {
+                type.channelFromAudioData({
+                    audioStreams: inputStreams,
+                    parameters: frame.parameters
+                });
+            });
+            inputs.push(input);
+        }
+        return inputs;
+    }
+    normalizeOutputs(outputs) {
+        // try-catch led to terrible performance, using validation instead.
+        const originalErrors = this.validateOutputs(outputs);
+        if (!originalErrors.length) {
+            return outputs;
+        }
+        outputs = [outputs];
+        const arrayErrors = this.validateOutputs(outputs);
+        if (!arrayErrors.length) {
+            return outputs;
+        }
+        throw new Error(`Unable to read outputs from processing function due to the following error(s):
+${originalErrors.map(v => " - " + v).join("\n")}
+
+Attempted to wrap output in an array, which failed as well:
+${arrayErrors.map(v => " - " + v).join("\n")}`);
+    }
+    validateOutputs(outputs) {
+        if (!isArrayLike(outputs)) {
+            return [`Expected function outputs to be an array with the signature ${this.outputSpec} but got '${typeof outputs}' type instead.`];
+        }
+        if (outputs.length != this.outputSpec.length) {
+            return [`Expected the function to have ${this.outputSpec.length} output(s), expressed as an array with length ${this.outputSpec.length}, but got array of length ${outputs.length} instead.`];
+        }
+        return map(outputs, (v, i) => {
+            const spec = this.outputSpec[i];
+            // TODO: account for different dimension in datatype string.
+            if (!isCorrectOutput(this.dimension, v, spec.type)) {
+                return `Error parsing output ${i} ('${spec.name}') of function with dimension='${this.dimension}'. Expected datatype ${spec.type}, given ${v}.`;
+            }
+            return '';
+        }).filter(v => !!v);
+    }
+    __OLD__validateOutputs(outputs) {
+        if (!isArrayLike(outputs)) {
+            throw new Error(`Expected function outputs to be an array with the signature ${this.outputSpec} but got '${typeof outputs}' type instead.`);
+        }
+        if (outputs.length != this.outputSpec.length) {
+            throw new Error(`Expected function outputs to be an array with size ${this.outputSpec.length} but got size ${outputs.length} instead.`);
+        }
+        const itOutputs = ArrayView.createSliceView(outputs);
+        const checkLength = ["all", "time"].includes(this.dimension);
+        for (const [output, spec] of zip(itOutputs, this.outputSpec)) {
+            try {
+                mapOverChannels(this.dimension, output, channel => spec.type.__OLD__validate(channel, { checkLength }));
+            }
+            catch (e) {
+                e.message = `Error parsing output '${spec.name}' with expected datatype ${spec.type}. ${e.message}`;
+                throw e;
+            }
+        }
+    }
+    /**
+     * Convert user output back into raw data.
+     */
+    processOutputs(outputs) {
+        const outputAudioStreamParts = [];
+        for (const [output, specEntry] of zip(outputs, this.outputSpec)) {
+            try {
+                const streams = this.outputToAudioStreams(output, specEntry.type);
+                outputAudioStreamParts.push(streams);
+            }
+            catch (e) {
+                throw new Error(`Expected function outputs to be an array with the signature ${this.outputSpec} but unable to convert output '${specEntry.name}' to the expected type (${specEntry.type}): ${e.message}`);
+            }
+        }
+        return {
+            audioStreams: ArrayView.createConcatView(...outputAudioStreamParts)
+        };
+    }
+    outputToAudioStreams(output, type) {
+        const audioStreams = [];
+        // Because channelToAudioData can return multiple streams, we have to do 
+        // some funny business. The large dimension returned at the "channel" level 
+        // needs to be pushed to the topmost dimension (output level).
+        const channelByAudioStream = range(type.numAudioStreams).fill([]);
+        // 1. Collect flattened output by audioStream index.
+        mapOverChannels(this.dimension, output, channel => {
+            // TODO: how to handle parameters? Are output parameters allowed?
+            const data = type.__OLD__channelToAudioData(channel);
+            for (const i of range(type.numAudioStreams)) {
+                channelByAudioStream[i].push(data.audioStreams[i]);
+            }
+        });
+        // 2. For each audioStream index, create a top-level audioStream by reading 
+        // from the flattened array.
+        for (const i of range(type.numAudioStreams)) {
+            let j = 0; // Indexes the "flattened" array.
+            const stream = mapOverChannels(this.dimension, output, _ => channelByAudioStream[i][j++]);
+            audioStreams.push(stream);
+        }
+        return audioStreams;
+    }
+}
+
+class ArrayFunctionality {
+    constructor(length) {
+        this.length = length;
+        for (const i of range(length)) {
+            Object.defineProperty(this, i, {
+                get() {
+                    return this.getItem(i);
+                }
+            });
+        }
+    }
+    *[Symbol.iterator]() {
+        for (const i of range(this.length)) {
+            yield this[i];
+        }
+    }
+}
+/**
+ * Specifies a configuration of inputs / outputs grouped into channels and the name of each one.
+ *
+ */
+class TypedStreamSpec extends ArrayFunctionality {
+    constructor({ names, numStreams, numChannelsPerStream, types }) {
+        var _a, _b, _c;
+        super((_c = (_b = (_a = numStreams !== null && numStreams !== void 0 ? numStreams : types === null || types === void 0 ? void 0 : types.length) !== null && _a !== void 0 ? _a : names === null || names === void 0 ? void 0 : names.length) !== null && _b !== void 0 ? _b : numChannelsPerStream === null || numChannelsPerStream === void 0 ? void 0 : numChannelsPerStream.length) !== null && _c !== void 0 ? _c : 0);
+        types && (numStreams !== null && numStreams !== void 0 ? numStreams : (numStreams = types.length));
+        if (names != undefined
+            && numStreams != undefined
+            && numStreams != names.length
+            || numChannelsPerStream != undefined
+                && numStreams != undefined
+                && numStreams != numChannelsPerStream.length
+            || numChannelsPerStream instanceof Array
+                && names != undefined
+                && numChannelsPerStream.length != names.length) {
+            throw new Error(`If provided, numStreams, inputNames, and numChannelsPerStream must match. Given numStreams=${numStreams}, inputNames=${JSON.stringify(names)}, numChannelsPerStream=${numChannelsPerStream}.`);
+        }
+        // Store whether the names were auto-generated.
+        this.hasNumberedNames = names == undefined;
+        this.hasDefaultNumChannels = numChannelsPerStream == undefined;
+        if (numChannelsPerStream != undefined) {
+            const info = this.infoFromChannelsPerStream(numChannelsPerStream);
+            numStreams !== null && numStreams !== void 0 ? numStreams : (numStreams = info.numStreams);
+            names !== null && names !== void 0 ? names : (names = info.names);
+        }
+        else if (names != undefined) {
+            const info = this.infoFromNames(names);
+            numStreams !== null && numStreams !== void 0 ? numStreams : (numStreams = info.numStreams);
+            numChannelsPerStream !== null && numChannelsPerStream !== void 0 ? numChannelsPerStream : (numChannelsPerStream = info.numChannelsPerStream);
+        }
+        else if (numStreams != undefined) {
+            const info = this.infoFromNumStreams(numStreams);
+            numChannelsPerStream !== null && numChannelsPerStream !== void 0 ? numChannelsPerStream : (numChannelsPerStream = info.numChannelsPerStream);
+            names !== null && names !== void 0 ? names : (names = info.names);
+        }
+        else {
+            throw new Error("At least one of (names, numStreams, numChannelsPerStream) must be specified.");
+        }
+        types !== null && types !== void 0 ? types : (types = names.map(_ => new audio()));
+        // These will all be defined at this point.
+        this.names = names;
+        this.length = numStreams;
+        this.numChannelsPerStream = numChannelsPerStream;
+        this.types = types.map((v, i) => isType(v, IODatatype) ?
+            v
+            : IODatatype.create(v, this.names[i]));
+    }
+    static fromSerialized(streamSpec) {
+        const types = streamSpec.types.map(t => t.name);
+        return new TypedStreamSpec(Object.assign(Object.assign({}, streamSpec), { types }));
+    }
+    getItem(i) {
+        return {
+            name: this.names[i],
+            numChannels: this.numChannelsPerStream[i],
+            type: this.types[i]
+        };
+    }
+    get totalNumChannels() {
+        return sum(Object.values(this.numChannelsPerStream));
+    }
+    infoFromNames(names) {
+        return {
+            numStreams: names.length,
+            numChannelsPerStream: range(names.length).fill(constants.DEFAULT_NUM_CHANNELS)
+        };
+    }
+    infoFromNumStreams(numStreams) {
+        return {
+            numChannelsPerStream: range(numStreams).fill(constants.DEFAULT_NUM_CHANNELS),
+            names: range(numStreams)
+        };
+    }
+    infoFromChannelsPerStream(numChannelsPerStream) {
+        return {
+            names: range(numChannelsPerStream.length),
+            numStreams: numChannelsPerStream.length
+        };
+    }
+    toString() {
+        const specString = map(this, data => {
+            let streamString = `'${data.name}': ${data.type.name}`;
+            if (data.numChannels) {
+                streamString += ` (${data.numChannels} channels)`;
+            }
+            return streamString;
+        }).join(", ");
+        return `[${specString}]`;
+    }
+}
+// Audio-only StreamSpec
+class StreamSpec extends TypedStreamSpec {
+    constructor({ names, numStreams, numChannelsPerStream }) {
+        super({ names, numStreams, numChannelsPerStream });
+    }
+}
+
 class BaseConnectable extends ToStringAndUUID {
     get isAudioStream() {
         return this.defaultOutput instanceof this._.AudioRateOutput;
@@ -831,7 +1674,19 @@ class BaseConnectable extends ToStringAndUUID {
     }
     getDestinationInfo(destination) {
         if (isFunction(destination)) {
-            destination = this.isControlStream ? new this._.FunctionComponent(destination) : new this._.AudioTransformComponent(destination);
+            if (this.isControlStream) {
+                destination = new this._.FunctionComponent(destination);
+            }
+            else {
+                // TODO: move away from ths unsafe conversion...or make sure it's safe 
+                // by ensuring it's either BaseComponent or AudioRateOutput?
+                const numInputChannels = this.numOutputChannels;
+                destination = new this._.AudioTransformComponent(destination, {
+                    inputSpec: new StreamSpec({
+                        numChannelsPerStream: [numInputChannels]
+                    })
+                });
+            }
         }
         let component;
         let input;
@@ -857,19 +1712,6 @@ class BaseConnectable extends ToStringAndUUID {
         }
         return { component, input };
     }
-}
-
-function toMultiChannelArray(array) {
-    const proxy = new Proxy(array, {
-        get(target, p, receiver) {
-            if (p == "left")
-                return target[0];
-            if (p == "right")
-                return target[1];
-            return Reflect.get(target, p, receiver);
-        }
-    });
-    return proxy;
 }
 
 function getNumInputChannels(node) {
@@ -1701,6 +2543,7 @@ class BaseComponent extends BaseConnectable {
         return new this._.BundleComponent(result);
     }
     perChannel(functions) {
+        var _a;
         if (functions instanceof Array)
             functions = arrayToObject(functions);
         const keys = Object.keys(functions);
@@ -1722,7 +2565,10 @@ class BaseComponent extends BaseConnectable {
                     throw new Error("Array and rest specs not currently supported.");
                 }
                 const res = functions[key](outputGroup[0]);
-                res && (result[toNum(key)] = res);
+                // NOTE: res.defaultOutput?.left is used because sometimes the output 
+                // from the function may be multichannel.
+                // TODO: reconsider.
+                res && (result[toNum(key)] = (_a = res.defaultOutput) === null || _a === void 0 ? void 0 : _a.left);
             }
             // Otherwise, leave it out. TODO: Throw error if not explicitly null
             // or undefined?
@@ -1834,216 +2680,6 @@ class AudioComponent extends BaseComponent {
         this.preventIOOverwrites();
     }
 }
-
-const IS_WORKLET = typeof AudioWorkletProcessor != 'undefined';
-function getColumn(arr, col) {
-    const result = [];
-    for (let i = 0; i < arr.length; i++) {
-        result.push(arr[i][col]);
-    }
-    return result;
-}
-function writeColumn(arr, col, values) {
-    for (let i = 0; i < arr.length; i++) {
-        arr[i][col] = values[i];
-    }
-}
-function assertValidReturnType(result) {
-    if (result === undefined) {
-        throw new Error("Expected mapping function to return valid value(s), but got undefined.");
-    }
-}
-function processSamples(fn, inputChunks, outputChunks, contextFactory) {
-    var _a, _b;
-    const numChannels = (_a = inputChunks[0]) === null || _a === void 0 ? void 0 : _a.length;
-    const numSamples = (_b = inputChunks[0][0]) === null || _b === void 0 ? void 0 : _b.length;
-    for (let c = 0; c < numChannels; c++) {
-        for (let i = 0; i < numSamples; i++) {
-            const inputs = inputChunks.map(input => input[c][i]);
-            const context = contextFactory.getContext({ channelIndex: c, sampleIndex: i });
-            const outputs = context.execute(fn, inputs);
-            for (const [output, dest] of zip(outputs, outputChunks)) {
-                assertValidReturnType(output);
-                dest[c][i] = output;
-            }
-        }
-    }
-    // The number of output channels is the same as the input because this is not
-    // determined by the user's function.
-    return outputChunks.map(_ => numChannels);
-}
-function processTime(fn, inputChunks, outputChunks, contextFactory) {
-    var _a;
-    const numChannels = (_a = inputChunks[0]) === null || _a === void 0 ? void 0 : _a.length;
-    for (let c = 0; c < numChannels; c++) {
-        const inputs = inputChunks.map(input => input[c]);
-        const context = contextFactory.getContext({ channelIndex: c });
-        const outputs = context.execute(fn, inputs);
-        for (const [output, dest] of zip(outputs, outputChunks)) {
-            assertValidReturnType(output);
-            dest[c].set(output);
-        }
-    }
-    // The number of output channels is the same as the input because this is not
-    // determined by the user's function.
-    return outputChunks.map(_ => numChannels);
-}
-/**
- * Apply a fuction across the audio chunk (channels and time).
- *
- * @param fn
- * @param inputChunks
- * @param outputChunks
- * @returns The number of channels for each output of the function.
- */
-function processTimeAndChannels(fn, inputChunks, outputChunks, contextFactory) {
-    const inputs = inputChunks.map(toMultiChannelArray);
-    const context = contextFactory.getContext();
-    const outputs = context.execute(fn, inputs);
-    assertValidReturnType(outputs);
-    for (const [output, dest] of zip(outputs, outputChunks)) {
-        for (let c = 0; c < output.length; c++) {
-            if (output[c] == undefined) {
-                continue; // This signifies that the channel should be empty.
-            }
-            dest[c].set(output[c]);
-        }
-    }
-    return outputs.map(a => a.length);
-}
-/**
- * Apply a fuction to each sample, across channels.
- *
- * @param fn
- * @param inputChunks
- * @param outputChunks
- * @returns The number of channels for each output of the function.
- */
-function processChannels(fn, inputChunks, outputChunks, contextFactory) {
-    var _a;
-    const numOutputChannels = Array(outputChunks.length).fill(0);
-    const numSamples = (_a = inputChunks[0][0]) === null || _a === void 0 ? void 0 : _a.length;
-    for (let i = 0; i < numSamples; i++) {
-        // Get the i'th sample, across all channels and inputs.
-        const inputs = inputChunks.map(input => {
-            const inputChannels = getColumn(input, i);
-            return toMultiChannelArray(inputChannels);
-        });
-        const context = contextFactory.getContext({ sampleIndex: i });
-        const outputChannels = context.execute(fn, inputs);
-        for (const [j, [output, destChunk]] of enumerate(zip(outputChannels, outputChunks))) {
-            // TODO: add NaN logic to postprocessing instead.
-            writeColumn(destChunk, i, map(output, v => isFinite(v) ? v : 0));
-            numOutputChannels[j] = output.length;
-        }
-    }
-    return numOutputChannels;
-}
-function getProcessingFunction(dimension) {
-    switch (dimension) {
-        case "all":
-            return processTimeAndChannels;
-        case "channels":
-            return processChannels;
-        case "time":
-            return processTime;
-        case "none":
-            return processSamples;
-        default:
-            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
-    }
-}
-function mapOverChannels(dimension, data, fn) {
-    switch (dimension) {
-        case "all":
-            return map(data, fn);
-        case "channels":
-            const channels = data;
-            return map(channels, c => fn([c]));
-        case "time":
-            return fn(data);
-        case "none":
-            return fn([data]);
-        default:
-            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
-    }
-}
-// Lightweight check that the structure is correct.
-function isCorrectOutput(dimension, output, type) {
-    const typeValidation = type.__NEW__validateAny(output);
-    switch (dimension) {
-        case "all":
-            return typeValidation && isArrayLike(output) && isArrayLike(output[0]);
-        case "channels":
-            // NOTE: Channels can be undefined, a special case that means empty data.
-            return output == undefined || typeValidation && isArrayLike(output);
-        case "time":
-            return typeValidation && isArrayLike(output);
-        case "none":
-            return typeValidation;
-        default:
-            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
-    }
-}
-function propertyIsDefined(obj, property) {
-    return typeof obj === 'object'
-        && obj !== null
-        && property in obj
-        && obj[property] != undefined;
-}
-function isArrayLike(value) {
-    return isType(value, Array) || propertyIsDefined(value, 'length') && propertyIsDefined(value, 0);
-}
-/**
- * Returns a structure filled with zeroes that represents the shape of a single input or the output.
- */
-function generateZeroInput(dimension, windowSize, numChannels) {
-    switch (dimension) {
-        case "all":
-            const frame = [];
-            for (let i = 0; i < numChannels; i++) {
-                frame.push(new Float32Array(windowSize));
-            }
-            return toMultiChannelArray(frame);
-        case "channels":
-            const channels = Array(windowSize).fill(0);
-            return toMultiChannelArray(channels);
-        case "time":
-            return new Float32Array(windowSize);
-        case "none":
-            return 0;
-        default:
-            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
-    }
-}
-function sum(iter) {
-    let sm = 0;
-    for (const x of iter) {
-        sm += x;
-    }
-    return sm;
-}
-const _NO_VALUE = Symbol("_NO_VALUE");
-function allEqual(iter) {
-    let lastValue = _NO_VALUE;
-    for (const x of iter) {
-        if (lastValue != _NO_VALUE && lastValue != x) {
-            return false;
-        }
-        lastValue = x;
-    }
-    return true;
-}
-function map(arr, fn) {
-    return Array.prototype.map.call(arr, fn);
-}
-IS_WORKLET ? AudioWorkletProcessor : class AudioWorkletProcessor {
-    constructor() {
-        const channel = new MessageChannel();
-        this.port = channel.port1;
-        this.outPort = channel.port2;
-    }
-};
 
 const RECORDER_WORKLET_NAME = "recorder-worklet";
 
@@ -9863,509 +10499,6 @@ function describeFunction(f) {
 describeFunction.FunctionDescriptor = FunctionDescriptor;
 describeFunction.ParamDescriptor = ParamDescriptor;
 
-function checkRange(i, min, max) {
-    if (i >= max || i < min) {
-        throw new RangeError(`Index '${i}' is not in range of the view.`);
-    }
-    return true;
-}
-function isIndexInRange(v, length) {
-    const isNumber = typeof v != 'symbol' && Number.isInteger(+v);
-    return isNumber && checkRange(+v, 0, length);
-}
-class ArrayView {
-    get proxy() {
-        var _a;
-        const length = this.length;
-        return (_a = this._proxy) !== null && _a !== void 0 ? _a : (this._proxy = new Proxy(this, {
-            get(target, p, receiver) {
-                if (isIndexInRange(p, length)) {
-                    return target.get(+p);
-                }
-                else {
-                    return Reflect.get(target, p, receiver);
-                }
-            },
-            set(target, p, newValue, receiver) {
-                if (isIndexInRange(p, length)) {
-                    target.set(+p, newValue);
-                    return true;
-                }
-                else {
-                    return Reflect.set(target, p, newValue, receiver);
-                }
-            }
-        }));
-    }
-    constructor(privateConstructor, get, set, length) {
-        this.get = get;
-        this.set = set;
-        this.length = length;
-        if (privateConstructor != ArrayView.PRIVATE_CONSTRUCTOR) {
-            throw new Error("Instances must be constructed using one of the ArrayView.create*() methods.");
-        }
-    }
-    flatMap(callback, thisArg) {
-        return Array.prototype.flatMap.call(this.proxy, callback, thisArg);
-    }
-    flat(depth) {
-        return Array.prototype.flat.call(this.proxy, depth);
-    }
-    toLocaleString(locales, options) {
-        throw new Error("Method not implemented.");
-    }
-    pop() {
-        if (this.length) {
-            const v = this.get(this.length - 1);
-            this.length -= 1;
-            return v;
-        }
-    }
-    push(...items) {
-        throw new Error("Method not implemented.");
-    }
-    concat(...items) {
-        return Array.prototype.concat.call(this.proxy, ...items);
-    }
-    join(separator) {
-        return Array.prototype.join.call(this.proxy, separator);
-    }
-    reverse() {
-        return ArrayView.createReversedView(this.proxy);
-    }
-    shift() {
-        throw new Error("Method not implemented.");
-    }
-    slice(start, end) {
-        return ArrayView.createSliceView(this.proxy, start, end);
-    }
-    sort(compareFn) {
-        return Array.prototype.sort.call(this.proxy, compareFn);
-    }
-    splice(start, deleteCount, ...rest) {
-        throw new Error("Method not implemented.");
-    }
-    unshift(...items) {
-        throw new Error("Method not implemented.");
-    }
-    indexOf(searchElement, fromIndex) {
-        return Array.prototype.indexOf.call(this.proxy, searchElement, fromIndex);
-    }
-    lastIndexOf(searchElement, fromIndex) {
-        return Array.prototype.lastIndexOf.call(this.proxy, searchElement, fromIndex);
-    }
-    every(predicate, thisArg) {
-        return Array.prototype.every.call(this.proxy, predicate, thisArg);
-    }
-    some(predicate, thisArg) {
-        return Array.prototype.some.call(this.proxy, predicate, thisArg);
-    }
-    forEach(callbackfn, thisArg) {
-        return Array.prototype.forEach.call(this.proxy, callbackfn, thisArg);
-    }
-    map(callbackfn, thisArg) {
-        return Array.prototype.map.call(this.proxy, callbackfn, thisArg);
-    }
-    filter(predicate, thisArg) {
-        return Array.prototype.filter.call(this.proxy, predicate, thisArg);
-    }
-    reduce(callbackfn, initialValue) {
-        return Array.prototype.reduce.call(this.proxy, callbackfn, initialValue);
-    }
-    reduceRight(callbackfn, initialValue) {
-        return Array.prototype.reduceRight.call(this.proxy, callbackfn, initialValue);
-    }
-    find(predicate, thisArg) {
-        return Array.prototype.find.call(this.proxy, predicate, thisArg);
-    }
-    findIndex(predicate, thisArg) {
-        return Array.prototype.findIndex.call(this.proxy, predicate, thisArg);
-    }
-    fill(value, start, end) {
-        return Array.prototype.fill.call(this.proxy, value, start, end);
-    }
-    copyWithin(target, start, end) {
-        return Array.prototype.copyWithin.call(this.proxy, target, start, end);
-    }
-    entries() {
-        return Array.prototype.entries.call(this.proxy);
-    }
-    keys() {
-        return Array.prototype.keys.call(this.proxy);
-    }
-    values() {
-        return Array.prototype.values.call(this.proxy);
-    }
-    includes(searchElement, fromIndex) {
-        return Array.prototype.includes.call(this.proxy, searchElement, fromIndex);
-    }
-    [Symbol.iterator]() {
-        return Array.prototype[Symbol.iterator].call(this.proxy);
-    }
-    toString() {
-        return `ArrayView (${this.length})`;
-    }
-    toArray() {
-        return [...this];
-    }
-    static create(get, set, length) {
-        const view = new ArrayView(ArrayView.PRIVATE_CONSTRUCTOR, get, set, length);
-        return view.proxy;
-    }
-    static createFromDataLocationFn(getDataLocation, length) {
-        return this.create(function get(i) {
-            const data = getDataLocation(i);
-            return data.array[data.index];
-        }, function set(i, v) {
-            const data = getDataLocation(i);
-            data.array[data.index] = v;
-        }, length);
-    }
-    static createConcatView(...arrays) {
-        const lengths = arrays.map(a => a.length);
-        const lengthSum = lengths.reduce((sum, c) => sum + c, 0);
-        function getDataLocation(i) {
-            for (let arrayIndex = 0; arrayIndex < arrays.length; arrayIndex++) {
-                if (i < lengths[arrayIndex]) {
-                    return {
-                        array: arrays[arrayIndex],
-                        index: i
-                    };
-                }
-                else {
-                    i -= lengths[arrayIndex];
-                }
-            }
-            throw new RangeError(`Index '${i}' is not in range of the view.`);
-        }
-        return this.createFromDataLocationFn(getDataLocation, lengthSum);
-    }
-    static createSliceView(array, startIndex, endIndex) {
-        // TODO: validate these numbers.
-        startIndex !== null && startIndex !== void 0 ? startIndex : (startIndex = 0);
-        endIndex !== null && endIndex !== void 0 ? endIndex : (endIndex = array.length);
-        function getDataLocation(i) {
-            const index = i + startIndex;
-            return { array, index };
-        }
-        return this.createFromDataLocationFn(getDataLocation, endIndex - startIndex);
-    }
-    static createReindexedView(array, indices) {
-        function getDataLocation(i) {
-            return { array, index: indices[i] };
-        }
-        return this.createFromDataLocationFn(getDataLocation, indices.length);
-    }
-    static createInterleavedView(...arrays) {
-        let singleArrLength = undefined;
-        const numArrs = arrays.length;
-        for (const arr of arrays) {
-            singleArrLength !== null && singleArrLength !== void 0 ? singleArrLength : (singleArrLength = arr.length);
-            if (arr.length != singleArrLength) {
-                throw new Error(`Each array to interleave must be the same length. Expected ${singleArrLength}, got ${arr.length}`);
-            }
-        }
-        function getDataLocation(i) {
-            const index = Math.floor(i / numArrs);
-            const arrIndex = i % numArrs;
-            return { array: arrays[arrIndex], index };
-        }
-        return this.createFromDataLocationFn(getDataLocation, singleArrLength * numArrs);
-    }
-    static createDeinterleavedViews(array, numViews) {
-        let length = array.length / numViews;
-        if (!Number.isInteger(length)) {
-            throw new Error(`The length of the array must be exactly divisible by numViews. Given numViews=${numViews}, array.length=${array.length}`);
-        }
-        const views = [];
-        for (let viewIndex = 0; viewIndex < numViews; viewIndex++) {
-            function getDataLocation(i) {
-                return { array, index: i * numViews + viewIndex };
-            }
-            const view = this.createFromDataLocationFn(getDataLocation, length);
-            views.push(view);
-        }
-        return views;
-    }
-    static createReversedView(array) {
-        function getDataLocation(i) {
-            return { array, index: array.length - (i + 1) };
-        }
-        return this.createFromDataLocationFn(getDataLocation, array.length);
-    }
-}
-ArrayView.PRIVATE_CONSTRUCTOR = Symbol('PRIVATE_CONSTRUCTOR');
-
-// NOTE: IODatatypes always process one channel at a time.
-class IODatatype {
-    constructor() {
-        this.name = this.constructor.name;
-    }
-    toString() {
-        return `${this.name} (${this.dataspecString})`;
-    }
-    static create(dtype, name) {
-        switch (dtype.toLowerCase()) {
-            case "fft":
-            case "stft":
-                return new stft();
-            case "audio":
-                return new audio();
-            case "control":
-                return new control(name);
-            default:
-                throw new Error(`Unrecognized dtype ${dtype}. Supported datatypes: ['stft', 'audio', 'control']`);
-        }
-    }
-}
-class stft extends IODatatype {
-    constructor(windowSize) {
-        super();
-        this.windowSize = windowSize;
-        this.dataspecString = '{ magnitude: ArrayLike<number>, phase: ArrayLike<number> }';
-        this.numAudioStreams = 3;
-    }
-    channelFromAudioData(frame) {
-        if (!isType(frame.audioStreams[0], Array)) {
-            throw new Error("STFT data must be arrays.");
-        }
-        // NOTE: Ignore the first audio stream (sync).
-        return {
-            magnitude: frame.audioStreams[1],
-            phase: frame.audioStreams[2]
-            // Other FFT traits to give the user?
-        };
-    }
-    __NEW__validateAny(value) {
-        return value.magnitude != undefined && value.phase != undefined;
-    }
-    __NEW__toAudioData(value, sampleIndex) {
-        const sync = sampleIndex == undefined ?
-            range(value.magnitude.length)
-            : sampleIndex;
-        return {
-            audioStreams: [
-                sync,
-                value.magnitude,
-                value.phase
-            ]
-        };
-    }
-    __OLD__validate(value, { checkLength }) {
-        if (value == undefined) {
-            throw new Error("Expected STFT data, got undefined.");
-        }
-        if (value.magnitude == undefined || value.phase == undefined) {
-            throw new Error("STFT data must have keys magnitude and phase. Given: " + value);
-        }
-        for (let key of ["magnitude", "phase"]) {
-            const arr = value[key];
-            if (!isArrayLike(value)) {
-                throw new Error(`Each STFT value must be an ArrayLike collection of numbers. Given ${key} value with no length property or numeric values.`);
-            }
-            if (checkLength && arr.length != this.windowSize) {
-                throw new Error(`Returned size must be equal to the input FFT windowSize. Expected ${this.windowSize}, given ${key}.length=${arr.length}.`);
-            }
-        }
-    }
-    __OLD__channelToAudioData(value) {
-        return {
-            audioStreams: [
-                range(value.magnitude.length), // sync signal.
-                value.magnitude,
-                value.phase
-            ].map(toMultiChannelArray)
-        };
-    }
-}
-class audio extends IODatatype {
-    constructor() {
-        super(...arguments);
-        this.dataspecString = 'ArrayLike<number>';
-        this.numAudioStreams = 1;
-    }
-    __NEW__validateAny(value) {
-        return isType(value, Number) || isArrayLike(value);
-    }
-    __NEW__toAudioData(value, sampleIndex) {
-        throw new Error("Method not implemented.");
-    }
-    __OLD__validate(channel) {
-        if (!isArrayLike(channel)) {
-            throw new Error(`Each audio channel must be an ArrayLike collection of numbers. Given value with no length property or numeric values.`);
-        }
-        if (channel[0] != undefined && !isType(channel[0], Number)) {
-            throw new Error(`Audio data must be numbers, given ${channel} (typeof ${typeof channel})`);
-        }
-    }
-    channelFromAudioData(frame) {
-        return frame.audioStreams[0];
-    }
-    __OLD__channelToAudioData(channel) {
-        if (!(channel instanceof Array)) {
-            throw new Error(`Audio data must be an array, given type ${typeof channel}.`);
-        }
-        channel = channel.map(v => isFinite(+v) ? v : 0);
-        return {
-            audioStreams: [toMultiChannelArray(channel)]
-        };
-    }
-}
-class control extends IODatatype {
-    __NEW__validateAny(value) {
-        throw new Error("control is not a valid return type.");
-    }
-    __NEW__toAudioData(value, sampleIndex) {
-        throw new Error("control is not a valid return type.");
-    }
-    __OLD__validate(value) {
-        throw new Error("control is not a valid return type.");
-    }
-    constructor(parameterKey) {
-        super();
-        this.parameterKey = parameterKey;
-        this.dataspecString = 'any';
-        this.numAudioStreams = 0;
-    }
-    channelFromAudioData(frame) {
-        if (frame.parameters == undefined) {
-            throw new Error(`undefined parameters, expected key ${this.parameterKey}`);
-        }
-        return frame.parameters[this.parameterKey];
-    }
-    __OLD__channelToAudioData(value) {
-        // TODO: how would someone specify the output name?
-        return {
-            audioStreams: [],
-            parameters: { [this.parameterKey]: value }
-        };
-    }
-}
-// TODO: use named outputs.
-/**
- * Converts a frame of audio data + metadata to and from function I/O types exposed to the user-defined function. The frame may be of any dimension.
- */
-class FrameToSignatureConverter {
-    constructor(dimension, inputSpec, outputSpec) {
-        this.dimension = dimension;
-        this.inputSpec = inputSpec;
-        this.outputSpec = outputSpec;
-    }
-    /**
-     * Convert raw audio frame data into user-friendly function inputs.
-     */
-    prepareInputs(frame) {
-        // TODO: fix this function.
-        let streamIndex = 0;
-        const inputs = [];
-        for (const { type } of this.inputSpec) {
-            // TODO: figure out how to pass multiple streams to a channel...
-            const inputStreams = ArrayView.createSliceView(frame.audioStreams, streamIndex, streamIndex + type.numAudioStreams);
-            const input = mapOverChannels(this.dimension, frame.audioStreams, channel => {
-                type.channelFromAudioData({
-                    audioStreams: inputStreams,
-                    parameters: frame.parameters
-                });
-            });
-            inputs.push(input);
-        }
-        return inputs;
-    }
-    normalizeOutputs(outputs) {
-        // try-catch led to terrible performance, using validation instead.
-        const originalErrors = this.validateOutputs(outputs);
-        if (!originalErrors.length) {
-            return outputs;
-        }
-        outputs = [outputs];
-        const arrayErrors = this.validateOutputs(outputs);
-        if (!arrayErrors.length) {
-            return outputs;
-        }
-        throw new Error(`Unable to read outputs from processing function due to the following error(s):
-${originalErrors.map(v => " - " + v).join("\n")}
-
-Attempted to wrap output in an array, which failed as well:
-${arrayErrors.map(v => " - " + v).join("\n")}`);
-    }
-    validateOutputs(outputs) {
-        if (!isArrayLike(outputs)) {
-            return [`Expected function outputs to be an array with the signature [${this.outputSpec}] but got '${typeof outputs}' type instead.`];
-        }
-        if (outputs.length != this.outputSpec.length) {
-            return [`Expected the function to have ${this.outputSpec.length} output(s), expressed as an array with length ${this.outputSpec.length}, but got array of length ${outputs.length} instead.`];
-        }
-        return map(outputs, (v, i) => {
-            const spec = this.outputSpec[i];
-            // TODO: account for different dimension in datatype string.
-            if (!isCorrectOutput(this.dimension, v, spec.type)) {
-                return `Error parsing output ${i} ('${spec.name}') of function with dimension='${this.dimension}'. Expected datatype ${spec.type}, given ${v}.`;
-            }
-            return '';
-        }).filter(v => !!v);
-    }
-    __OLD__validateOutputs(outputs) {
-        if (!isArrayLike(outputs)) {
-            throw new Error(`Expected function outputs to be an array with the signature [${this.outputSpec}] but got '${typeof outputs}' type instead.`);
-        }
-        if (outputs.length != this.outputSpec.length) {
-            throw new Error(`Expected function outputs to be an array with size ${this.outputSpec.length} but got size ${outputs.length} instead.`);
-        }
-        const itOutputs = ArrayView.createSliceView(outputs);
-        const checkLength = ["all", "time"].includes(this.dimension);
-        for (const [output, spec] of zip(itOutputs, this.outputSpec)) {
-            try {
-                mapOverChannels(this.dimension, output, channel => spec.type.__OLD__validate(channel, { checkLength }));
-            }
-            catch (e) {
-                e.message = `Error parsing output '${spec.name}' with expected datatype ${spec.type}. ${e.message}`;
-                throw e;
-            }
-        }
-    }
-    /**
-     * Convert user output back into raw data.
-     */
-    processOutputs(outputs) {
-        const outputAudioStreamParts = [];
-        for (const [output, specEntry] of zip(outputs, this.outputSpec)) {
-            try {
-                const streams = this.outputToAudioStreams(output, specEntry.type);
-                outputAudioStreamParts.push(streams);
-            }
-            catch (e) {
-                throw new Error(`Expected function outputs to be an array with the signature [${this.outputSpec}] but unable to convert output '${specEntry.name}' to the expected type (${specEntry.type}): ${e.message}`);
-            }
-        }
-        return {
-            audioStreams: ArrayView.createConcatView(...outputAudioStreamParts)
-        };
-    }
-    outputToAudioStreams(output, type) {
-        const audioStreams = [];
-        // Because channelToAudioData can return multiple streams, we have to do 
-        // some funny business. The large dimension returned at the "channel" level 
-        // needs to be pushed to the topmost dimension (output level).
-        const channelByAudioStream = range(type.numAudioStreams).fill([]);
-        // 1. Collect flattened output by audioStream index.
-        mapOverChannels(this.dimension, output, channel => {
-            // TODO: how to handle parameters? Are output parameters allowed?
-            const data = type.__OLD__channelToAudioData(channel);
-            for (const i of range(type.numAudioStreams)) {
-                channelByAudioStream[i].push(data.audioStreams[i]);
-            }
-        });
-        // 2. For each audioStream index, create a top-level audioStream by reading 
-        // from the flattened array.
-        for (const i of range(type.numAudioStreams)) {
-            let j = 0; // Indexes the "flattened" array.
-            const stream = mapOverChannels(this.dimension, output, _ => channelByAudioStream[i][j++]);
-            audioStreams.push(stream);
-        }
-        return audioStreams;
-    }
-}
-
 /**
  * A data structure storing the last N values in a time series.
  *
@@ -10576,113 +10709,6 @@ class SignalProcessingContextFactory {
             frameIndex: this.getFrameIndex(),
             currentTime: this.getCurrentTime()
         });
-    }
-}
-
-class ArrayFunctionality {
-    constructor(length) {
-        this.length = length;
-        for (const i of range(length)) {
-            Object.defineProperty(this, i, {
-                get() {
-                    return this.getItem(i);
-                }
-            });
-        }
-    }
-    *[Symbol.iterator]() {
-        for (const i of range(this.length)) {
-            yield this[i];
-        }
-    }
-}
-/**
- * Specifies a configuration of inputs / outputs grouped into channels and the name of each one.
- *
- */
-class TypedStreamSpec extends ArrayFunctionality {
-    constructor({ names, numStreams, numChannelsPerStream, types }) {
-        var _a, _b, _c;
-        super((_c = (_b = (_a = numStreams !== null && numStreams !== void 0 ? numStreams : types === null || types === void 0 ? void 0 : types.length) !== null && _a !== void 0 ? _a : names === null || names === void 0 ? void 0 : names.length) !== null && _b !== void 0 ? _b : numChannelsPerStream === null || numChannelsPerStream === void 0 ? void 0 : numChannelsPerStream.length) !== null && _c !== void 0 ? _c : 0);
-        types && (numStreams !== null && numStreams !== void 0 ? numStreams : (numStreams = types.length));
-        if (names != undefined
-            && numStreams != undefined
-            && numStreams != names.length
-            || numChannelsPerStream != undefined
-                && numStreams != undefined
-                && numStreams != numChannelsPerStream.length
-            || numChannelsPerStream instanceof Array
-                && names != undefined
-                && numChannelsPerStream.length != names.length) {
-            throw new Error(`If provided, numStreams, inputNames, and numChannelsPerStream must match. Given numStreams=${numStreams}, inputNames=${JSON.stringify(names)}, numChannelsPerStream=${numChannelsPerStream}.`);
-        }
-        // Store whether the names were auto-generated.
-        this.hasNumberedNames = names == undefined;
-        this.hasDefaultNumChannels = numChannelsPerStream == undefined;
-        if (numChannelsPerStream != undefined) {
-            const info = this.infoFromChannelsPerStream(numChannelsPerStream);
-            numStreams !== null && numStreams !== void 0 ? numStreams : (numStreams = info.numStreams);
-            names !== null && names !== void 0 ? names : (names = info.names);
-        }
-        else if (names != undefined) {
-            const info = this.infoFromNames(names);
-            numStreams !== null && numStreams !== void 0 ? numStreams : (numStreams = info.numStreams);
-            numChannelsPerStream !== null && numChannelsPerStream !== void 0 ? numChannelsPerStream : (numChannelsPerStream = info.numChannelsPerStream);
-        }
-        else if (numStreams != undefined) {
-            const info = this.infoFromNumStreams(numStreams);
-            numChannelsPerStream !== null && numChannelsPerStream !== void 0 ? numChannelsPerStream : (numChannelsPerStream = info.numChannelsPerStream);
-            names !== null && names !== void 0 ? names : (names = info.names);
-        }
-        else {
-            throw new Error("At least one of (names, numStreams, numChannelsPerStream) must be specified.");
-        }
-        types !== null && types !== void 0 ? types : (types = names.map(_ => new audio()));
-        // These will all be defined at this point.
-        this.names = names;
-        this.length = numStreams;
-        this.numChannelsPerStream = numChannelsPerStream;
-        this.types = types.map((v, i) => isType(v, IODatatype) ?
-            v
-            : IODatatype.create(v, this.names[i]));
-    }
-    static fromSerialized(streamSpec) {
-        const types = streamSpec.types.map(t => t.name);
-        return new TypedStreamSpec(Object.assign(Object.assign({}, streamSpec), { types }));
-    }
-    getItem(i) {
-        return {
-            name: this.names[i],
-            numChannels: this.numChannelsPerStream[i],
-            type: this.types[i]
-        };
-    }
-    get totalNumChannels() {
-        return sum(Object.values(this.numChannelsPerStream));
-    }
-    infoFromNames(names) {
-        return {
-            numStreams: names.length,
-            numChannelsPerStream: range(names.length).fill(constants.DEFAULT_NUM_CHANNELS)
-        };
-    }
-    infoFromNumStreams(numStreams) {
-        return {
-            numChannelsPerStream: range(numStreams).fill(constants.DEFAULT_NUM_CHANNELS),
-            names: range(numStreams)
-        };
-    }
-    infoFromChannelsPerStream(numChannelsPerStream) {
-        return {
-            names: range(numChannelsPerStream.length),
-            numStreams: numChannelsPerStream.length
-        };
-    }
-}
-// Audio-only StreamSpec
-class StreamSpec extends TypedStreamSpec {
-    constructor({ names, numStreams, numChannelsPerStream }) {
-        super({ names, numStreams, numChannelsPerStream });
     }
 }
 
@@ -14933,7 +14959,7 @@ class SlowDown extends BaseComponent {
 
 class TimeVaryingSignal extends AudioTransformComponent {
     constructor(generatorFn, timeMeasure = TimeMeasure.SECONDS) {
-        super(generatorFn, { inputSpec: new StreamSpec({ numStreams: 1 }) });
+        super(generatorFn, { inputSpec: new StreamSpec({ numChannelsPerStream: [1] }) });
         const timeRamp = defineTimeRamp(this.audioContext, timeMeasure);
         timeRamp.connect(this.executionContext.inputs[0]);
         this.preventIOOverwrites();

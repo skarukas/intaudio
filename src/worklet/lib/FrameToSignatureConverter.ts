@@ -238,7 +238,7 @@ ${arrayErrors.map(v => " - " + v).join("\n")}`)
   }
   protected validateOutputs(outputs: unknown): string[] {
     if (!isArrayLike(outputs)) {
-      return [`Expected function outputs to be an array with the signature [${this.outputSpec}] but got '${typeof outputs}' type instead.`]
+      return [`Expected function outputs to be an array with the signature ${this.outputSpec} but got '${typeof outputs}' type instead.`]
     }
     if ((<any>outputs).length != this.outputSpec.length) {
       return [`Expected the function to have ${this.outputSpec.length} output(s), expressed as an array with length ${this.outputSpec.length}, but got array of length ${(<any>outputs).length} instead.`]
@@ -256,7 +256,7 @@ ${arrayErrors.map(v => " - " + v).join("\n")}`)
   }
   protected __OLD__validateOutputs(outputs: unknown) {
     if (!isArrayLike(outputs)) {
-      throw new Error(`Expected function outputs to be an array with the signature [${this.outputSpec}] but got '${typeof outputs}' type instead.`)
+      throw new Error(`Expected function outputs to be an array with the signature ${this.outputSpec} but got '${typeof outputs}' type instead.`)
     }
     if ((<any>outputs).length != this.outputSpec.length) {
       throw new Error(`Expected function outputs to be an array with size ${this.outputSpec.length} but got size ${(<any>outputs).length} instead.`)
@@ -286,7 +286,7 @@ ${arrayErrors.map(v => " - " + v).join("\n")}`)
         const streams = this.outputToAudioStreams(output, specEntry.type)
         outputAudioStreamParts.push(streams)
       } catch (e: any) {
-        throw new Error(`Expected function outputs to be an array with the signature [${this.outputSpec}] but unable to convert output '${specEntry.name}' to the expected type (${specEntry.type}): ${e.message}`)
+        throw new Error(`Expected function outputs to be an array with the signature ${this.outputSpec} but unable to convert output '${specEntry.name}' to the expected type (${specEntry.type}): ${e.message}`)
       }
     }
     return {

@@ -196,7 +196,7 @@ ${arrayErrors.map(v => " - " + v).join("\n")}`);
     }
     validateOutputs(outputs) {
         if (!isArrayLike(outputs)) {
-            return [`Expected function outputs to be an array with the signature [${this.outputSpec}] but got '${typeof outputs}' type instead.`];
+            return [`Expected function outputs to be an array with the signature ${this.outputSpec} but got '${typeof outputs}' type instead.`];
         }
         if (outputs.length != this.outputSpec.length) {
             return [`Expected the function to have ${this.outputSpec.length} output(s), expressed as an array with length ${this.outputSpec.length}, but got array of length ${outputs.length} instead.`];
@@ -212,7 +212,7 @@ ${arrayErrors.map(v => " - " + v).join("\n")}`);
     }
     __OLD__validateOutputs(outputs) {
         if (!isArrayLike(outputs)) {
-            throw new Error(`Expected function outputs to be an array with the signature [${this.outputSpec}] but got '${typeof outputs}' type instead.`);
+            throw new Error(`Expected function outputs to be an array with the signature ${this.outputSpec} but got '${typeof outputs}' type instead.`);
         }
         if (outputs.length != this.outputSpec.length) {
             throw new Error(`Expected function outputs to be an array with size ${this.outputSpec.length} but got size ${outputs.length} instead.`);
@@ -240,7 +240,7 @@ ${arrayErrors.map(v => " - " + v).join("\n")}`);
                 outputAudioStreamParts.push(streams);
             }
             catch (e) {
-                throw new Error(`Expected function outputs to be an array with the signature [${this.outputSpec}] but unable to convert output '${specEntry.name}' to the expected type (${specEntry.type}): ${e.message}`);
+                throw new Error(`Expected function outputs to be an array with the signature ${this.outputSpec} but unable to convert output '${specEntry.name}' to the expected type (${specEntry.type}): ${e.message}`);
             }
         }
         return {

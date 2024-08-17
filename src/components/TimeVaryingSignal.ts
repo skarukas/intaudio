@@ -10,7 +10,10 @@ export class TimeVaryingSignal extends AudioTransformComponent {
     generatorFn: (t: number) => number,
     timeMeasure: TimeMeasure = TimeMeasure.SECONDS
   ) {
-    super(generatorFn, { inputSpec: new StreamSpec({ numStreams: 1 }) })
+    super(
+      generatorFn,
+      { inputSpec: new StreamSpec({ numChannelsPerStream: [1] }) }
+    )
     const timeRamp = defineTimeRamp(this.audioContext, timeMeasure)
     timeRamp.connect(this.executionContext.inputs[0])
     this.preventIOOverwrites()

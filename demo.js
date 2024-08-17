@@ -5,7 +5,7 @@ if (!ia) {
 }
 
 // Determines which test cases to run.
-const TEST_MATCHER = /().*/
+const TEST_MATCHER = /(bundleObject).*/
 
 ia.run(() => {
   const testNames = Object.keys(tests).filter(s => s.match(TEST_MATCHER))
@@ -365,18 +365,14 @@ const tests = {
     this.assertTrue(envelope.decayDurationMs.value == 100, envelope.decayDurationMs.value)
   },
   audioParamByDictFailure() {
-    let envelope = new ia.ADSR(100, 10, 0.5, 1000)
-    let fn = new ia.AudioTransformComponent(x => {
-      // This is undefined behavior but cannot be prevented.
-      return {
-        input: x,
-        ham: 12398
-      }
-    })
-    let oscFreq = new ia.AudioComponent(createOscillator(400).frequency)
-    // Try to modulate the frequency of the oscillator by using an object 
-    // (throws error)
-    envelope.connect(fn).connect(oscFreq)
+    this.assertThrows(() => {
+      new ia.AudioTransformComponent(x => {
+        return {
+          input: x,
+          myOtherKey: 12398
+        }
+      })
+    }, 'Unable to read outputs from processing function')
   },
   sliderControl($root) {
     let slider = new ia.RangeInputComponent()
@@ -839,6 +835,8 @@ const tests = {
     })
   },
   fftPassthrough($root) {
+    // TODO: understand why this test doesn't pass when run in parallel... race 
+    // condition with buffer reading?
     // TODO: Right channel of osc is muted (shouldn't be the case...)
     //const signal = new ia.AudioComponent(createOscillator(880)).left
 

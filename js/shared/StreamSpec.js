@@ -1,5 +1,5 @@
 import { audio, IODatatype } from "../worklet/lib/FrameToSignatureConverter.js";
-import { sum } from "../worklet/lib/utils.js";
+import { map, sum } from "../worklet/lib/utils.js";
 import constants from "./constants.js";
 import { isType, range } from "./util.js";
 class ArrayFunctionality {
@@ -100,6 +100,16 @@ export class TypedStreamSpec extends ArrayFunctionality {
             names: range(numChannelsPerStream.length),
             numStreams: numChannelsPerStream.length
         };
+    }
+    toString() {
+        const specString = map(this, data => {
+            let streamString = `'${data.name}': ${data.type.name}`;
+            if (data.numChannels) {
+                streamString += ` (${data.numChannels} channels)`;
+            }
+            return streamString;
+        }).join(", ");
+        return `[${specString}]`;
     }
 }
 // Audio-only StreamSpec

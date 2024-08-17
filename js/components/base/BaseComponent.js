@@ -310,6 +310,7 @@ export class BaseComponent extends BaseConnectable {
         return new this._.BundleComponent(result);
     }
     perChannel(functions) {
+        var _a;
         if (functions instanceof Array)
             functions = arrayToObject(functions);
         const keys = Object.keys(functions);
@@ -331,7 +332,10 @@ export class BaseComponent extends BaseConnectable {
                     throw new Error("Array and rest specs not currently supported.");
                 }
                 const res = functions[key](outputGroup[0]);
-                res && (result[toNum(key)] = res);
+                // NOTE: res.defaultOutput?.left is used because sometimes the output 
+                // from the function may be multichannel.
+                // TODO: reconsider.
+                res && (result[toNum(key)] = (_a = res.defaultOutput) === null || _a === void 0 ? void 0 : _a.left);
             }
             // Otherwise, leave it out. TODO: Throw error if not explicitly null
             // or undefined?
