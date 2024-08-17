@@ -6,7 +6,6 @@ import { AudioTransformComponent } from "./AudioTransformComponent.js"
 
 export class TimeVaryingSignal extends AudioTransformComponent {
   static TimeMeasure = TimeMeasure
-  output: AudioRateOutput
   constructor(
     generatorFn: (t: number) => number,
     timeMeasure: TimeMeasure = TimeMeasure.SECONDS
@@ -15,6 +14,5 @@ export class TimeVaryingSignal extends AudioTransformComponent {
     const timeRamp = defineTimeRamp(this.audioContext, timeMeasure)
     timeRamp.connect(this.executionContext.inputs[0])
     this.preventIOOverwrites()
-    this.output = <any>this.defineOutputAlias('output', this.outputs.$0)
   }
 }

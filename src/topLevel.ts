@@ -44,7 +44,6 @@ export function combine(
     // Needs to learn to handle float input I think.
     return new this._.FunctionComponent(fn).withInputs(inputs)
   } else {
-    console.log(values)
     return new this._.AudioTransformComponent(
       fn,
       { ...options, inputSpec: new StreamSpec({ numStreams: values.length }) }

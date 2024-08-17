@@ -262,7 +262,6 @@ export class BaseWorkletProcessor extends SafeAudioWorkletProcessor {
           // overwritten.
           return input.map(c => new Float32Array(c))
         }
-        console.log("EMPTY! " + i)
         const emptyChannels = Array(numChannels).fill([])
         return emptyChannels.map(_ => new Float32Array(numSamples))
       })

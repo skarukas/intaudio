@@ -548,7 +548,10 @@ export abstract class BaseComponent<
       dimension?: AudioDimension
     } = {}
   ): Component {
-    return this.getAudioOutputProperty('transformAudio')(fn, dimension, { windowSize, useWorklet })
+    return this.getAudioOutputProperty('transformAudio')(
+      fn,
+      { dimension, windowSize, useWorklet }
+    )
   }
   fft(fftSize: number = 128): FFTStream {
     return this.getAudioOutputProperty('fft')(fftSize)

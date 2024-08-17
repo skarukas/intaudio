@@ -14,6 +14,7 @@ import { AudioDimension } from "../worklet/lib/types.js";
 import { serializeWorkletMessage } from "../worklet/lib/serialization.js";
 import { FUNCTION_WORKLET_NAME } from "../worklet/OperationWorklet.js";
 import { StreamSpec } from "../shared/StreamSpec.js";
+import { AbstractOutput } from "../io/output/AbstractOutput.js";
 
 export abstract class AudioExecutionContext<D extends AudioDimension> extends ToStringAndUUID {
   abstract inputs: AudioNode[]
@@ -47,14 +48,14 @@ export abstract class AudioExecutionContext<D extends AudioDimension> extends To
     const inputChunks = inputSpec.numChannelsPerStream.map(createChunk)
     // The output may have more channels than the input, so be flexible when 
     // testing it so as to not break the implementation.
-    const maxChannelsPerOutput = range(outputSpec.numStreams).fill(constants.MAX_CHANNELS)
+    const maxChannelsPerOutput = range(outputSpec.length).fill(constants.MAX_CHANNELS)
     const outputChunks = maxChannelsPerOutput.map(createChunk)
     const contextFactory = new SignalProcessingContextFactory({
       sampleRate: this.audioContext.sampleRate,
       getCurrentTime: () => this.audioContext.currentTime,
       getFrameIndex: () => 0,
-      numChannelsPerInput: inputSpec.numChannelsPerStream,
-      numChannelsPerOutput: maxChannelsPerOutput,
+      inputSpec,
+      outputSpec,
       windowSize,
       dimension: this.dimension
     })
@@ -119,9 +120,9 @@ export class WorkletExecutionContext<D extends AudioDimension> extends AudioExec
     }
 
     const worklet = new AudioWorkletNode(this.audioContext, FUNCTION_WORKLET_NAME, {
-      numberOfInputs: inputSpec.numStreams,
+      numberOfInputs: inputSpec.length,
       outputChannelCount: outputSpec.numChannelsPerStream,
-      numberOfOutputs: outputSpec.numStreams
+      numberOfOutputs: outputSpec.length
     })
     // TODO: figure this out.
     // @ts-ignore No index signature.
@@ -140,9 +141,8 @@ export class WorkletExecutionContext<D extends AudioDimension> extends AudioExec
     // https://bugzilla.mozilla.org/show_bug.cgi?id=1629478
     const serializedFunction = serializeWorkletMessage(fn, {
       dimension,
-      numInputs: inputSpec.numStreams,
-      numChannelsPerInput: inputSpec.numChannelsPerStream,
-      numOutputChannels: outputSpec.numChannelsPerStream,
+      inputSpec,
+      outputSpec,
       windowSize: 128  // TODO: make this flexible.
     })
     worklet.port.postMessage(serializedFunction)
@@ -159,17 +159,21 @@ export class WorkletExecutionContext<D extends AudioDimension> extends AudioExec
   }): { inputs: AudioNode[], outputs: AudioNode[] } {
     const inputNodes = []
     const outputNodes = []
-    for (const numChannels of inputSpec.numChannelsPerStream) {
+    for (const [i, numChannels] of enumerate(inputSpec.numChannelsPerStream)) {
       const input = new GainNode(this.audioContext, {
         channelCount: numChannels,
         // Force channelCount even if the input has more / fewer channels.
         channelCountMode: "explicit"
       })
-      input.connect(workletNode, 0, numChannels)
+      input.connect(workletNode, 0, i)
       inputNodes.push(input)
     }
-    for (const i of range(outputSpec.numStreams)) {
-      const output = new GainNode(this.audioContext)
+    for (const [i, numChannels] of enumerate(outputSpec.numChannelsPerStream)) {
+      const output = new GainNode(this.audioContext, {
+        channelCount: numChannels,
+        // Force channelCount even if the input has more / fewer channels.
+        channelCountMode: "explicit"
+      })
       workletNode.connect(output, i, 0)
       outputNodes.push(output)
     }
@@ -280,8 +284,8 @@ export class ScriptProcessorExecutionContext<D extends AudioDimension> extends A
       sampleRate: this.audioContext.sampleRate,
       getCurrentTime: () => this.audioContext.currentTime,
       getFrameIndex: () => frameIndex,
-      numChannelsPerInput: this.inputSpec.numChannelsPerStream,
-      numChannelsPerOutput: this.outputSpec.numChannelsPerStream,
+      inputSpec: this.inputSpec,
+      outputSpec: this.outputSpec,
       windowSize: this.windowSize,
       dimension: this.dimension
     })
@@ -337,6 +341,8 @@ export class ScriptProcessorExecutionContext<D extends AudioDimension> extends A
 export class AudioTransformComponent<D extends AudioDimension = "none"> extends BaseComponent {
   inputSpec: StreamSpec
   outputSpec: StreamSpec
+  // Alias for the first output.
+  output: AbstractOutput<any>
   protected executionContext: AudioExecutionContext<D>
 
   constructor(
@@ -400,14 +406,15 @@ export class AudioTransformComponent<D extends AudioDimension = "none"> extends 
       this.defineOutputAlias(i, this[propName])
     }
     // TODO: this should be automatic, aliases should not count.
-    if (inputSpec.numStreams == 1) {
+    if (inputSpec.length == 1) {
       // @ts-ignore No index signature.
       this.setDefaultInput(this["$" + inputSpec.names[0]])
     }
-    if (outputSpec.numStreams == 1) {
+    if (outputSpec.length == 1) {
       // @ts-ignore No index signature.
       this.setDefaultOutput(this["$" + outputSpec.names[0]])
     }
+    this.output = this.defineOutputAlias('output', this.outputs[0])
     this.inputSpec = inputSpec
     this.outputSpec = outputSpec
   }
@@ -416,7 +423,7 @@ export class AudioTransformComponent<D extends AudioDimension = "none"> extends 
     fn: Function,
     inputSpec?: StreamSpec,
   ): (string | number)[] {
-    let numInputs = inputSpec?.numStreams
+    let numInputs = inputSpec?.length
     const maxSafeInputs = Math.floor(constants.MAX_CHANNELS / constants.DEFAULT_NUM_CHANNELS)
     let descriptor;
     try {
@@ -442,7 +449,7 @@ export class AudioTransformComponent<D extends AudioDimension = "none"> extends 
     return range(numInputs).map(i => {
       const paramDescriptor = descriptor.parameters[i]
       // Parameters may be unnamed if they are object- or array-destructured.
-      return paramDescriptor?.name ?? i
+      return paramDescriptor?.name || i
     })
   }
   // TODO: turn this into a single array arg here and FunctionComponent

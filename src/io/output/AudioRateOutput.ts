@@ -42,6 +42,12 @@ export class AudioRateOutput
   get numOutputChannels(): number {
     return this.activeChannel != undefined ? 1 : getNumOutputChannels(this.audioNode)
   }
+  toString() {
+    const superCall = super.toString()
+    return this.activeChannel == undefined ?
+      superCall
+      : `${superCall}.channels[${this.activeChannel}]`
+  }
   private connectNodes(
     from: AudioNode,
     to: WebAudioConnectable,

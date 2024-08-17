@@ -42,9 +42,9 @@ export function* enumerate<T>(arr: Iterable<T>): Generator<[number, T]> {
   }
 }
 
-type ZipType<T> = { [K in keyof T]: T[K] extends (infer V)[] ? V : never }
+type ZipType<T> = { [K in keyof T]: T[K] extends Iterable<infer V> ? V : never }
 
-export function* zip<T extends unknown[][]>(...iterables: T): Generator<ZipType<T>> {
+export function* zip<T extends Iterable<unknown>[]>(...iterables: T): Generator<ZipType<T>> {
   const iterators = iterables.map(iterable => iterable[Symbol.iterator]());
   let done = false;
   while (!done) {

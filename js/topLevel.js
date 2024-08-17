@@ -22,7 +22,6 @@ export function combine(inputs, fn, options = {}) {
         return new this._.FunctionComponent(fn).withInputs(inputs);
     }
     else {
-        console.log(values);
         return new this._.AudioTransformComponent(fn, Object.assign(Object.assign({}, options), { inputSpec: new StreamSpec({ numStreams: values.length }) })).withInputs(...values);
     }
 }

@@ -1,3 +1,5 @@
+import { StreamSpec } from "../../shared/StreamSpec.js"
+import { FrameToSignatureConverter } from "./FrameToSignatureConverter.js"
 import { MemoryBuffer } from "./MemoryBuffer.js"
 import { SignalProcessingContext } from "./SignalProcessingContext.js"
 import { AudioDimension, SignalProcessingFnInput } from "./types.js"
@@ -16,23 +18,23 @@ export class SignalProcessingContextFactory<D extends AudioDimension> {
   } = {}
   windowSize: number
   sampleRate: number
-  numChannelsPerInput: number[]
-  numChannelsPerOutput: number[]
+  inputSpec: StreamSpec
+  outputSpec: StreamSpec
   getFrameIndex: () => number
   getCurrentTime: () => number
+  ioConverter: FrameToSignatureConverter<D>
 
   constructor({
-    // TODO: consider using StreamSpec here.
-    numChannelsPerInput,
-    numChannelsPerOutput,
+    inputSpec,
+    outputSpec,
     windowSize,
     dimension,
     getFrameIndex,
     getCurrentTime,
     sampleRate,
   }: {
-    numChannelsPerInput: number[],
-    numChannelsPerOutput: number[],
+    inputSpec: StreamSpec,
+    outputSpec: StreamSpec,
     windowSize: number,
     dimension: D,
     sampleRate: number,
@@ -41,37 +43,38 @@ export class SignalProcessingContextFactory<D extends AudioDimension> {
   }) {
     this.windowSize = windowSize
     this.sampleRate = sampleRate
-    this.numChannelsPerInput = numChannelsPerInput
-    this.numChannelsPerOutput = numChannelsPerOutput
+    this.inputSpec = inputSpec
+    this.outputSpec = outputSpec
     this.getCurrentTime = getCurrentTime
     this.getFrameIndex = getFrameIndex
+    this.ioConverter = new FrameToSignatureConverter(dimension, inputSpec, outputSpec)
 
     const genInput = this.getDefaultValueFn({
       dimension,
       windowSize,
-      numChannelsPerStream: numChannelsPerInput
+      numChannelsPerStream: inputSpec.numChannelsPerStream
     })
     const genOutput = this.getDefaultValueFn({
       dimension,
       windowSize,
-      numChannelsPerStream: numChannelsPerOutput
+      numChannelsPerStream: outputSpec.numChannelsPerStream
     })
     const hasChannelSpecificProcessing = ["all", "channels"].includes(dimension)
     if (hasChannelSpecificProcessing) {
       this.inputHistory[ALL_CHANNELS] = <any>new MemoryBuffer(genInput)
       this.outputHistory[ALL_CHANNELS] = <any>new MemoryBuffer(genOutput)
     } else {
-      if (!allEqual(numChannelsPerInput)) {
-        throw new Error(`Only dimensions 'all' and 'channels' may have inconsistent numbers of input channels. Given dimension=${dimension}, numChannelsPerInput=${numChannelsPerInput}.`)
+      if (!allEqual(inputSpec.numChannelsPerStream)) {
+        throw new Error(`Only dimensions 'all' and 'channels' may have inconsistent numbers of input channels. Given dimension=${dimension}, inputSpec=${inputSpec}.`)
       }
-      if (!allEqual(numChannelsPerOutput)) {
-        throw new Error(`Only dimensions 'all' and 'channels' may have inconsistent numbers of output channels. Given dimension=${dimension}, numChannelsPerOutput=${numChannelsPerOutput}.`)
+      if (!allEqual(outputSpec.numChannelsPerStream)) {
+        throw new Error(`Only dimensions 'all' and 'channels' may have inconsistent numbers of output channels. Given dimension=${dimension}, outputSpec=${outputSpec}.`)
       }
       // Each channel is processed the same.
-      for (let c = 0; c < numChannelsPerInput[0]; c++) {
+      for (let c = 0; c < inputSpec.numChannelsPerStream[0]; c++) {
         this.inputHistory[c] = <any>new MemoryBuffer(genInput)
       }
-      for (let c = 0; c < numChannelsPerOutput[0]; c++) {
+      for (let c = 0; c < outputSpec.numChannelsPerStream[0]; c++) {
         this.outputHistory[c] = <any>new MemoryBuffer(genOutput)
       }
     }
@@ -110,8 +113,7 @@ export class SignalProcessingContextFactory<D extends AudioDimension> {
         windowSize: this.windowSize,
         channelIndex,
         sampleIndex,
-        numInputs: this.numChannelsPerInput.length,
-        numOutputs: this.numChannelsPerOutput.length,
+        ioConverter: this.ioConverter,
         sampleRate: this.sampleRate,
         frameIndex: this.getFrameIndex(),
         currentTime: this.getCurrentTime()

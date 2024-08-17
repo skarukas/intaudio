@@ -33,6 +33,12 @@ export class AudioRateOutput extends AbstractOutput {
     get numOutputChannels() {
         return this.activeChannel != undefined ? 1 : getNumOutputChannels(this.audioNode);
     }
+    toString() {
+        const superCall = super.toString();
+        return this.activeChannel == undefined ?
+            superCall
+            : `${superCall}.channels[${this.activeChannel}]`;
+    }
     connectNodes(from, to, fromChannel = undefined, toChannel = undefined) {
         to && connectWebAudioChannels(this.audioContext, from, to, fromChannel, toChannel);
     }

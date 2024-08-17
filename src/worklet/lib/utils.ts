@@ -1,4 +1,6 @@
-import { enumerate, zip } from "../../shared/util.js"
+import { KeysLike } from "../../shared/types.js"
+import { enumerate, isType, zip } from "../../shared/util.js"
+import { IODatatype } from "./FrameToSignatureConverter.js"
 import { SignalProcessingContextFactory } from "./SignalProcessingContextFactory.js"
 import { MultiChannelArray, toMultiChannelArray, AudioDimension, SignalProcessingFnInput, ArrayLike } from "./types.js"
 import { WritableArrayLike } from "./views.js"
@@ -13,7 +15,11 @@ function getColumn<T>(arr: ArrayLike<ArrayLike<T>>, col: number): T[] {
   return result
 }
 
-function writeColumn<T>(arr: ArrayLike<ArrayLike<T>>, col: number, values: T[]) {
+function writeColumn<T>(
+  arr: ArrayLike<ArrayLike<T>>,
+  col: number,
+  values: ArrayLike<T>
+) {
   for (let i = 0; i < arr.length; i++) {
     arr[i][col] = values[i]
   }
@@ -46,7 +52,7 @@ function processSamples(
   }
   // The number of output channels is the same as the input because this is not
   // determined by the user's function.
-  return inputChunks.map(x => x.length)
+  return outputChunks.map(_ => numChannels)
 }
 
 
@@ -68,7 +74,7 @@ function processTime(
   }
   // The number of output channels is the same as the input because this is not
   // determined by the user's function.
-  return inputChunks.map(x => x.length)
+  return outputChunks.map(_ => numChannels)
 }
 
 /**
@@ -123,14 +129,13 @@ function processChannels(
       return toMultiChannelArray(inputChannels)
     })
     const context = contextFactory.getContext({ sampleIndex: i })
-    // .map(v => isFinite(v) ? v : 0)
     const outputChannels = context.execute(fn, inputs)
     for (
       const [j, [output, destChunk]]
       of enumerate(zip(outputChannels, outputChunks))
     ) {
-      assertValidReturnType(outputChannels)
-      writeColumn(destChunk, i, output)
+      // TODO: add NaN logic to postprocessing instead.
+      writeColumn(destChunk, i, map(output, v => isFinite(v) ? v : 0))
       numOutputChannels[j] = output.length
     }
   }
@@ -149,16 +154,69 @@ export function getProcessingFunction<D extends AudioDimension>(
 ): MappingFn<D> {
   switch (dimension) {
     case "all":
-      return processTimeAndChannels as (MappingFn<D>)
+      return <unknown>processTimeAndChannels as (MappingFn<D>)
     case "channels":
-      return processChannels as (MappingFn<D>)
+      return <unknown>processChannels as (MappingFn<D>)
     case "time":
-      return processTime as (MappingFn<D>)
+      return <unknown>processTime as (MappingFn<D>)
     case "none":
-      return processSamples as (MappingFn<D>)
+      return <unknown>processSamples as (MappingFn<D>)
     default:
       throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`)
   }
+}
+
+export function mapOverChannels<D extends AudioDimension, R>(
+  dimension: D,
+  data: SignalProcessingFnInput<D>,
+  fn: (x: ArrayLike<number>) => R
+): KeysLike<SignalProcessingFnInput<D>, R> {
+  switch (dimension) {
+    case "all":
+      return <any>map(data as SignalProcessingFnInput<"all">, fn)
+    case "channels":
+      const channels = <SignalProcessingFnInput<"channels">>data
+      return <any>map(channels, c => fn([c]))
+    case "time":
+      return <any>fn(<SignalProcessingFnInput<"time">>data)
+    case "none":
+      return <any>fn([<number>data])
+    default:
+      throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`)
+  }
+}
+
+// Lightweight check that the structure is correct.
+export function isCorrectOutput<D extends AudioDimension>(
+  dimension: D,
+  output: SignalProcessingFnInput<D>,
+  type: IODatatype,
+): boolean {
+  const typeValidation = type.__NEW__validateAny(output)
+  switch (dimension) {
+    case "all":
+      return typeValidation && isArrayLike(output) && isArrayLike((output as any)[0])
+    case "channels":
+      // NOTE: Channels can be undefined, a special case that means empty data.
+      return output == undefined || typeValidation && isArrayLike(output)
+    case "time":
+      return typeValidation && isArrayLike(output)
+    case "none":
+      return typeValidation
+    default:
+      throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`)
+  }
+}
+
+function propertyIsDefined(obj: unknown, property: string | number) {
+  return typeof obj === 'object'
+    && obj !== null
+    && property in obj
+    && (<any>obj)[property] != undefined
+}
+
+export function isArrayLike(value: unknown) {
+  return isType(value, Array) || propertyIsDefined(value, 'length') && propertyIsDefined(value, 0)
 }
 
 /**
@@ -329,11 +387,11 @@ export function getChannel<ArrType extends ArrayLike<any>>(
   return arr[c % arr.length]
 }
 
-export function forEach<T>(
+export function map<T>(
   arr: ArrayLike<T>,
   fn: (v: T, i: number) => void
 ) {
-  return Array.prototype.forEach.call(arr, fn)
+  return Array.prototype.map.call(arr, fn)
 }
 
 export function map2d<T, V>(

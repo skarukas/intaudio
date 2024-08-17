@@ -1,3 +1,8 @@
+.test-status-root {
+  font-size: small;
+  font-family: 'Courier New', Courier, monospace;
+}
+
 .modular-container {
   padding: 0;
   margin: 0;

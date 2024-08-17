@@ -3,7 +3,34 @@ import ia from "./dist/bundle.js"
 if (!ia) {
   throw new Error("Need audio library.")
 }
-console.log(ia)
+
+// Determines which test cases to run.
+const TEST_MATCHER = /().*/
+
+ia.run(() => {
+  const testNames = Object.keys(tests).filter(s => s.match(TEST_MATCHER))
+  console.log("Running tests: " + testNames)
+  const failedTests = []
+  for (let testName of testNames) {
+    const $testRoot = $(document.createElement('div'))
+    try {
+      const testCase = new TestCase(testName)
+      tests[testName].bind(testCase)($testRoot)
+    } catch (e) {
+      console.error(`Failed to execute test case ${testName}.`)
+      console.error(e)
+      failedTests.push(testName)
+    }
+    ia.util.afterRender(() => {
+      if ($testRoot.children().length) {
+        $testRoot.appendTo('#root')
+      }
+    })
+  }
+  if (failedTests.length) {
+    console.log(`The following tests failed to run due to errors: [${failedTests}]`)
+  }
+})
 
 function wait(ms, fn) {
   let resolve;
@@ -42,7 +69,11 @@ class TestCase {
       .text(symbol)
       .css('color', getColor(percent))
   }
-  assertSignal(output, predicate, maxGapMs = 4000) {
+  assertSignal(output, predicate, description = undefined, maxGapMs = 4000) {
+    description ??= `assertSignal(${output}, ${predicate})`
+    if (!(output instanceof ia.BaseConnectable)) {
+      throw new Error("Expected the signal to be a connectable (output or component), got " + output)
+    }
     const $listItem = appendTestSuccessScore(this.name)
     let matchCount = 0
     let totalCount = 0
@@ -52,20 +83,30 @@ class TestCase {
       matchCount += !!predicate(v)
       const matchPercent = 100 * matchCount / totalCount
       $listItem
-        .text(`${matchPercent.toFixed(2)}%`)
+        .text(`${description}: ${matchPercent.toFixed(2)}%`)
         .css('color', getColor(matchPercent))
     })
   }
   assertSilentSignal(output) {
-    this.assertSignal(output, v => v == 0)
+    this.assertSignal(output, v => v == 0, `assertSilentSignal(${output})`)
   }
 
   assertSignalEquals(output, val, maxGapMs = 4000) {
-    this.assertSignal(output, v => v == val, maxGapMs)
+    this.assertSignal(
+      output,
+      v => v == val,
+      `assertSignalEquals(${output}, ${val})`,
+      maxGapMs
+    )
   }
 
   assertNonzeroSignal(output, maxGapMs = 4000) {
-    this.assertSignal(output, v => v != 0, maxGapMs)
+    this.assertSignal(
+      output,
+      v => v != 0,
+      `assertNonzeroSignal(${output})`,
+      maxGapMs
+    )
   }
 
   assertThrows(fn, substr) {
@@ -914,29 +955,6 @@ const tests = {
   }
 }
 
-
-
-ia.run(() => {
-  const testMatcher = /().*/
-  const testNames = Object.keys(tests).filter(s => s.match(testMatcher))
-  console.log("Running tests: " + testNames)
-
-  for (let testName of testNames) {
-    const $testRoot = $(document.createElement('div'))
-    try {
-      const testCase = new TestCase(testName)
-      tests[testName].bind(testCase)($testRoot)
-    } catch (e) {
-      console.error(`Failed to execute test case ${testName}.`)
-      console.error(e)
-    }
-    ia.util.afterRender(() => {
-      if ($testRoot.children().length) {
-        $testRoot.appendTo('#root')
-      }
-    })
-  }
-})
 
 // Split then merge channels.
 /* oscillator.transformAudio((left, right, c2, c3) => {

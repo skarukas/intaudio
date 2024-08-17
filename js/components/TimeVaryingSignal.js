@@ -8,7 +8,6 @@ export class TimeVaryingSignal extends AudioTransformComponent {
         const timeRamp = defineTimeRamp(this.audioContext, timeMeasure);
         timeRamp.connect(this.executionContext.inputs[0]);
         this.preventIOOverwrites();
-        this.output = this.defineOutputAlias('output', this.outputs.$0);
     }
 }
 TimeVaryingSignal.TimeMeasure = TimeMeasure;

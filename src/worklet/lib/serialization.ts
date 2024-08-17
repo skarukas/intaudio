@@ -1,6 +1,7 @@
 
 /* Serialization */
 
+import { StreamSpec, TypedStreamSpec } from "../../shared/StreamSpec.js"
 import { SignalProcessingContextFactory } from "./SignalProcessingContextFactory.js"
 import { AudioDimension } from "./types.js"
 import { getProcessingFunction } from "./utils.js"
@@ -8,9 +9,8 @@ import { getProcessingFunction } from "./utils.js"
 export type SerializedWorkletMessage = {
   fnString: string,
   dimension: AudioDimension,
-  numInputs: number,
-  numChannelsPerInput: number[],
-  numChannelsPerOutput: number[],
+  inputSpec: StreamSpec,
+  outputSpec: StreamSpec,
   windowSize: number,
   tracebackString: string
 }
@@ -19,15 +19,13 @@ export function serializeWorkletMessage(
   f: Function,
   {
     dimension,
-    numInputs,
-    numChannelsPerInput,
-    numOutputChannels,
+    inputSpec,
+    outputSpec,
     windowSize
   }: {
     dimension: AudioDimension,
-    numInputs: number,
-    numChannelsPerInput: number[],
-    numOutputChannels: number[],
+    inputSpec: StreamSpec,
+    outputSpec: StreamSpec,
     windowSize: number
   }
 ): SerializedWorkletMessage {
@@ -36,9 +34,8 @@ export function serializeWorkletMessage(
   return {
     fnString: f.toString(),
     dimension,
-    numInputs,
-    numChannelsPerInput,
-    numChannelsPerOutput: numOutputChannels,
+    inputSpec,
+    outputSpec,
     windowSize,
     // @ts-ignore
     tracebackString: traceback['stack']
@@ -56,6 +53,9 @@ export function deserializeWorkletMessage(
   const applyToChunk = getProcessingFunction(message.dimension)
   const contextFactory = new SignalProcessingContextFactory({
     ...message,
+    // These need to be rebuilt after serialization.
+    inputSpec: TypedStreamSpec.fromSerialized(message.inputSpec),
+    outputSpec: TypedStreamSpec.fromSerialized(message.outputSpec),
     // Each environment may get this information from different places.
     sampleRate,
     getCurrentTime,

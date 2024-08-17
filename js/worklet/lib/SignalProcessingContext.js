@@ -1,6 +1,5 @@
-import { isType } from "../../shared/util.js";
 export class SignalProcessingContext {
-    constructor(inputMemory, outputMemory, { windowSize, currentTime, frameIndex, sampleRate, numInputs, numOutputs, channelIndex = undefined, sampleIndex = undefined }) {
+    constructor(inputMemory, outputMemory, { windowSize, currentTime, frameIndex, sampleRate, ioConverter, channelIndex = undefined, sampleIndex = undefined }) {
         this.inputMemory = inputMemory;
         this.outputMemory = outputMemory;
         this.maxInputLookback = 0;
@@ -13,8 +12,9 @@ export class SignalProcessingContext {
         this.channelIndex = channelIndex;
         this.frameIndex = frameIndex;
         this.sampleRate = sampleRate;
-        this.numInputs = numInputs;
-        this.numOutputs = numOutputs;
+        this.numInputs = ioConverter.inputSpec.length;
+        this.numOutputs = ioConverter.outputSpec.length;
+        this.ioConverter = ioConverter;
     }
     // TODO: consider making this 1-based to make previousInputs(0) be the current.
     previousInputs(t = 0) {
@@ -43,8 +43,7 @@ export class SignalProcessingContext {
         // Execute the function, making the Context properties and methods available
         // within the user-supplied function.
         const rawOutput = fn.bind(this)(...inputs);
-        // TODO: also fix if rawOutput.length != numOutputs
-        const outputs = !isType(rawOutput, Array) || this.numOutputs == 1 && rawOutput.length != 1 ? [rawOutput] : rawOutput;
+        const outputs = this.ioConverter.normalizeOutputs(rawOutput);
         // If the function tried to access past inputs or force-rezised the memory, 
         // resize.
         SignalProcessingContext.resizeMemory(this.inputMemory, this.maxInputLookback, this.fixedInputLookback);

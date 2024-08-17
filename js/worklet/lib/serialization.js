@@ -1,15 +1,15 @@
 /* Serialization */
+import { TypedStreamSpec } from "../../shared/StreamSpec.js";
 import { SignalProcessingContextFactory } from "./SignalProcessingContextFactory.js";
 import { getProcessingFunction } from "./utils.js";
-export function serializeWorkletMessage(f, { dimension, numInputs, numChannelsPerInput, numOutputChannels, windowSize }) {
+export function serializeWorkletMessage(f, { dimension, inputSpec, outputSpec, windowSize }) {
     const traceback = {};
     Error.captureStackTrace(traceback);
     return {
         fnString: f.toString(),
         dimension,
-        numInputs,
-        numChannelsPerInput,
-        numChannelsPerOutput: numOutputChannels,
+        inputSpec,
+        outputSpec,
         windowSize,
         // @ts-ignore
         tracebackString: traceback['stack']
@@ -20,6 +20,8 @@ export function deserializeWorkletMessage(message, sampleRate, getCurrentTime, g
     const innerFunction = new Function('return ' + message.fnString)();
     const applyToChunk = getProcessingFunction(message.dimension);
     const contextFactory = new SignalProcessingContextFactory(Object.assign(Object.assign({}, message), { 
+        // These need to be rebuilt after serialization.
+        inputSpec: TypedStreamSpec.fromSerialized(message.inputSpec), outputSpec: TypedStreamSpec.fromSerialized(message.outputSpec), 
         // Each environment may get this information from different places.
         sampleRate,
         getCurrentTime,

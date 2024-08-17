@@ -1,5 +1,5 @@
 export type AudioDimension = "all" | "none" | "channels" | "time"
-export type MultiChannelArray<T> = T[] & { get left(): T, get right(): T }
+export type MultiChannelArray<T> = ArrayLike<T> & { get left(): T, get right(): T }
 export type ArrayLike<T> = { length: number, [idx: number]: T }
 export type SignalProcessingFnInput<D> = (
   D extends "all" ? MultiChannelArray<ArrayLike<number>>
@@ -11,7 +11,7 @@ export type SignalProcessingFnInput<D> = (
   )
 )
 
-export function toMultiChannelArray<T>(array: T[]): MultiChannelArray<T> {
+export function toMultiChannelArray<T>(array: ArrayLike<T>): MultiChannelArray<T> {
   const proxy = new Proxy(array, {
     get(target, p, receiver) {
       if (p == "left") return target[0]

@@ -1,6 +1,6 @@
 import { BaseWorkletProcessor } from "./lib/BaseWorkletProcessor.js";
 import { FFTJS } from "./lib/fft.js";
-import { carToPolArray, forEach, getChannel, IS_WORKLET, polToCarArray, splitComplexArray, toComplexArray } from "./lib/utils.js";
+import { carToPolArray, map, getChannel, IS_WORKLET, polToCarArray, splitComplexArray, toComplexArray } from "./lib/utils.js";
 import { ArrayView, WritableArrayLike } from "./lib/views.js";
 
 export const FFT_WORKLET_NAME = "fft-worklet"
@@ -139,7 +139,7 @@ export class IFFTWorklet extends BaseFFTWorkletProcessor {
       imaginary = input2
     } else {  // Inputs are [magnitude, phase].
       // De-normalize magnitudes.
-      forEach(input1, (v, i) => input1[i] = v * input1.length)
+      map(input1, (v, i) => input1[i] = v * input1.length)
       const complex = polToCarArray(
         /*magnitude=*/input1,
         /*phase=*/input2,

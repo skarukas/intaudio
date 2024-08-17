@@ -373,7 +373,7 @@ export class BaseComponent extends BaseConnectable {
         return this.getAudioOutputProperty('channels');
     }
     transformAudio(fn, { windowSize, useWorklet, dimension = "none" } = {}) {
-        return this.getAudioOutputProperty('transformAudio')(fn, dimension, { windowSize, useWorklet });
+        return this.getAudioOutputProperty('transformAudio')(fn, { dimension, windowSize, useWorklet });
     }
     fft(fftSize = 128) {
         return this.getAudioOutputProperty('fft')(fftSize);

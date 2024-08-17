@@ -1,4 +1,4 @@
-import { enumerate, zip } from "../../shared/util.js";
+import { enumerate, isType, zip } from "../../shared/util.js";
 import { toMultiChannelArray } from "./types.js";
 export const IS_WORKLET = typeof AudioWorkletProcessor != 'undefined';
 function getColumn(arr, col) {
@@ -35,7 +35,7 @@ function processSamples(fn, inputChunks, outputChunks, contextFactory) {
     }
     // The number of output channels is the same as the input because this is not
     // determined by the user's function.
-    return inputChunks.map(x => x.length);
+    return outputChunks.map(_ => numChannels);
 }
 function processTime(fn, inputChunks, outputChunks, contextFactory) {
     var _a;
@@ -51,7 +51,7 @@ function processTime(fn, inputChunks, outputChunks, contextFactory) {
     }
     // The number of output channels is the same as the input because this is not
     // determined by the user's function.
-    return inputChunks.map(x => x.length);
+    return outputChunks.map(_ => numChannels);
 }
 /**
  * Apply a fuction across the audio chunk (channels and time).
@@ -95,11 +95,10 @@ function processChannels(fn, inputChunks, outputChunks, contextFactory) {
             return toMultiChannelArray(inputChannels);
         });
         const context = contextFactory.getContext({ sampleIndex: i });
-        // .map(v => isFinite(v) ? v : 0)
         const outputChannels = context.execute(fn, inputs);
         for (const [j, [output, destChunk]] of enumerate(zip(outputChannels, outputChunks))) {
-            assertValidReturnType(outputChannels);
-            writeColumn(destChunk, i, output);
+            // TODO: add NaN logic to postprocessing instead.
+            writeColumn(destChunk, i, map(output, v => isFinite(v) ? v : 0));
             numOutputChannels[j] = output.length;
         }
     }
@@ -118,6 +117,47 @@ export function getProcessingFunction(dimension) {
         default:
             throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
     }
+}
+export function mapOverChannels(dimension, data, fn) {
+    switch (dimension) {
+        case "all":
+            return map(data, fn);
+        case "channels":
+            const channels = data;
+            return map(channels, c => fn([c]));
+        case "time":
+            return fn(data);
+        case "none":
+            return fn([data]);
+        default:
+            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
+    }
+}
+// Lightweight check that the structure is correct.
+export function isCorrectOutput(dimension, output, type) {
+    const typeValidation = type.__NEW__validateAny(output);
+    switch (dimension) {
+        case "all":
+            return typeValidation && isArrayLike(output) && isArrayLike(output[0]);
+        case "channels":
+            // NOTE: Channels can be undefined, a special case that means empty data.
+            return output == undefined || typeValidation && isArrayLike(output);
+        case "time":
+            return typeValidation && isArrayLike(output);
+        case "none":
+            return typeValidation;
+        default:
+            throw new Error(`Invalid AudioDimension: ${dimension}. Expected one of ["all", "none", "channels", "time"]`);
+    }
+}
+function propertyIsDefined(obj, property) {
+    return typeof obj === 'object'
+        && obj !== null
+        && property in obj
+        && obj[property] != undefined;
+}
+export function isArrayLike(value) {
+    return isType(value, Array) || propertyIsDefined(value, 'length') && propertyIsDefined(value, 0);
 }
 /**
  * Returns a structure filled with zeroes that represents the shape of a single input or the output.
@@ -243,8 +283,8 @@ export function polToCarArray(magnitude, phase, real, imaginary) {
 export function getChannel(arr, c) {
     return arr[c % arr.length];
 }
-export function forEach(arr, fn) {
-    return Array.prototype.forEach.call(arr, fn);
+export function map(arr, fn) {
+    return Array.prototype.map.call(arr, fn);
 }
 export function map2d(grid, fn) {
     return grid.map((arr, i) => arr.map((v, j) => fn(v, i, j)));

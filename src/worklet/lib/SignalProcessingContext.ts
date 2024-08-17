@@ -1,4 +1,6 @@
+import { StreamSpec } from "../../shared/StreamSpec.js"
 import { isType } from "../../shared/util.js"
+import { FrameToSignatureConverter } from "./FrameToSignatureConverter.js"
 import { MemoryBuffer } from "./MemoryBuffer.js"
 import { AudioDimension, SignalProcessingFnInput } from "./types.js"
 
@@ -48,6 +50,7 @@ export class SignalProcessingContext<D extends AudioDimension> {
   protected maxOutputLookback: number = 0
   protected fixedInputLookback: number = -1
   protected fixedOutputLookback: number = -1
+  protected ioConverter: FrameToSignatureConverter<D>
 
   constructor(
     protected inputMemory: MemoryBuffer<SignalProcessingFnInput<D>[]>,
@@ -57,8 +60,7 @@ export class SignalProcessingContext<D extends AudioDimension> {
       currentTime,
       frameIndex,
       sampleRate,
-      numInputs,
-      numOutputs,
+      ioConverter,
       channelIndex = undefined,
       sampleIndex = undefined
     }: {
@@ -66,8 +68,7 @@ export class SignalProcessingContext<D extends AudioDimension> {
       currentTime: number,
       frameIndex: number,
       sampleRate: number,
-      numInputs: number,
-      numOutputs: number,
+      ioConverter: FrameToSignatureConverter<D>,
       channelIndex?: number,
       sampleIndex?: number
     }
@@ -78,8 +79,9 @@ export class SignalProcessingContext<D extends AudioDimension> {
     this.channelIndex = channelIndex
     this.frameIndex = frameIndex
     this.sampleRate = sampleRate
-    this.numInputs = numInputs
-    this.numOutputs = numOutputs
+    this.numInputs = ioConverter.inputSpec.length
+    this.numOutputs = ioConverter.outputSpec.length
+    this.ioConverter = ioConverter
   }
   // TODO: consider making this 1-based to make previousInputs(0) be the current.
   previousInputs(t: number = 0): SignalProcessingFnInput<D>[] {
@@ -111,8 +113,7 @@ export class SignalProcessingContext<D extends AudioDimension> {
     // Execute the function, making the Context properties and methods available
     // within the user-supplied function.
     const rawOutput = fn.bind(this)(...inputs)
-    // TODO: also fix if rawOutput.length != numOutputs
-    const outputs: any = !isType(rawOutput, Array) || this.numOutputs == 1 && rawOutput.length != 1 ? [rawOutput] : rawOutput
+    const outputs: any = this.ioConverter.normalizeOutputs(rawOutput)
 
     // If the function tried to access past inputs or force-rezised the memory, 
     // resize.

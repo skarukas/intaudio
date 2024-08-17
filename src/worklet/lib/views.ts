@@ -1,7 +1,7 @@
 export interface WritableArrayLike<T> {
   readonly length: number;
   [n: number]: T;
-  [Symbol.iterator](): Iterator<T>;
+  [Symbol.iterator]?(): Iterator<T>;
 }
 
 function checkRange(i: number, min: number, max: number) {

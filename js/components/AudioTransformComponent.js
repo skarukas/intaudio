@@ -28,14 +28,14 @@ export class AudioExecutionContext extends ToStringAndUUID {
         const inputChunks = inputSpec.numChannelsPerStream.map(createChunk);
         // The output may have more channels than the input, so be flexible when 
         // testing it so as to not break the implementation.
-        const maxChannelsPerOutput = range(outputSpec.numStreams).fill(constants.MAX_CHANNELS);
+        const maxChannelsPerOutput = range(outputSpec.length).fill(constants.MAX_CHANNELS);
         const outputChunks = maxChannelsPerOutput.map(createChunk);
         const contextFactory = new SignalProcessingContextFactory({
             sampleRate: this.audioContext.sampleRate,
             getCurrentTime: () => this.audioContext.currentTime,
             getFrameIndex: () => 0,
-            numChannelsPerInput: inputSpec.numChannelsPerStream,
-            numChannelsPerOutput: maxChannelsPerOutput,
+            inputSpec,
+            outputSpec,
             windowSize,
             dimension: this.dimension
         });
@@ -74,9 +74,9 @@ export class WorkletExecutionContext extends AudioExecutionContext {
             outputSpec = new StreamSpec(Object.assign(Object.assign({}, outputSpec), { numChannelsPerStream: numChannelsPerOutput }));
         }
         const worklet = new AudioWorkletNode(this.audioContext, FUNCTION_WORKLET_NAME, {
-            numberOfInputs: inputSpec.numStreams,
+            numberOfInputs: inputSpec.length,
             outputChannelCount: outputSpec.numChannelsPerStream,
-            numberOfOutputs: outputSpec.numStreams
+            numberOfOutputs: outputSpec.length
         });
         // TODO: figure this out.
         // @ts-ignore No index signature.
@@ -94,9 +94,8 @@ export class WorkletExecutionContext extends AudioExecutionContext {
         // https://bugzilla.mozilla.org/show_bug.cgi?id=1629478
         const serializedFunction = serializeWorkletMessage(fn, {
             dimension,
-            numInputs: inputSpec.numStreams,
-            numChannelsPerInput: inputSpec.numChannelsPerStream,
-            numOutputChannels: outputSpec.numChannelsPerStream,
+            inputSpec,
+            outputSpec,
             windowSize: 128 // TODO: make this flexible.
         });
         worklet.port.postMessage(serializedFunction);
@@ -106,17 +105,21 @@ export class WorkletExecutionContext extends AudioExecutionContext {
     static defineAudioGraph(workletNode, { inputSpec, outputSpec, }) {
         const inputNodes = [];
         const outputNodes = [];
-        for (const numChannels of inputSpec.numChannelsPerStream) {
+        for (const [i, numChannels] of enumerate(inputSpec.numChannelsPerStream)) {
             const input = new GainNode(this.audioContext, {
                 channelCount: numChannels,
                 // Force channelCount even if the input has more / fewer channels.
                 channelCountMode: "explicit"
             });
-            input.connect(workletNode, 0, numChannels);
+            input.connect(workletNode, 0, i);
             inputNodes.push(input);
         }
-        for (const i of range(outputSpec.numStreams)) {
-            const output = new GainNode(this.audioContext);
+        for (const [i, numChannels] of enumerate(outputSpec.numChannelsPerStream)) {
+            const output = new GainNode(this.audioContext, {
+                channelCount: numChannels,
+                // Force channelCount even if the input has more / fewer channels.
+                channelCountMode: "explicit"
+            });
             workletNode.connect(output, i, 0);
             outputNodes.push(output);
         }
@@ -192,8 +195,8 @@ export class ScriptProcessorExecutionContext extends AudioExecutionContext {
             sampleRate: this.audioContext.sampleRate,
             getCurrentTime: () => this.audioContext.currentTime,
             getFrameIndex: () => frameIndex,
-            numChannelsPerInput: this.inputSpec.numChannelsPerStream,
-            numChannelsPerOutput: this.outputSpec.numChannelsPerStream,
+            inputSpec: this.inputSpec,
+            outputSpec: this.outputSpec,
             windowSize: this.windowSize,
             dimension: this.dimension
         });
@@ -282,19 +285,20 @@ export class AudioTransformComponent extends BaseComponent {
             this.defineOutputAlias(i, this[propName]);
         }
         // TODO: this should be automatic, aliases should not count.
-        if (inputSpec.numStreams == 1) {
+        if (inputSpec.length == 1) {
             // @ts-ignore No index signature.
             this.setDefaultInput(this["$" + inputSpec.names[0]]);
         }
-        if (outputSpec.numStreams == 1) {
+        if (outputSpec.length == 1) {
             // @ts-ignore No index signature.
             this.setDefaultOutput(this["$" + outputSpec.names[0]]);
         }
+        this.output = this.defineOutputAlias('output', this.outputs[0]);
         this.inputSpec = inputSpec;
         this.outputSpec = outputSpec;
     }
     inferParamNames(fn, inputSpec) {
-        let numInputs = inputSpec === null || inputSpec === void 0 ? void 0 : inputSpec.numStreams;
+        let numInputs = inputSpec === null || inputSpec === void 0 ? void 0 : inputSpec.length;
         const maxSafeInputs = Math.floor(constants.MAX_CHANNELS / constants.DEFAULT_NUM_CHANNELS);
         let descriptor;
         try {
@@ -320,10 +324,9 @@ export class AudioTransformComponent extends BaseComponent {
             throw new Error(`Given a function with ${descriptor.minArgs} required parameters, but expected no more than the supplied value of numInputs (${numInputs}) to ensure inputs are not undefined during signal processing.`);
         }
         return range(numInputs).map(i => {
-            var _a;
             const paramDescriptor = descriptor.parameters[i];
             // Parameters may be unnamed if they are object- or array-destructured.
-            return (_a = paramDescriptor === null || paramDescriptor === void 0 ? void 0 : paramDescriptor.name) !== null && _a !== void 0 ? _a : i;
+            return (paramDescriptor === null || paramDescriptor === void 0 ? void 0 : paramDescriptor.name) || i;
         });
     }
     withInputs(...inputs) {
