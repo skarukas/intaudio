@@ -9,8 +9,8 @@ import { BaseConnectable } from "./shared/base/BaseConnectable.js";
 import { AudioRateInput } from "./io/input/AudioRateInput.js";
 import * as internalNamespace from './internals.js';
 export declare class IATopLevel {
-    protected config: AudioConfig;
-    protected internals: typeof internalNamespace;
+    config: AudioConfig;
+    internals: typeof internalNamespace;
     out: AudioRateInput;
     util: typeof internalNamespace.util;
     constructor(config: AudioConfig, internals: typeof internalNamespace);

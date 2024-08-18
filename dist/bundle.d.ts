@@ -1850,8 +1850,8 @@ interface Component<InputTypes extends AnyInput = AnyInput, OutputTypes extends 
 }
 
 declare class IATopLevel {
-    protected config: AudioConfig;
-    protected internals: typeof internalNamespace;
+    config: AudioConfig;
+    internals: typeof internalNamespace;
     out: AudioRateInput;
     util: typeof util_d;
     constructor(config: AudioConfig, internals: typeof internalNamespace);

@@ -7,7 +7,6 @@ import { BufferWriterComponent } from "./components/BufferWriterComponent.js";
 import { StreamSpec } from "./shared/StreamSpec.js";
 import { joinContexts } from "./shared/multicontext.js";
 import { AudioConfig } from "./shared/config.js";
-import { AbstractOutput } from "./io/output/AbstractOutput.js";
 import { BufferComponent } from "./components/BufferComponent.js";
 import { BaseConnectable } from "./shared/base/BaseConnectable.js";
 import { AudioRateInput } from "./io/input/AudioRateInput.js";
@@ -28,8 +27,8 @@ export class IATopLevel {
   out: AudioRateInput
   util: typeof internalNamespace.util
   constructor(
-    protected config: AudioConfig,
-    protected internals: typeof internalNamespace
+    public config: AudioConfig,
+    public internals: typeof internalNamespace
   ) {
     this.out = new this.internals.AudioRateInput('out', undefined, config.audioContext.destination)
     this.util = internalNamespace.util
