@@ -2030,8 +2030,6 @@ class AudioRateOutput extends AbstractOutput {
         this.parent = parent;
         this._channels = undefined;
         this.activeChannel = undefined;
-        this.analyzer = new AnalyserNode(this.audioContext, { fftSize: constants.MAX_ANALYZER_LENGTH });
-        this.connectNodes(this.audioNode, this.analyzer);
     }
     get channels() {
         var _a;
@@ -15491,6 +15489,25 @@ var internals = /*#__PURE__*/Object.freeze({
 // TODO: Specify only a subset for public use
 var public_namespace = Object.assign({}, internals);
 
+function contextPipe(fromContext, toContext) {
+    const mediaStreamDestination = fromContext.createMediaStreamDestination();
+    const mediaStreamSource = toContext.createMediaStreamSource(mediaStreamDestination.stream);
+    return {
+        sink: mediaStreamDestination,
+        source: mediaStreamSource,
+    };
+}
+function joinContexts(sourceContexts, destinationContext) {
+    const source = destinationContext.createGain();
+    const sinks = [];
+    for (const src of sourceContexts) {
+        const { source: input, sink: output } = contextPipe(src, destinationContext);
+        input.connect(source);
+        sinks.push(output);
+    }
+    return { sinks, source };
+}
+
 function stackChannels(inputs) {
     return this._.ChannelStacker.fromInputs(inputs);
 }
@@ -15540,6 +15557,22 @@ function recorder(sources) {
     sources.map((s, i) => s.connect(component.inputs[i]));
     return component;
 }
+/**
+ * Allow joining ("mixing") across multiple audioContexts / threads.
+ */
+function join(sources) {
+    const sourceContexts = [...new Set(sources.map(s => s.audioContext))];
+    const { sinks, source } = joinContexts(sourceContexts, this.config.audioContext);
+    const sinkMap = new Map(zip(sourceContexts, sinks));
+    for (const sourceConnectable of sources) {
+        const sink = sinkMap.get(sourceConnectable.audioContext);
+        if (sink == undefined) {
+            throw new Error(`Unable to find audioContext of ${sourceConnectable}.`);
+        }
+        sourceConnectable.connect(sink);
+    }
+    return new this._.AudioComponent(source);
+}
 
 var topLevel = /*#__PURE__*/Object.freeze({
   __proto__: null,
@@ -15548,6 +15581,7 @@ var topLevel = /*#__PURE__*/Object.freeze({
   bundle: bundle,
   combine: combine,
   generate: generate,
+  join: join,
   ramp: ramp,
   read: read,
   recorder: recorder,

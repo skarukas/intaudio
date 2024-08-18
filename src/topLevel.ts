@@ -1,17 +1,12 @@
 import { Component } from "./components/base/Component.js";
-import { ChannelStacker } from "./components/ChannelStacker.js";
-import { BundleComponent } from "./components/BundleComponent.js";
 import { MaybePromise, ObjectOf, ObjectOrArrayOf, TimeMeasure } from "./shared/types.js";
 import { Connectable } from "./shared/base/Connectable.js";
-import { FunctionComponent } from "./components/FunctionComponent.js";
-import { AbstractInput } from "./io/input/AbstractInput.js";
-import { AudioTransformComponent } from "./components/AudioTransformComponent.js";
-import { defineTimeRamp, isFunction, isType, loadFile } from "./shared/util.js";
-import { AudioRateOutput } from "./io/output/AudioRateOutput.js";
-import { AbstractOutput, BaseComponent, BufferComponent, TimeVaryingSignal, TypedConfigurable } from "./internals.js";
+import { defineTimeRamp, isFunction, isType, loadFile, zip } from "./shared/util.js";
+import { AbstractOutput, BaseConnectable, BufferComponent, TypedConfigurable } from "./internals.js";
 import { AudioRecordingComponent } from "./components/AudioRecordingComponent.js";
 import { BufferWriterComponent } from "./components/BufferWriterComponent.js";
 import { StreamSpec } from "./shared/StreamSpec.js";
+import { joinContexts } from "./shared/multicontext.js";
 
 export function stackChannels(
   this: TypedConfigurable,
@@ -98,4 +93,21 @@ export function recorder(this: TypedConfigurable, sources: any): AudioRecordingC
   const component = new this._.AudioRecordingComponent(sources.length)
   sources.map((s: Component, i: number) => s.connect(component.inputs[i]))
   return component
+}
+
+/**
+ * Allow joining ("mixing") across multiple audioContexts / threads.
+ */
+export function join(this: TypedConfigurable, sources: BaseConnectable[]) {
+  const sourceContexts = [...new Set(sources.map(s => s.audioContext))]
+  const { sinks, source } = joinContexts(sourceContexts, this.config.audioContext)
+  const sinkMap = new Map(zip(sourceContexts, sinks))
+  for (const sourceConnectable of sources) {
+    const sink = sinkMap.get(sourceConnectable.audioContext)
+    if (sink == undefined) {
+      throw new Error(`Unable to find audioContext of ${sourceConnectable}.`)
+    }
+    sourceConnectable.connect(sink)
+  }
+  return new this._.AudioComponent(source)
 }

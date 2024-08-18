@@ -1,7 +1,8 @@
 import { TimeMeasure } from "./shared/types.js";
-import { defineTimeRamp, isFunction, isType, loadFile } from "./shared/util.js";
+import { defineTimeRamp, isFunction, isType, loadFile, zip } from "./shared/util.js";
 import { BufferComponent } from "./internals.js";
 import { StreamSpec } from "./shared/StreamSpec.js";
+import { joinContexts } from "./shared/multicontext.js";
 export function stackChannels(inputs) {
     return this._.ChannelStacker.fromInputs(inputs);
 }
@@ -50,4 +51,20 @@ export function recorder(sources) {
     const component = new this._.AudioRecordingComponent(sources.length);
     sources.map((s, i) => s.connect(component.inputs[i]));
     return component;
+}
+/**
+ * Allow joining ("mixing") across multiple audioContexts / threads.
+ */
+export function join(sources) {
+    const sourceContexts = [...new Set(sources.map(s => s.audioContext))];
+    const { sinks, source } = joinContexts(sourceContexts, this.config.audioContext);
+    const sinkMap = new Map(zip(sourceContexts, sinks));
+    for (const sourceConnectable of sources) {
+        const sink = sinkMap.get(sourceConnectable.audioContext);
+        if (sink == undefined) {
+            throw new Error(`Unable to find audioContext of ${sourceConnectable}.`);
+        }
+        sourceConnectable.connect(sink);
+    }
+    return new this._.AudioComponent(source);
 }

@@ -1,4 +1,3 @@
-import constants from "../../shared/constants.js";
 import { connectWebAudioChannels, createMultiChannelView, getNumInputChannels, getNumOutputChannels } from "../../shared/multichannel.js";
 import { AudioRateInput } from "../input/AudioRateInput.js";
 import { ComponentInput } from "../input/ComponentInput.js";
@@ -13,8 +12,6 @@ export class AudioRateOutput extends AbstractOutput {
         this.parent = parent;
         this._channels = undefined;
         this.activeChannel = undefined;
-        this.analyzer = new AnalyserNode(this.audioContext, { fftSize: constants.MAX_ANALYZER_LENGTH });
-        this.connectNodes(this.audioNode, this.analyzer);
     }
     get channels() {
         var _a;

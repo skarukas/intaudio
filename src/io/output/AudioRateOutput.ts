@@ -16,7 +16,6 @@ export class AudioRateOutput
   implements MultiChannel<AudioRateOutput>, AudioSignalStream {
   private _channels: MultiChannelArray<AudioRateOutput> | undefined = undefined
   activeChannel = undefined
-  private analyzer: AnalyserNode
 
   constructor(
     public name: string | number,
@@ -24,8 +23,6 @@ export class AudioRateOutput
     public parent?: Component
   ) {
     super(name, parent)
-    this.analyzer = new AnalyserNode(this.audioContext, { fftSize: constants.MAX_ANALYZER_LENGTH })
-    this.connectNodes(this.audioNode, this.analyzer)
   }
   get channels(): MultiChannelArray<AudioRateOutput> {
     return this._channels ?? (this._channels = createMultiChannelView(this, true))

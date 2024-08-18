@@ -422,6 +422,15 @@ const tests = {
       () => keyboard.connect(synth),
       "Unable to connect components from different namespaces.")
   },
+  crossNamespaceJoining() {
+    let thread1 = ia.withConfig({ audioContext:  new AudioContext() })
+    let thread2 = ia.withConfig({ audioContext:  new AudioContext() })
+    const osc1 = new thread1.TimeVaryingSignal(() => 1)
+    const osc2 = new thread2.TimeVaryingSignal(() => 2)
+    const mainThreadSignal = ia.join([osc1, osc2])
+    this.assertSignalEquals(mainThreadSignal, 3)
+    mainThreadSignal.connect(ia.out)
+  },
   midiInput($demo) {
     const midiIn = new ia.MidiInputDevice("newest")
     midiIn.addToDom($demo)
