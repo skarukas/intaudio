@@ -71,7 +71,7 @@ class TestCase {
   }
   assertSignal(output, predicate, description = undefined, maxGapMs = 4000) {
     description ??= `assertSignal(${output}, ${predicate})`
-    if (!(output instanceof ia.BaseConnectable)) {
+    if (!(output instanceof ia.internals.BaseConnectable)) {
       throw new Error("Expected the signal to be a connectable (output or component), got " + output)
     }
     const $listItem = appendTestSuccessScore(this.name)
@@ -164,7 +164,7 @@ function createOscillator(freq = 440) {
 // TESTS
 const tests = {
   multiInputControlFunction() {
-    let subtractNumbers = new ia.FunctionComponent((x, y) => x + y.toFixed(0))
+    let subtractNumbers = new ia.internals.FunctionComponent((x, y) => x + y.toFixed(0))
     let val;
     subtractNumbers.connect(v => {
       val = v
@@ -175,8 +175,8 @@ const tests = {
     this.assertTrue(val == "1020", val)
   },
   keyboardAndSynth($root) {
-    const keyboard = new ia.Keyboard(48)
-    const synth = new ia.SimplePolyphonicSynth()
+    const keyboard = new ia.internals.Keyboard(48)
+    const synth = new ia.internals.SimplePolyphonicSynth()
     keyboard.addToDom($root)
     keyboard.connect(synth)
     synth.connect(ia.out)
@@ -185,7 +185,9 @@ const tests = {
       if (pitch < 60) {
         return
       }
-      keyboard.midiInput.setValue(new ia.KeyEvent(ia.KeyEventType.KEY_UP, pitch, 127))
+      keyboard.midiInput.setValue(
+        new ia.internals.KeyEvent(ia.internals.KeyEventType.KEY_UP, pitch, 127)
+      )
       setTimeout(() => removeNote(pitch - 2), 400)
     }
     function addNote(pitch) {
@@ -193,7 +195,9 @@ const tests = {
         removeNote(pitch)
         return
       }
-      keyboard.midiInput.setValue(new ia.KeyEvent(ia.KeyEventType.KEY_DOWN, pitch, 127))
+      keyboard.midiInput.setValue(
+        new ia.internals.KeyEvent(ia.internals.KeyEventType.KEY_DOWN, pitch, 127)
+      )
       setTimeout(() => addNote(pitch + 2), 400)
     }
     // Add a bunch of notes, then remove them.
@@ -202,12 +206,12 @@ const tests = {
   convertAudioToControl() {
     // Conversion from audio to control signal
     let oscillator = createOscillator()
-    let oscillatorOutput = new ia.AudioRateOutput('osc', oscillator)
+    let oscillatorOutput = new ia.internals.AudioRateOutput('osc', oscillator)
 
     // TODO: This does't work because there's no way to processs 2 signals 
     // together right now.
     // Will have to put the channels side by side or something?
-    let subtractSignals = new ia.AudioTransformComponent((x, y) => x - y)
+    let subtractSignals = new ia.internals.AudioTransformComponent((x, y) => x - y)
     oscillatorOutput.connect(subtractSignals.$x)
     oscillatorOutput.connect(subtractSignals.$y)
     this.assertSilentSignal(subtractSignals)
@@ -226,7 +230,7 @@ const tests = {
     }, 2000)
   },
   createBang($root) {
-    let bang = new ia.Bang()
+    let bang = new ia.internals.Bang()
     bang.addToDom($root)
     let bangs = 0
     bang.connect(_ => {
@@ -244,11 +248,11 @@ const tests = {
     // - Play attack and decay parts
     // - Release after another second
     let [a, d, s, r] = [100, 200, 0.1, 1000]
-    let envelope = new ia.ADSR(a, d, s, r)
-    let osc = new ia.AudioComponent(createOscillator())
+    let envelope = new ia.internals.ADSR(a, d, s, r)
+    let osc = new ia.internals.AudioComponent(createOscillator())
     let gain = ia.audioContext.createGain()
     gain.gain.value = 0
-    let attackBang = new ia.Bang()
+    let attackBang = new ia.internals.Bang()
     attackBang.addToDom($root, { width: 48, height: 48 })
 
     // Control
@@ -260,17 +264,17 @@ const tests = {
     osc.connect(gain).connect(ia.out)
 
     // Analyze the envelope
-    envelope.connect(new ia.ScrollingAudioMonitor())
+    envelope.connect(new ia.internals.ScrollingAudioMonitor())
       .addToDom($root, { top: 48, width: 128, height: 48 })
   },
   adsrSummingEnvelopes($root) {
-    let envelope1 = new ia.ADSR(500, 200, 0.5, 1000)
-    let envelope2 = new ia.ADSR(20, 20, 0.5, 10)
-    let attackBang = new ia.Bang()
-    let releaseBang = new ia.Bang()
+    let envelope1 = new ia.internals.ADSR(500, 200, 0.5, 1000)
+    let envelope2 = new ia.internals.ADSR(20, 20, 0.5, 10)
+    let attackBang = new ia.internals.Bang()
+    let releaseBang = new ia.internals.Bang()
     attackBang.addToDom($root, { width: 48, height: 48 })
-    let oscillator = new ia.AudioComponent(createOscillator(440))
-    let oscillator2 = new ia.AudioComponent(createOscillator(220))
+    let oscillator = new ia.internals.AudioComponent(createOscillator(440))
+    let oscillator2 = new ia.internals.AudioComponent(createOscillator(220))
 
     const compoundEnvelope = ia.combine(
       { e1: envelope1, e2: envelope2, w: oscillator, w2: oscillator2, v: 0.5 }, (e1, e2, w, w2, v) => {
@@ -289,7 +293,7 @@ const tests = {
     })
     attackBang.trigger()
 
-    let monitor = new ia.ScrollingAudioMonitor(20, 128, 'auto', 'auto')
+    let monitor = new ia.internals.ScrollingAudioMonitor(20, 128, 'auto', 'auto')
     monitor.addToDom($root, { width: 256, height: 48, left: 48 })
 
     compoundEnvelope.connect(monitor.input.left)
@@ -305,7 +309,7 @@ const tests = {
     // - Wait until the release trigger (~1 sec)
     // - Over 1000 ms, move to 400 Hz
     let [a, d, s, r] = [1000, 10, 0.5, 1000]
-    let envelope = new ia.ADSR(a, d, s, r)
+    let envelope = new ia.internals.ADSR(a, d, s, r)
     let freq = 440
     let osc = createOscillator(freq)
     let scaled = envelope.connect(v => (v * 50) + freq)
@@ -315,14 +319,14 @@ const tests = {
       envelope.releaseEvent.trigger()
       osc.disconnect(ia.out)
     }, 4000)
-    new ia.AudioComponent(osc).connect(ia.out)
+    new ia.internals.AudioComponent(osc).connect(ia.out)
   },
   timeVaryingSignal($root) {
     let f1 = 880
-    let signal = new ia.TimeVaryingSignal(cy => {
+    let signal = new ia.internals.TimeVaryingSignal(cy => {
       return Math.sin(cy * cy * f1) * 0.2
     }, 'cycles')
-    let monitor = new ia.ScrollingAudioMonitor(1, 64)
+    let monitor = new ia.internals.ScrollingAudioMonitor(1, 64)
     monitor.addToDom($root)
     signal.connect(monitor)
     signal.connect(ia.out)
@@ -331,21 +335,21 @@ const tests = {
     }, 4000)
   },
   typingKeyboardInput($root) {
-    const keyInput = new ia.TypingKeyboardMIDI()
-    const uiKeyboard = new ia.Keyboard()
-    const synth = new ia.SimplePolyphonicSynth()
+    const keyInput = new ia.internals.TypingKeyboardMIDI()
+    const uiKeyboard = new ia.internals.Keyboard()
+    const synth = new ia.internals.SimplePolyphonicSynth()
     keyInput.connect(uiKeyboard)
     uiKeyboard.connect(synth)
     uiKeyboard.addToDom($root, { width: 512, height: 64, rotateDeg: -90 })
     synth.connect(ia.out)
 
-    let monitor = new ia.ScrollingAudioMonitor(4, 128, 'auto', 'auto')
+    let monitor = new ia.internals.ScrollingAudioMonitor(4, 128, 'auto', 'auto')
     monitor.addToDom($root, { top: 64, width: 512, height: 64 })
     synth.connect(monitor)
   },
   eliminateDuplicates() {
-    const duplicateFilter = new ia.IgnoreDuplicates()
-    let envelope = new ia.ADSR(100, 10, 0.5, 1000)
+    const duplicateFilter = new ia.internals.IgnoreDuplicates()
+    let envelope = new ia.internals.ADSR(100, 10, 0.5, 1000)
     // Log only when the signal changes
     envelope.sampleSignal()
       .connect(duplicateFilter)
@@ -353,8 +357,8 @@ const tests = {
     envelope.attackEvent.trigger()
   },
   setParamByDict() {
-    let envelope = new ia.ADSR(100, 10, 0.5, 1000)
-    let fn = new ia.FunctionComponent(() => ({
+    let envelope = new ia.internals.ADSR(100, 10, 0.5, 1000)
+    let fn = new ia.internals.FunctionComponent(() => ({
       attackDurationMs: 1000,
       decayDurationMs: 100,
       isMuted: true
@@ -366,7 +370,7 @@ const tests = {
   },
   audioParamByDictFailure() {
     this.assertThrows(() => {
-      new ia.AudioTransformComponent(x => {
+      new ia.internals.AudioTransformComponent(x => {
         return {
           input: x,
           myOtherKey: 12398
@@ -375,7 +379,7 @@ const tests = {
     }, 'Unable to read outputs from processing function')
   },
   sliderControl($root) {
-    let slider = new ia.RangeInputComponent()
+    let slider = new ia.internals.RangeInputComponent()
     slider.addToDom($root, { width: 100, height: 20, rotateDeg: -90 })
     let inputs = []
     // TODO: this currently fails because an audio event shows up and makes it 
@@ -405,7 +409,7 @@ const tests = {
     audioContext.createBiquadFilter()
     const configId = "my-config"
     let ia2 = ia.withConfig({ audioContext }, configId)
-    let synth = new ia2.SimplePolyphonicSynth()
+    let synth = new ia2.internals.SimplePolyphonicSynth()
     let transformed = synth.connect(x => x / 2)
 
     this.assertTrue(
@@ -416,23 +420,24 @@ const tests = {
   crossNamespaceConnnectionFailure() {
     let audioContext = new AudioContext()
     let ia2 = ia.withConfig({ audioContext })
-    let keyboard = new ia.Keyboard()
-    let synth = new ia2.SimplePolyphonicSynth()
+    let keyboard = new ia.internals.Keyboard()
+    let synth = new ia2.internals.SimplePolyphonicSynth()
     this.assertThrows(
       () => keyboard.connect(synth),
       "Unable to connect components from different namespaces.")
   },
   crossNamespaceJoining() {
-    let thread1 = ia.withConfig({ audioContext:  new AudioContext() })
-    let thread2 = ia.withConfig({ audioContext:  new AudioContext() })
-    const osc1 = new thread1.TimeVaryingSignal(() => 1)
-    const osc2 = new thread2.TimeVaryingSignal(() => 2)
+    let thread1 = ia.createThread()
+    let thread2 = ia.createThread()
+    this.assertFalse(thread1.audioContext == thread2.audioContext)
+    const osc1 = new thread1.internals.TimeVaryingSignal(() => 1)
+    const osc2 = new thread2.internals.TimeVaryingSignal(() => 2)
     const mainThreadSignal = ia.join([osc1, osc2])
     this.assertSignalEquals(mainThreadSignal, 3)
     mainThreadSignal.connect(ia.out)
   },
   midiInput($demo) {
-    const midiIn = new ia.MidiInputDevice("newest")
+    const midiIn = new ia.internals.MidiInputDevice("newest")
     midiIn.addToDom($demo)
     midiIn.midiOut.connect(v => console.log(v))
     midiIn.availableDevices.connect(v => console.log(v))
@@ -449,9 +454,9 @@ const tests = {
       </video>
     </div>`)
     setTimeout(() => {
-      const playbackRate = new ia.RangeInputComponent(0, 32, undefined, 1)
-      const audio = new ia.MediaElementComponent("#audio")
-      const video = new ia.MediaElementComponent("#video")
+      const playbackRate = new ia.internals.RangeInputComponent(0, 32, undefined, 1)
+      const audio = new ia.internals.MediaElementComponent("#audio")
+      const video = new ia.internals.MediaElementComponent("#video")
 
       playbackRate.addToDom($root)
       playbackRate.connect(audio.playbackRate)
@@ -471,17 +476,17 @@ const tests = {
       </video>
     </div>`)
     setTimeout(() => {
-      const audio = new ia.MediaElementComponent("#audio")
-      const slow = new ia.SlowDown(0.5)
+      const audio = new ia.internals.MediaElementComponent("#audio")
+      const slow = new ia.internals.SlowDown(0.5)
       audio.connect(slow).audioOutput.connect(ia.out)
       slow.rampOut.sampleSignal().connect(v => console.log(v))
       setTimeout(() => slow.start(), 5000)
     }, 1000)
   },
   channelStackerAndSplitter($root) {
-    let oscillator = new ia.AudioComponent(createOscillator(440))
-    let oscillator2 = new ia.AudioComponent(createOscillator(445))
-    const monitor = new ia.ScrollingAudioMonitor()
+    let oscillator = new ia.internals.AudioComponent(createOscillator(440))
+    let oscillator2 = new ia.internals.AudioComponent(createOscillator(445))
+    const monitor = new ia.internals.ScrollingAudioMonitor()
     monitor.addToDom($root)
 
     // Weird quirk, each oscillator is actually stereo, so we need to discard 
@@ -497,8 +502,8 @@ const tests = {
     right.connect(ia.out.right)
   },
   transformAudio($root) {
-    let oscillator = new ia.AudioComponent(createOscillator(440))
-    const monitor = new ia.ScrollingAudioMonitor()
+    let oscillator = new ia.internals.AudioComponent(createOscillator(440))
+    const monitor = new ia.internals.ScrollingAudioMonitor()
     monitor.addToDom($root)
 
     // Apply to each sample, across channels.
@@ -561,13 +566,13 @@ const tests = {
     this.assertEqual(timeTransform.numOutputChannels, 2)
   },
   multipleInputTransformGainSlider($root) {
-    let slider = new ia.RangeInputComponent()
+    let slider = new ia.internals.RangeInputComponent()
     slider.addToDom($root)
-    let oscillator = new ia.AudioComponent(createOscillator(440))
-    const monitor = new ia.ScrollingAudioMonitor()
+    let oscillator = new ia.internals.AudioComponent(createOscillator(440))
+    const monitor = new ia.internals.ScrollingAudioMonitor()
     monitor.addToDom($root, { top: 40 })
 
-    const transform = new ia.AudioTransformComponent((v, vol) => {
+    const transform = new ia.internals.AudioTransformComponent((v, vol) => {
       return v * vol
     }, { dimension: "none", useWorklet: true }).withInputs(oscillator, slider)
     transform.connect(monitor).connect(ia.out)
@@ -575,7 +580,7 @@ const tests = {
   variableDelayWithSlider($root) {
     // Source: gated noise.
     const whiteNoiseSource = ia.generate(() => Math.random() - 0.5)
-    const envelope = new ia.ADSR(10, 50, 0, 10)
+    const envelope = new ia.internals.ADSR(10, 50, 0, 10)
     const gatedNoise = ia.combine(
       [whiteNoiseSource, envelope],
       (noise, gain) => noise * gain,
@@ -585,7 +590,7 @@ const tests = {
     setInterval(() => envelope.attackEvent(), 1000)
 
     // Control echo duration.
-    let delaySlider = new ia.RangeInputComponent(0, 44100)
+    let delaySlider = new ia.internals.RangeInputComponent(0, 44100)
     delaySlider.addToDom($root)
     const delayedNoise = ia.combine(
       [gatedNoise, delaySlider],
@@ -596,7 +601,7 @@ const tests = {
     )
 
     // Display.
-    const monitor = new ia.ScrollingAudioMonitor()
+    const monitor = new ia.internals.ScrollingAudioMonitor()
     monitor.addToDom($root, { top: 40 })
 
     delayedNoise.connect(monitor).connect(ia.out)
@@ -604,7 +609,7 @@ const tests = {
   variableDelaySinewave($root) {
     // Source: gated noise.
     const whiteNoiseSource = ia.generate(() => Math.random() - 0.5)
-    const envelope = new ia.ADSR(10, 50, 0, 10)
+    const envelope = new ia.internals.ADSR(10, 50, 0, 10)
     const gatedNoise = ia.combine(
       [whiteNoiseSource, envelope],
       (noise, gain) => noise * gain,
@@ -616,7 +621,7 @@ const tests = {
 
     // Control echo duration.
 
-    const lfo = new ia.Wave("triangle", 21)
+    const lfo = new ia.internals.Wave("triangle", 21)
       .transformAudio(([l, r]) => {
         const bw = 44100
         return [
@@ -635,7 +640,7 @@ const tests = {
     )
 
     // Display.
-    const monitor = new ia.ScrollingAudioMonitor()
+    const monitor = new ia.internals.ScrollingAudioMonitor()
     monitor.addToDom($root, { top: 40 })
     delayedNoise.connect(monitor).connect(ia.out)
   },
@@ -721,7 +726,7 @@ const tests = {
     ]).connect(buffer.time)
       .logSignal()
 
-    const monitor = new ia.ScrollingAudioMonitor()
+    const monitor = new ia.internals.ScrollingAudioMonitor()
     monitor.addToDom($root)
     buffer.connect(monitor).connect(ia.out)
   },
@@ -847,7 +852,7 @@ const tests = {
     // TODO: understand why this test doesn't pass when run in parallel... race 
     // condition with buffer reading?
     // TODO: Right channel of osc is muted (shouldn't be the case...)
-    //const signal = new ia.AudioComponent(createOscillator(880)).left
+    //const signal = new ia.internals.AudioComponent(createOscillator(880)).left
 
     ia.config.useWorkletByDefault = true
     const signal = ia.bufferReader("assets/fugue.m4a")
@@ -905,12 +910,12 @@ const tests = {
     }
     plotFft()
     const passthrough = fft.ifft()
-    /* const monitor = new ia.ScrollingAudioMonitor()
+    /* const monitor = new ia.internals.ScrollingAudioMonitor()
     monitor.addToDom($root)
     fft.sync.connect(monitor)
      */
     /*  
-    const monitor = new ia.ScrollingAudioMonitor()
+    const monitor = new ia.internals.ScrollingAudioMonitor()
     monitor.addToDom($root)
     passthrough.connect(monitor) */
     passthrough.connect(ia.out)

@@ -106,7 +106,7 @@ export abstract class VisualComponent<T extends BaseDisplay = any> extends BaseC
 
     // Main component
     const $component = this.$container
-    init.run(() => $component.removeClass(constants.UNINITIALIZED_CLASS))
+    $component.removeClass(constants.UNINITIALIZED_CLASS)
 
     // Define structure.
     this.$root.append(this.$container)

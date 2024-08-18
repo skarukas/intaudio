@@ -7,7 +7,9 @@ export class ToStringAndUUID extends TypedConfigurable {
     this._uuid = crypto.randomUUID()
   }
   get _className() {
-    return this.constructor.name
+    return this.constructor.name == '_Configured' ?
+      Object.getPrototypeOf(Object.getPrototypeOf(this)).constructor.name
+      : this.constructor.name
   }
   toString() {
     return this._className

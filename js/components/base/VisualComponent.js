@@ -5,7 +5,6 @@ var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (
 };
 var _VisualComponent_instances, _a, _VisualComponent_addBypassIndicator, _VisualComponent_assertDisplayIsUsable;
 import constants from "../../shared/constants.js";
-import * as init from "../../shared/init.js";
 import { afterRender } from "../../shared/util.js";
 import { BaseDisplay } from "../../ui/BaseDisplay.js";
 import { BaseComponent } from "./BaseComponent.js";
@@ -75,7 +74,7 @@ export class VisualComponent extends BaseComponent {
         this.$container.css({ width, height, top, left });
         // Main component
         const $component = this.$container;
-        init.run(() => $component.removeClass(constants.UNINITIALIZED_CLASS));
+        $component.removeClass(constants.UNINITIALIZED_CLASS);
         // Define structure.
         this.$root.append(this.$container);
         //this.$container.append($component)

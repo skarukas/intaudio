@@ -2,112 +2,184 @@ import { Component } from "./components/base/Component.js";
 import { MaybePromise, ObjectOf, ObjectOrArrayOf, TimeMeasure } from "./shared/types.js";
 import { Connectable } from "./shared/base/Connectable.js";
 import { defineTimeRamp, isFunction, isType, loadFile, zip } from "./shared/util.js";
-import { AbstractOutput, BaseConnectable, BufferComponent, TypedConfigurable } from "./internals.js";
 import { AudioRecordingComponent } from "./components/AudioRecordingComponent.js";
 import { BufferWriterComponent } from "./components/BufferWriterComponent.js";
 import { StreamSpec } from "./shared/StreamSpec.js";
 import { joinContexts } from "./shared/multicontext.js";
+import { AudioConfig } from "./shared/config.js";
+import { AbstractOutput } from "./io/output/AbstractOutput.js";
+import { BufferComponent } from "./components/BufferComponent.js";
+import { BaseConnectable } from "./shared/base/BaseConnectable.js";
+import { AudioRateInput } from "./io/input/AudioRateInput.js";
+// @ts-ignore Missing d.ts
+import stache from 'stache-config';
+import * as internalNamespace from './internals.js'
+import publicNamespace from './public.js'
+import * as init from './shared/init.js'
 
-export function stackChannels(
-  this: TypedConfigurable,
-  inputs: Connectable[]
-) {
-  return this._.ChannelStacker.fromInputs(inputs)
-}
+const baseWithConfig = stache.registerAndCreateFactoryFn(
+  init.defaultConfig,
+  publicNamespace,
+  { ...internalNamespace }
+)
+const USER_GESTURES = ["change", "click", "contextmenu", "dblclick", "mouseup", "pointerup", "reset", "submit", "touchend"]
 
-export function generate(
-  this: TypedConfigurable,
-  fn: (t: number) => number,
-  timeMeasure: TimeMeasure = TimeMeasure.SECONDS
-): Component {
-  if (isFunction(fn)) {
-    return new this._.TimeVaryingSignal(fn, timeMeasure)
-  } else {
-    throw new Error("not supported yet.")
+export class IATopLevel {
+  out: AudioRateInput
+  util: typeof internalNamespace.util
+  constructor(
+    protected config: AudioConfig,
+    protected internals: typeof internalNamespace
+  ) {
+    this.out = new this.internals.AudioRateInput('out', undefined, config.audioContext.destination)
+    this.util = internalNamespace.util
   }
-}
-
-export function combine(
-  this: TypedConfigurable,
-  inputs: AbstractOutput[] | ObjectOf<AbstractOutput>,
-  fn: Function, options = {}
-): Component {
-  const values: AbstractOutput[] = inputs instanceof Array ? inputs : Object.values(inputs)
-  // TODO: Also allow cases where the arguments aren't outputs, but values 
-  // themselves.
-  if (values.every(o => o.isControlStream)) {
-    // Needs to learn to handle float input I think.
-    return new this._.FunctionComponent(fn).withInputs(inputs)
-  } else {
-    return new this._.AudioTransformComponent(
-      fn,
-      { ...options, inputSpec: new StreamSpec({ numStreams: values.length }) }
-    ).withInputs(...values)
+  get audioContext() {
+    return this.config.audioContext
   }
-}
-
-// TODO: make this work for inputs/outputs
-export function bundle(
-  this: TypedConfigurable,
-  inputs: ObjectOrArrayOf<Component>
-) {
-  return new this._.BundleComponent(inputs)
-}
-
-// TODO: Potentially turn this into a component (?).
-export function ramp(
-  this: TypedConfigurable,
-  units: TimeMeasure
-): Connectable {
-  return new this._.AudioRateOutput('time', defineTimeRamp(this.config.audioContext, units))
-}
-
-export function read(
-  this: TypedConfigurable,
-  fname: string
-): Promise<AudioBuffer> {
-  return loadFile(this.config.audioContext, fname)
-}
-
-export function bufferReader(this: TypedConfigurable, fname: string): BufferComponent
-export function bufferReader(this: TypedConfigurable, buffer: MaybePromise<AudioBuffer>): BufferComponent
-export function bufferReader(
-  this: TypedConfigurable,
-  arg: string | MaybePromise<AudioBuffer>
-): BufferComponent {
-  const bufferComponent = new BufferComponent()
-  const buffer = isType(arg, String) ? read.call(this, arg) : arg
-  bufferComponent.buffer.setValue(buffer)
-  return bufferComponent
-}
-
-export function bufferWriter(this: TypedConfigurable, buffer: AudioBuffer): BufferWriterComponent {
-  return new this._.BufferWriterComponent(buffer)
-}
-
-// TODO: handle more input types.
-export function recorder(this: TypedConfigurable, sources: Connectable[]): AudioRecordingComponent
-export function recorder(this: TypedConfigurable, sourceAudio: Connectable): AudioRecordingComponent
-export function recorder(this: TypedConfigurable, sources: any): AudioRecordingComponent {
-  sources = sources instanceof Array ? sources : [sources]
-  const component = new this._.AudioRecordingComponent(sources.length)
-  sources.map((s: Component, i: number) => s.connect(component.inputs[i]))
-  return component
-}
-
-/**
- * Allow joining ("mixing") across multiple audioContexts / threads.
- */
-export function join(this: TypedConfigurable, sources: BaseConnectable[]) {
-  const sourceContexts = [...new Set(sources.map(s => s.audioContext))]
-  const { sinks, source } = joinContexts(sourceContexts, this.config.audioContext)
-  const sinkMap = new Map(zip(sourceContexts, sinks))
-  for (const sourceConnectable of sources) {
-    const sink = sinkMap.get(sourceConnectable.audioContext)
-    if (sink == undefined) {
-      throw new Error(`Unable to find audioContext of ${sourceConnectable}.`)
+  private gestureListeners: ((ctx?: AudioContext) => any)[] = []
+  private runCalled: boolean = false
+  private createInitListeners() {
+    const workletPromise = this.audioContext.audioWorklet.addModule(this.config.workletPath)
+    const initAfterAsync = () => {
+      workletPromise.then(() => this.init(true), () => this.init(false))
     }
-    sourceConnectable.connect(sink)
+    for (const gesture of USER_GESTURES) {
+      document.addEventListener(gesture, initAfterAsync, { once: true })
+    }
   }
-  return new this._.AudioComponent(source)
+
+  private init(workletAvailable: boolean) {
+    if (this.config.state.isInitialized) return
+    this.config.state.isInitialized = true
+
+    this.config.state.workletIsAvailable = workletAvailable
+    workletAvailable || console.warn(`Unable to load worklet file from ${this.config.workletPath}. Worklet-based processing will be disabled. Verify the workletPath configuration setting is set correctly and the file is available.`)
+
+    this.config.audioContext.resume()
+    for (const listener of this.gestureListeners) {
+      listener(this.config.audioContext)
+    }
+  }
+
+  /**
+   * Register a function to be called once the audio engine is ready and a user gesture has been performed.
+   * 
+   * @param callback A function to run once the audio engine is ready.
+   */
+  run(callback: (ctx?: AudioContext) => void) {
+    if (!this.runCalled) this.createInitListeners()
+    this.runCalled = true
+
+    if (this.config.state.isInitialized) {
+      callback(this.config.audioContext)
+    } else {
+      this.gestureListeners.push(callback)
+    }
+  }
+
+  withConfig(customConfigOptions: object = {}, configId?: string) {
+    const config = { ...this.config, ...customConfigOptions }
+    const namespace: typeof this.internals = baseWithConfig(config, configId)
+    const topLevel = new IATopLevel(config, namespace)
+    return new IATopLevel(config, namespace)
+  }
+
+  stackChannels(inputs: Connectable[]) {
+    return this.internals.ChannelStacker.fromInputs(inputs)
+  }
+
+  generate(
+    fn: (t: number) => number,
+    timeMeasure: TimeMeasure = TimeMeasure.SECONDS
+  ): Component {
+    if (isFunction(fn)) {
+      return new this.internals.TimeVaryingSignal(fn, timeMeasure)
+    } else {
+      throw new Error("not supported yet.")
+    }
+  }
+
+  combine(
+    inputs: AbstractOutput[] | ObjectOf<AbstractOutput>,
+    fn: Function, options = {}
+  ): Component {
+    const values: AbstractOutput[] = inputs instanceof Array ? inputs : Object.values(inputs)
+    // TODO: Also allow cases where the arguments aren't outputs, but values 
+    // themselves.
+    if (values.every(o => o.isControlStream)) {
+      // Needs to learn to handle float input I think.
+      return new this.internals.FunctionComponent(fn).withInputs(inputs)
+    } else {
+      return new this.internals.AudioTransformComponent(
+        fn,
+        { ...options, inputSpec: new StreamSpec({ numStreams: values.length }) }
+      ).withInputs(...values)
+    }
+  }
+
+  // TODO: make this work for inputs/outputs
+  bundle(inputs: ObjectOrArrayOf<Component>) {
+    return new this.internals.BundleComponent(inputs)
+  }
+
+  // TODO: Potentially turn this into a component (?).
+  ramp(units: TimeMeasure): Connectable {
+    return new this.internals.AudioRateOutput('time', defineTimeRamp(this.config.audioContext, units))
+  }
+
+  read(fname: string): Promise<AudioBuffer> {
+    return loadFile(this.config.audioContext, fname)
+  }
+
+  bufferReader(fname: string): BufferComponent
+  bufferReader(buffer: MaybePromise<AudioBuffer>): BufferComponent
+  bufferReader(arg: string | MaybePromise<AudioBuffer>): BufferComponent {
+    const bufferComponent = new BufferComponent()
+    const buffer = isType(arg, String) ? this.read(arg) : arg
+    bufferComponent.buffer.setValue(buffer)
+    return bufferComponent
+  }
+
+  bufferWriter(buffer: AudioBuffer): BufferWriterComponent {
+    return new this.internals.BufferWriterComponent(buffer)
+  }
+
+  // TODO: handle more input types.
+  recorder(sources: Connectable[]): AudioRecordingComponent
+  recorder(sourceAudio: Connectable): AudioRecordingComponent
+  recorder(sources: any): AudioRecordingComponent {
+    sources = sources instanceof Array ? sources : [sources]
+    const component = new this.internals.AudioRecordingComponent(sources.length)
+    sources.map((s: Component, i: number) => s.connect(component.inputs[i]))
+    return component
+  }
+
+  /**
+   * Allow joining ("mixing") across multiple audioContexts / threads.
+   */
+  join(sources: BaseConnectable[]) {
+    const sourceContexts = [...new Set(sources.map(s => s.audioContext))]
+    const { sinks, source } = joinContexts(sourceContexts, this.config.audioContext)
+    const sinkMap = new Map(zip(sourceContexts, sinks))
+    for (const sourceConnectable of sources) {
+      const sink = sinkMap.get(sourceConnectable.audioContext)
+      if (sink == undefined) {
+        throw new Error(`Unable to find audioContext of ${sourceConnectable}.`)
+      }
+      sourceConnectable.connect(sink)
+    }
+    return new this.internals.AudioComponent(source)
+  }
+  createThread({
+    name,
+    audioContext,
+    ...options
+  }: Partial<AudioConfig> & { name?: string } = {}
+  ): IATopLevel {
+    return this.withConfig({
+      audioContext: audioContext ?? new AudioContext(),
+      ...options
+    }, name)
+  }
 }
