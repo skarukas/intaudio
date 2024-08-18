@@ -1,7 +1,8 @@
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
+import { dts } from "rollup-plugin-dts";
 
-export default {
+export default [{
 	input: 'js/main.js',
 	output: {
 		file: 'dist/bundle.js',
@@ -12,7 +13,19 @@ export default {
 		}
 	},
   plugins: [
-    nodeResolve(), // can't figure out how to ignore jquery....
+    nodeResolve(),
     commonjs()
   ]
-};
+},
+{
+  input: "js/main.d.ts",
+  output: [{
+    file: "dist/bundle.d.ts",
+    format: "es"
+  }],
+  plugins: [
+    dts(),
+    nodeResolve(),
+    commonjs()
+  ],
+}];

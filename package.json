@@ -30,6 +30,7 @@
     "jquery": "^3.7.1",
     "jsdoc-escape-at": "^1.0.1",
     "rollup": "^4.18.0",
+    "rollup-plugin-dts": "^6.1.1",
     "typescript": "^5.5.2"
   }
 }

@@ -92,7 +92,7 @@ export class IATopLevel {
   generate(
     fn: (t: number) => number,
     timeMeasure: TimeMeasure = TimeMeasure.SECONDS
-  ): Component {
+  ): internalNamespace.TimeVaryingSignal {
     if (isFunction(fn)) {
       return new this.internals.TimeVaryingSignal(fn, timeMeasure)
     } else {
@@ -101,10 +101,10 @@ export class IATopLevel {
   }
 
   combine(
-    inputs: AbstractOutput[] | ObjectOf<AbstractOutput>,
+    inputs: Connectable[] | ObjectOf<Connectable>,
     fn: Function, options = {}
   ): Component {
-    const values: AbstractOutput[] = inputs instanceof Array ? inputs : Object.values(inputs)
+    const values: Connectable[] = inputs instanceof Array ? inputs : Object.values(inputs)
     // TODO: Also allow cases where the arguments aren't outputs, but values 
     // themselves.
     if (values.every(o => o.isControlStream)) {
