@@ -18,6 +18,7 @@ export declare class IATopLevel {
     private gestureListeners;
     private runCalled;
     private createInitListeners;
+    isInitialized: boolean;
     private init;
     /**
      * Register a function to be called once the audio engine is ready and a user gesture has been performed.
@@ -25,7 +26,7 @@ export declare class IATopLevel {
      * @param callback A function to run once the audio engine is ready.
      */
     run(callback: (ctx?: AudioContext) => void): void;
-    withConfig(customConfigOptions?: object, configId?: string): IATopLevel;
+    withConfig(customConfigOptions?: Partial<AudioConfig>, configId?: string): IATopLevel;
     stackChannels(inputs: Connectable[]): internalNamespace.ChannelStacker;
     generate(fn: (t: number) => number, timeMeasure?: TimeMeasure): internalNamespace.TimeVaryingSignal;
     combine(inputs: Connectable[] | ObjectOf<Connectable>, fn: Function, options?: {}): Component;
@@ -43,5 +44,5 @@ export declare class IATopLevel {
     join(sources: BaseConnectable[]): internalNamespace.AudioComponent;
     createThread({ name, audioContext, ...options }?: Partial<AudioConfig> & {
         name?: string;
-    }): IATopLevel;
+    }): Promise<IATopLevel>;
 }

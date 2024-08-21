@@ -1494,6 +1494,23 @@ declare function createMultiChannelView<T extends MultiChannel>(multiChannelIO: 
  */
 declare function connectWebAudioChannels(audioContext: AudioContext, source: AudioNode, destination: WebAudioConnectable, fromChannel?: number | undefined, toChannel?: number | undefined): void | AudioNode;
 
+type NodeInfo = {
+    analyzers: AnalyserNode[];
+    formatString: string;
+};
+declare class SignalLogger extends ToStringAndUUID {
+    samplePeriodMs: number;
+    analysers: NodeInfo[];
+    protected interval: number | undefined;
+    constructor(samplePeriodMs?: number);
+    start(): void;
+    stop(): void;
+    /**
+     * Register a node to be monitored.
+     */
+    register(output: AudioRateOutput, formatString: string): void;
+}
+
 type internalNamespace_ADSR = ADSR;
 declare const internalNamespace_ADSR: typeof ADSR;
 type internalNamespace_AbstractInput<T = any> = AbstractInput<T>;
@@ -1616,6 +1633,8 @@ type internalNamespace_ScrollingAudioMonitor = ScrollingAudioMonitor;
 declare const internalNamespace_ScrollingAudioMonitor: typeof ScrollingAudioMonitor;
 type internalNamespace_ScrollingAudioMonitorDisplay = ScrollingAudioMonitorDisplay;
 declare const internalNamespace_ScrollingAudioMonitorDisplay: typeof ScrollingAudioMonitorDisplay;
+type internalNamespace_SignalLogger = SignalLogger;
+declare const internalNamespace_SignalLogger: typeof SignalLogger;
 type internalNamespace_SimplePolyphonicSynth = SimplePolyphonicSynth;
 declare const internalNamespace_SimplePolyphonicSynth: typeof SimplePolyphonicSynth;
 type internalNamespace_SliderDisplay = SliderDisplay;
@@ -1650,7 +1669,7 @@ declare const internalNamespace_getNumOutputChannels: typeof getNumOutputChannel
 declare const internalNamespace_lazyProperty: typeof lazyProperty;
 declare const internalNamespace_resolvePromiseArgs: typeof resolvePromiseArgs;
 declare namespace internalNamespace {
-  export { internalNamespace_ADSR as ADSR, internalNamespace_AbstractInput as AbstractInput, internalNamespace_AbstractOutput as AbstractOutput, type internalNamespace_AnyFn as AnyFn, type internalNamespace_AnyInput as AnyInput, type internalNamespace_AnyOutput as AnyOutput, internalNamespace_AudioComponent as AudioComponent, type internalNamespace_AudioConfig as AudioConfig, internalNamespace_AudioExecutionContext as AudioExecutionContext, internalNamespace_AudioRateInput as AudioRateInput, internalNamespace_AudioRateOutput as AudioRateOutput, internalNamespace_AudioRateSignalSampler as AudioRateSignalSampler, internalNamespace_AudioRecordingComponent as AudioRecordingComponent, internalNamespace_AudioTransformComponent as AudioTransformComponent, internalNamespace_Bang as Bang, internalNamespace_BangDisplay as BangDisplay, internalNamespace_BaseComponent as BaseComponent, internalNamespace_BaseConnectable as BaseConnectable, internalNamespace_BaseDisplay as BaseDisplay, internalNamespace_BaseEvent as BaseEvent, internalNamespace_BufferComponent as BufferComponent, internalNamespace_BufferWriterComponent as BufferWriterComponent, type internalNamespace_Bundle as Bundle, internalNamespace_BundleComponent as BundleComponent, internalNamespace_BypassEvent as BypassEvent, type internalNamespace_CanBeConnectedTo as CanBeConnectedTo, internalNamespace_ChannelSplitter as ChannelSplitter, internalNamespace_ChannelStacker as ChannelStacker, internalNamespace_ComponentInput as ComponentInput, internalNamespace_CompoundInput as CompoundInput, internalNamespace_CompoundOutput as CompoundOutput, type internalNamespace_Constructor as Constructor, internalNamespace_ControlInput as ControlInput, internalNamespace_ControlOutput as ControlOutput, internalNamespace_ControlToAudioConverter as ControlToAudioConverter, internalNamespace_DefaultDeviceBehavior as DefaultDeviceBehavior, internalNamespace_Disconnect as Disconnect, internalNamespace_FFTComponent as FFTComponent, internalNamespace_FFTInput as FFTInput, internalNamespace_FFTOutput as FFTOutput, internalNamespace_FunctionComponent as FunctionComponent, internalNamespace_HybridInput as HybridInput, internalNamespace_HybridOutput as HybridOutput, internalNamespace_IFFTComponent as IFFTComponent, internalNamespace_IgnoreDuplicates as IgnoreDuplicates, internalNamespace_KeyEvent as KeyEvent, internalNamespace_KeyEventType as KeyEventType, internalNamespace_Keyboard as Keyboard, internalNamespace_KeyboardDisplay as KeyboardDisplay, type internalNamespace_KeysLike as KeysLike, internalNamespace_KnobDisplay as KnobDisplay, type internalNamespace_MaybePromise as MaybePromise, type internalNamespace_MaybePromises as MaybePromises, internalNamespace_MediaElementComponent as MediaElementComponent, internalNamespace_MidiAccessListener as MidiAccessListener, internalNamespace_MidiInputDevice as MidiInputDevice, internalNamespace_MidiLearn as MidiLearn, internalNamespace_MidiMessageListener as MidiMessageListener, type internalNamespace_MultiChannel as MultiChannel, internalNamespace_MuteEvent as MuteEvent, type internalNamespace_ObjectOf as ObjectOf, type internalNamespace_ObjectOrArrayOf as ObjectOrArrayOf, internalNamespace_RangeInputComponent as RangeInputComponent, internalNamespace_RangeInputDisplay as RangeInputDisplay, internalNamespace_RangeType as RangeType, internalNamespace_ScriptProcessorExecutionContext as ScriptProcessorExecutionContext, internalNamespace_ScrollingAudioMonitor as ScrollingAudioMonitor, internalNamespace_ScrollingAudioMonitorDisplay as ScrollingAudioMonitorDisplay, internalNamespace_SimplePolyphonicSynth as SimplePolyphonicSynth, internalNamespace_SliderDisplay as SliderDisplay, internalNamespace_SlowDown as SlowDown, type internalNamespace_SupportsSelect as SupportsSelect, internalNamespace_TimeMeasure as TimeMeasure, internalNamespace_TimeVaryingSignal as TimeVaryingSignal, internalNamespace_ToStringAndUUID as ToStringAndUUID, internalNamespace_TypedConfigurable as TypedConfigurable, internalNamespace_TypingKeyboardMIDI as TypingKeyboardMIDI, internalNamespace_VisualComponent as VisualComponent, internalNamespace_Wave as Wave, internalNamespace_WaveType as WaveType, type internalNamespace_WebAudioConnectable as WebAudioConnectable, internalNamespace_WorkletExecutionContext as WorkletExecutionContext, internalNamespace_connectWebAudioChannels as connectWebAudioChannels, _default$2 as constants, internalNamespace_createMultiChannelView as createMultiChannelView, internalNamespace_disconnect as disconnect, events_d as events, internalNamespace_getNumInputChannels as getNumInputChannels, internalNamespace_getNumOutputChannels as getNumOutputChannels, internalNamespace_lazyProperty as lazyProperty, internalNamespace_resolvePromiseArgs as resolvePromiseArgs, util_d as util };
+  export { internalNamespace_ADSR as ADSR, internalNamespace_AbstractInput as AbstractInput, internalNamespace_AbstractOutput as AbstractOutput, type internalNamespace_AnyFn as AnyFn, type internalNamespace_AnyInput as AnyInput, type internalNamespace_AnyOutput as AnyOutput, internalNamespace_AudioComponent as AudioComponent, type internalNamespace_AudioConfig as AudioConfig, internalNamespace_AudioExecutionContext as AudioExecutionContext, internalNamespace_AudioRateInput as AudioRateInput, internalNamespace_AudioRateOutput as AudioRateOutput, internalNamespace_AudioRateSignalSampler as AudioRateSignalSampler, internalNamespace_AudioRecordingComponent as AudioRecordingComponent, internalNamespace_AudioTransformComponent as AudioTransformComponent, internalNamespace_Bang as Bang, internalNamespace_BangDisplay as BangDisplay, internalNamespace_BaseComponent as BaseComponent, internalNamespace_BaseConnectable as BaseConnectable, internalNamespace_BaseDisplay as BaseDisplay, internalNamespace_BaseEvent as BaseEvent, internalNamespace_BufferComponent as BufferComponent, internalNamespace_BufferWriterComponent as BufferWriterComponent, type internalNamespace_Bundle as Bundle, internalNamespace_BundleComponent as BundleComponent, internalNamespace_BypassEvent as BypassEvent, type internalNamespace_CanBeConnectedTo as CanBeConnectedTo, internalNamespace_ChannelSplitter as ChannelSplitter, internalNamespace_ChannelStacker as ChannelStacker, internalNamespace_ComponentInput as ComponentInput, internalNamespace_CompoundInput as CompoundInput, internalNamespace_CompoundOutput as CompoundOutput, type internalNamespace_Constructor as Constructor, internalNamespace_ControlInput as ControlInput, internalNamespace_ControlOutput as ControlOutput, internalNamespace_ControlToAudioConverter as ControlToAudioConverter, internalNamespace_DefaultDeviceBehavior as DefaultDeviceBehavior, internalNamespace_Disconnect as Disconnect, internalNamespace_FFTComponent as FFTComponent, internalNamespace_FFTInput as FFTInput, internalNamespace_FFTOutput as FFTOutput, internalNamespace_FunctionComponent as FunctionComponent, internalNamespace_HybridInput as HybridInput, internalNamespace_HybridOutput as HybridOutput, internalNamespace_IFFTComponent as IFFTComponent, internalNamespace_IgnoreDuplicates as IgnoreDuplicates, internalNamespace_KeyEvent as KeyEvent, internalNamespace_KeyEventType as KeyEventType, internalNamespace_Keyboard as Keyboard, internalNamespace_KeyboardDisplay as KeyboardDisplay, type internalNamespace_KeysLike as KeysLike, internalNamespace_KnobDisplay as KnobDisplay, type internalNamespace_MaybePromise as MaybePromise, type internalNamespace_MaybePromises as MaybePromises, internalNamespace_MediaElementComponent as MediaElementComponent, internalNamespace_MidiAccessListener as MidiAccessListener, internalNamespace_MidiInputDevice as MidiInputDevice, internalNamespace_MidiLearn as MidiLearn, internalNamespace_MidiMessageListener as MidiMessageListener, type internalNamespace_MultiChannel as MultiChannel, internalNamespace_MuteEvent as MuteEvent, type internalNamespace_ObjectOf as ObjectOf, type internalNamespace_ObjectOrArrayOf as ObjectOrArrayOf, internalNamespace_RangeInputComponent as RangeInputComponent, internalNamespace_RangeInputDisplay as RangeInputDisplay, internalNamespace_RangeType as RangeType, internalNamespace_ScriptProcessorExecutionContext as ScriptProcessorExecutionContext, internalNamespace_ScrollingAudioMonitor as ScrollingAudioMonitor, internalNamespace_ScrollingAudioMonitorDisplay as ScrollingAudioMonitorDisplay, internalNamespace_SignalLogger as SignalLogger, internalNamespace_SimplePolyphonicSynth as SimplePolyphonicSynth, internalNamespace_SliderDisplay as SliderDisplay, internalNamespace_SlowDown as SlowDown, type internalNamespace_SupportsSelect as SupportsSelect, internalNamespace_TimeMeasure as TimeMeasure, internalNamespace_TimeVaryingSignal as TimeVaryingSignal, internalNamespace_ToStringAndUUID as ToStringAndUUID, internalNamespace_TypedConfigurable as TypedConfigurable, internalNamespace_TypingKeyboardMIDI as TypingKeyboardMIDI, internalNamespace_VisualComponent as VisualComponent, internalNamespace_Wave as Wave, internalNamespace_WaveType as WaveType, type internalNamespace_WebAudioConnectable as WebAudioConnectable, internalNamespace_WorkletExecutionContext as WorkletExecutionContext, internalNamespace_connectWebAudioChannels as connectWebAudioChannels, _default$2 as constants, internalNamespace_createMultiChannelView as createMultiChannelView, internalNamespace_disconnect as disconnect, events_d as events, internalNamespace_getNumInputChannels as getNumInputChannels, internalNamespace_getNumOutputChannels as getNumOutputChannels, internalNamespace_lazyProperty as lazyProperty, internalNamespace_resolvePromiseArgs as resolvePromiseArgs, util_d as util };
 }
 
 declare const _default$1: {
@@ -1743,6 +1762,7 @@ declare const _default$1: {
     MuteEvent: typeof MuteEvent;
     KeyEventType: typeof KeyEventType;
     KeyEvent: typeof KeyEvent;
+    SignalLogger: typeof SignalLogger;
     Disconnect: typeof Disconnect;
     disconnect: () => never;
     WaveType: typeof WaveType;
@@ -1756,23 +1776,6 @@ declare const _default$1: {
     SliderDisplay: typeof SliderDisplay;
     ScrollingAudioMonitorDisplay: typeof ScrollingAudioMonitorDisplay;
 };
-
-type NodeInfo = {
-    analyzers: AnalyserNode[];
-    formatString: string;
-};
-declare class SignalLogger extends ToStringAndUUID {
-    samplePeriodMs: number;
-    analysers: NodeInfo[];
-    protected interval: number | undefined;
-    constructor(samplePeriodMs?: number);
-    start(): void;
-    stop(): void;
-    /**
-     * Register a node to be monitored.
-     */
-    register(output: AudioRateOutput, formatString: string): void;
-}
 
 declare abstract class TypedConfigurable extends CallableInstance<any, any> implements stache.Configurable {
     constructor();
@@ -1859,6 +1862,7 @@ declare class IATopLevel {
     private gestureListeners;
     private runCalled;
     private createInitListeners;
+    isInitialized: boolean;
     private init;
     /**
      * Register a function to be called once the audio engine is ready and a user gesture has been performed.
@@ -1866,7 +1870,7 @@ declare class IATopLevel {
      * @param callback A function to run once the audio engine is ready.
      */
     run(callback: (ctx?: AudioContext) => void): void;
-    withConfig(customConfigOptions?: object, configId?: string): IATopLevel;
+    withConfig(customConfigOptions?: Partial<AudioConfig>, configId?: string): IATopLevel;
     stackChannels(inputs: Connectable[]): ChannelStacker;
     generate(fn: (t: number) => number, timeMeasure?: TimeMeasure): TimeVaryingSignal;
     combine(inputs: Connectable[] | ObjectOf<Connectable>, fn: Function, options?: {}): Component;
@@ -1884,7 +1888,7 @@ declare class IATopLevel {
     join(sources: BaseConnectable[]): AudioComponent;
     createThread({ name, audioContext, ...options }?: Partial<AudioConfig> & {
         name?: string;
-    }): IATopLevel;
+    }): Promise<IATopLevel>;
 }
 
 declare const _default: IATopLevel;

@@ -1,5 +1,3 @@
-import { AudioRateInput } from "../io/input/AudioRateInput.js";
-import { FFTInput } from "../io/input/FFTInput.js";
 import { IFFT_WORKLET_NAME } from "../worklet/FFTWorklet.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 export class IFFTComponent extends BaseComponent {
@@ -17,7 +15,7 @@ export class IFFTComponent extends BaseComponent {
         const magnitudeGain = this.audioContext.createGain();
         const phaseGain = this.audioContext.createGain();
         const syncGain = this.audioContext.createGain();
-        this.fftIn = new FFTInput('fftIn', this, new AudioRateInput('magnitude', this, magnitudeGain), new AudioRateInput('phase', this, phaseGain), new AudioRateInput('sync', this, syncGain));
+        this.fftIn = new this._.FFTInput('fftIn', this, new this._.AudioRateInput('magnitude', this, magnitudeGain), new this._.AudioRateInput('phase', this, phaseGain), new this._.AudioRateInput('sync', this, syncGain));
         this.defineInputOrOutput('fftIn', this.fftIn, this.inputs);
         // Outputs
         const realGain = this.audioContext.createGain();

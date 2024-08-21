@@ -1,3 +1,12 @@
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __rest = (this && this.__rest) || function (s, e) {
     var t = {};
     for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
@@ -13,7 +22,6 @@ import { TimeMeasure } from "./shared/types.js";
 import { defineTimeRamp, isFunction, isType, loadFile, zip } from "./shared/util.js";
 import { StreamSpec } from "./shared/StreamSpec.js";
 import { joinContexts } from "./shared/multicontext.js";
-import { BufferComponent } from "./components/BufferComponent.js";
 // @ts-ignore Missing d.ts
 import stache from 'stache-config';
 import * as internalNamespace from './internals.js';
@@ -21,12 +29,14 @@ import publicNamespace from './public.js';
 import * as init from './shared/init.js';
 const baseWithConfig = stache.registerAndCreateFactoryFn(init.defaultConfig, publicNamespace, Object.assign({}, internalNamespace));
 const USER_GESTURES = ["change", "click", "contextmenu", "dblclick", "mouseup", "pointerup", "reset", "submit", "touchend"];
+let userHasInteracted = false;
 export class IATopLevel {
     constructor(config, internals) {
         this.config = config;
         this.internals = internals;
         this.gestureListeners = [];
         this.runCalled = false;
+        this.isInitialized = false;
         this.out = new this.internals.AudioRateInput('out', undefined, config.audioContext.destination);
         this.util = internalNamespace.util;
     }
@@ -36,16 +46,22 @@ export class IATopLevel {
     createInitListeners() {
         const workletPromise = this.audioContext.audioWorklet.addModule(this.config.workletPath);
         const initAfterAsync = () => {
+            userHasInteracted = true;
             workletPromise.then(() => this.init(true), () => this.init(false));
         };
-        for (const gesture of USER_GESTURES) {
-            document.addEventListener(gesture, initAfterAsync, { once: true });
+        if (userHasInteracted) {
+            initAfterAsync();
+        }
+        else {
+            for (const gesture of USER_GESTURES) {
+                document.addEventListener(gesture, initAfterAsync, { once: true });
+            }
         }
     }
     init(workletAvailable) {
-        if (this.config.state.isInitialized)
+        if (this.isInitialized)
             return;
-        this.config.state.isInitialized = true;
+        this.isInitialized = true;
         this.config.state.workletIsAvailable = workletAvailable;
         workletAvailable || console.warn(`Unable to load worklet file from ${this.config.workletPath}. Worklet-based processing will be disabled. Verify the workletPath configuration setting is set correctly and the file is available.`);
         this.config.audioContext.resume();
@@ -62,7 +78,7 @@ export class IATopLevel {
         if (!this.runCalled)
             this.createInitListeners();
         this.runCalled = true;
-        if (this.config.state.isInitialized) {
+        if (this.isInitialized) {
             callback(this.config.audioContext);
         }
         else {
@@ -70,9 +86,10 @@ export class IATopLevel {
         }
     }
     withConfig(customConfigOptions = {}, configId) {
+        var _a;
+        (_a = customConfigOptions.logger) !== null && _a !== void 0 ? _a : (customConfigOptions.logger = new this.internals.SignalLogger());
         const config = Object.assign(Object.assign({}, this.config), customConfigOptions);
         const namespace = baseWithConfig(config, configId);
-        const topLevel = new IATopLevel(config, namespace);
         return new IATopLevel(config, namespace);
     }
     stackChannels(inputs) {
@@ -110,7 +127,7 @@ export class IATopLevel {
         return loadFile(this.config.audioContext, fname);
     }
     bufferReader(arg) {
-        const bufferComponent = new BufferComponent();
+        const bufferComponent = new this.internals.BufferComponent();
         const buffer = isType(arg, String) ? this.read(arg) : arg;
         bufferComponent.buffer.setValue(buffer);
         return bufferComponent;
@@ -140,8 +157,16 @@ export class IATopLevel {
         }
         return new this.internals.AudioComponent(source);
     }
-    createThread(_a = {}) {
-        var { name, audioContext } = _a, options = __rest(_a, ["name", "audioContext"]);
-        return this.withConfig(Object.assign({ audioContext: audioContext !== null && audioContext !== void 0 ? audioContext : new AudioContext() }, options), name);
+    createThread() {
+        return __awaiter(this, arguments, void 0, function* (_a = {}) {
+            var { name, audioContext } = _a, options = __rest(_a, ["name", "audioContext"]);
+            const obj = this.withConfig(Object.assign({ audioContext: audioContext !== null && audioContext !== void 0 ? audioContext : new AudioContext() }, options), name);
+            let resolve;
+            let p = new Promise((res, rej) => {
+                resolve = res;
+            });
+            obj.run(() => { resolve(obj); });
+            return p;
+        });
     }
 }

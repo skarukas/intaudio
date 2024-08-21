@@ -180,19 +180,6 @@ export function defineTimeRamp(
   timeRamp.offset.linearRampToValueAtTime(toValue(durationSec), endTime)
   return timeRamp
 }
-// TODO: figure out how to avoid circular dependency??
-/* 
-export function createComponent(webAudioNode: WebAudioConnectable): AudioComponent;
-export function createComponent(fn: Function): FunctionComponent;
-export function createComponent(x: any): Component {
-  if (x instanceof AudioNode || x instanceof AudioParam) {
-    return new AudioComponent(x)
-  } else if (x instanceof Function) {
-    return new FunctionComponent(x)
-  }
-  return undefined
-}
- */
 
 export async function loadFile(audioContext: AudioContext, filePathOrUrl: string): Promise<AudioBuffer> {
   const response = await fetch(filePathOrUrl)

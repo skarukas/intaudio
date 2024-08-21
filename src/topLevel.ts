@@ -22,6 +22,7 @@ const baseWithConfig = stache.registerAndCreateFactoryFn(
   { ...internalNamespace }
 )
 const USER_GESTURES = ["change", "click", "contextmenu", "dblclick", "mouseup", "pointerup", "reset", "submit", "touchend"]
+let userHasInteracted = false
 
 export class IATopLevel {
   out: AudioRateInput
@@ -41,16 +42,21 @@ export class IATopLevel {
   private createInitListeners() {
     const workletPromise = this.audioContext.audioWorklet.addModule(this.config.workletPath)
     const initAfterAsync = () => {
+      userHasInteracted = true
       workletPromise.then(() => this.init(true), () => this.init(false))
     }
-    for (const gesture of USER_GESTURES) {
-      document.addEventListener(gesture, initAfterAsync, { once: true })
+    if (userHasInteracted) {
+      initAfterAsync()
+    } else {
+      for (const gesture of USER_GESTURES) {
+        document.addEventListener(gesture, initAfterAsync, { once: true })
+      }
     }
   }
-
+  isInitialized: boolean = false
   private init(workletAvailable: boolean) {
-    if (this.config.state.isInitialized) return
-    this.config.state.isInitialized = true
+    if (this.isInitialized) return
+    this.isInitialized = true
 
     this.config.state.workletIsAvailable = workletAvailable
     workletAvailable || console.warn(`Unable to load worklet file from ${this.config.workletPath}. Worklet-based processing will be disabled. Verify the workletPath configuration setting is set correctly and the file is available.`)
@@ -70,17 +76,20 @@ export class IATopLevel {
     if (!this.runCalled) this.createInitListeners()
     this.runCalled = true
 
-    if (this.config.state.isInitialized) {
+    if (this.isInitialized) {
       callback(this.config.audioContext)
     } else {
       this.gestureListeners.push(callback)
     }
   }
 
-  withConfig(customConfigOptions: object = {}, configId?: string) {
+  withConfig(
+    customConfigOptions: Partial<AudioConfig> = {},
+    configId?: string
+  ) {
+    customConfigOptions.logger ??= new this.internals.SignalLogger()
     const config = { ...this.config, ...customConfigOptions }
     const namespace: typeof this.internals = baseWithConfig(config, configId)
-    const topLevel = new IATopLevel(config, namespace)
     return new IATopLevel(config, namespace)
   }
 
@@ -134,7 +143,7 @@ export class IATopLevel {
   bufferReader(fname: string): BufferComponent
   bufferReader(buffer: MaybePromise<AudioBuffer>): BufferComponent
   bufferReader(arg: string | MaybePromise<AudioBuffer>): BufferComponent {
-    const bufferComponent = new BufferComponent()
+    const bufferComponent = new this.internals.BufferComponent()
     const buffer = isType(arg, String) ? this.read(arg) : arg
     bufferComponent.buffer.setValue(buffer)
     return bufferComponent
@@ -170,15 +179,22 @@ export class IATopLevel {
     }
     return new this.internals.AudioComponent(source)
   }
-  createThread({
+  async createThread({
     name,
     audioContext,
     ...options
   }: Partial<AudioConfig> & { name?: string } = {}
-  ): IATopLevel {
-    return this.withConfig({
+  ): Promise<IATopLevel> {
+    const obj = this.withConfig({
       audioContext: audioContext ?? new AudioContext(),
       ...options
     }, name)
+
+    let resolve: Function
+    let p = new Promise((res, rej) => {
+      resolve = res
+    })
+    obj.run(() => { resolve(obj) })
+    return p as any
   }
 }

@@ -1,5 +1,3 @@
-import { AudioRateOutput } from "../io/output/AudioRateOutput.js";
-import { FFTOutput } from "../io/output/FFTOutput.js";
 import { FFT_WORKLET_NAME } from "../worklet/FFTWorklet.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 export class FFTComponent extends BaseComponent {
@@ -23,7 +21,7 @@ export class FFTComponent extends BaseComponent {
         const phaseGain = this.audioContext.createGain();
         const syncGain = this.audioContext.createGain();
         // Output
-        this.fftOut = new FFTOutput('fftOut', new AudioRateOutput('magnitude', magnitudeGain, this), new AudioRateOutput('phase', phaseGain, this), new AudioRateOutput('sync', syncGain, this), this, this.fftSize);
+        this.fftOut = new this._.FFTOutput('fftOut', new this._.AudioRateOutput('magnitude', magnitudeGain, this), new this._.AudioRateOutput('phase', phaseGain, this), new this._.AudioRateOutput('sync', syncGain, this), this, this.fftSize);
         this.defineInputOrOutput('fftOut', this.fftOut, this.outputs);
         realGain.connect(this.worklet, undefined, 0);
         imaginaryGain.connect(this.worklet, undefined, 1);

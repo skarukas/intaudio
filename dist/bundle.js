@@ -94,7 +94,7 @@ var constants = Object.freeze({
     UNSET_VALUE: undefined
 });
 
-var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+var __awaiter$1 = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -239,21 +239,8 @@ function defineTimeRamp(audioContext, timeMeasure, node = undefined, mapFn = v =
     timeRamp.offset.linearRampToValueAtTime(toValue(durationSec), endTime);
     return timeRamp;
 }
-// TODO: figure out how to avoid circular dependency??
-/*
-export function createComponent(webAudioNode: WebAudioConnectable): AudioComponent;
-export function createComponent(fn: Function): FunctionComponent;
-export function createComponent(x: any): Component {
-  if (x instanceof AudioNode || x instanceof AudioParam) {
-    return new AudioComponent(x)
-  } else if (x instanceof Function) {
-    return new FunctionComponent(x)
-  }
-  return undefined
-}
- */
 function loadFile(audioContext, filePathOrUrl) {
-    return __awaiter(this, void 0, void 0, function* () {
+    return __awaiter$1(this, void 0, void 0, function* () {
         const response = yield fetch(filePathOrUrl);
         const arrayBuffer = yield response.arrayBuffer();
         return audioContext.decodeAudioData(arrayBuffer);
@@ -1196,7 +1183,326 @@ function joinContexts(sourceContexts, destinationContext) {
     return { sinks, source };
 }
 
-const BUFFER_WORKLET_NAME = "buffer-worklet";
+function _throwUnregisteredError(Class) {
+  throw new ReferenceError(`Cannot access config. The class '${Class.name}' must be registered by including it within 'publicClasses' or 'internals' when building a NamespaceTemplate.`)
+}
+
+
+function _defineStaticAndInstanceGetter(Class, getterName, hiddenPropName) {
+  // Static getter returns the value of the hidden static prop.
+  Object.defineProperty(Class, getterName, {
+    get() {
+      return this[hiddenPropName] || _throwUnregisteredError(this)
+    }
+  });
+  // Instance getter delegates to the static getter.
+  Object.defineProperty(Class.prototype, getterName, {
+    get() {
+      return this.constructor[getterName]
+    }
+  });
+}
+
+function _mightBeClass(obj) {
+  return (obj instanceof Function) && (obj.prototype != undefined)
+}
+
+function _makeConfigurable(cls, inPlace=true, allowAlready=true) {
+  let Class;
+  if (inPlace) {
+    Class = cls;
+  } else {
+    Class = (class Class extends cls {});  // Hmm...
+  }
+  if (!allowAlready && (Class.__isConfigurable__ || Class.prototype instanceof Configurable)) {
+    throw new Error(`The class '${Class.name}' is already configurable.`)
+  }
+  // Define hidden static props. These are expected to be overridden:
+  // 1. By the defaults when the class is registered.
+  // 2. By a subclass when a namespace with a new config is created.
+  Class.__config__ = undefined;
+  Class.__namespace__ = undefined;
+  Class.__configId__ = undefined;
+  Class.__isConfigurable__ = true;
+
+  // Define hybrid getters for (config, _, configId)
+  _defineStaticAndInstanceGetter(Class, 'config', '__config__');
+  _defineStaticAndInstanceGetter(Class, '_', '__namespace__');
+  _defineStaticAndInstanceGetter(Class, 'configId', '__configId__');
+  return Class
+}
+
+/**
+ * Define stache getters that allow the class to access `_`, `config`, and `configId`.
+ * 
+ * **NOTE:** Using this function is not strictly necessary and only helps detect when this class has not been properly registered. Prefer inheriting from `stache.Configurable`.
+ * 
+ * @param {Class} cls A class that you want to explicitly set as configurable.
+ * @param {boolean} inPlace Whether to modify the class in-place.
+ * @returns {Class} A version of `cls` with getters implemented for `_`, `config`, and `configId`.
+ */
+function makeConfigurable(cls, inPlace=true) {
+  return _makeConfigurable(cls, inPlace)
+}
+
+/**
+ * The base class for defining objects configurable by the `stache` library. Inheriting from this class is not strictly necessary to use library, but it comes with two advantages:
+ * 1. Static analysis will recognize the `config`, `configId`, and `_` properties on the class ("stache properties").
+ * 2. Easier bug fixing. An error will be thrown if you try to access the stache properties without adding the class to a `NamespaceTemplate`.
+ * 
+ * If inheriting from this class is not possible, calling `stache.makeConfigurable(MyClass)` will retain advantage #2.
+ * 
+ * @example
+ * // Registration
+ * class MyPublicClass extends stache.Configurable {};
+ * class MyInternalClass extends stache.Configurable {};
+ * const defaultConfig = { myProp: 'default' };
+ * const withConfig = registerAndCreateFactoryFn(defaultConfig, { MyPublicClass }, { MyInternalClass });
+ * // Usage
+ * const ns1 = withConfig({ myProp: 'value1' });
+ * const configuredCls = new ns1.MyPublicClass();
+ * console.log(configuredCls.config);  // { myProp: 'value1' }
+ * console.log(configuredCls._);  // { MyInternalClass: ... }
+ */
+class Configurable {
+  /* @ignore */
+  static __isConfigurable__ = true
+
+  // These are expected to be overridden:
+  // 1. By the defaults when the class is registered.
+  // 2. By a subclass when a namespace with a new config is created.
+  /* @ignore */
+  static __config__  
+  /* @ignore */
+  static __namespace__ 
+  /* @ignore */
+  static __configId__ 
+
+  /**
+   * The configuration of the namespace this class belongs to.
+   * 
+   * This will be either:
+   * - The `defaultConfig` passed to the `NamespaceTemplate` constructor (if using the raw class).
+   * - The `config` value passed to `myNamespaceTemplate.createConfiguration` (if using the class under a configured namespace)
+   * @type {any}
+   */
+  static get config() {
+    return this.__config__ || _throwUnregisteredError(this)
+  }
+
+  /**
+   * The internal namespace that includes all other configurable classes.
+   * 
+   * **NOTE:** To obtain the version of a class that shares the configuration of `this`, you *must* use `this._.MyClass` to access the class instead of just `MyClass`.
+   * @type {Object}
+   */
+  static get _() {
+    return this.__namespace__ || _throwUnregisteredError(this)
+  }
+
+  /**
+   * The identifier of the configured namespace that this class belongs to. If this class is accessed in its raw form as opposed to under a namespace, this will be `'default'`.
+   * @type {string}
+   */
+  static get configId() {
+    return this.__configId__ || _throwUnregisteredError(this)
+  }
+
+  /**
+   * The configuration of the namespace this class belongs to.
+   * 
+   * This will be either:
+   * - The `defaultConfig` passed to the `NamespaceTemplate` constructor (if using the raw class).
+   * - The `config` value passed to `myNamespaceTemplate.createConfiguration` (if using the class under a configured namespace)
+   * @type {any}
+   */
+  get config() { return this.constructor.config }
+
+  /**
+   * The internal namespace that includes all other configurable classes.
+   * 
+   * **NOTE:** To obtain the version of a class that shares the configuration of `this`, you *must* use `this._.MyClass` to access the class instead of just `MyClass`.
+   * @type {Object}
+   */
+  get _() { return this.constructor._ }
+
+  /**
+   * The identifier of the configured namespace that this class belongs to. If this class is accessed in its raw form as opposed to under a namespace, this will be `'default'`.
+   * @type {string}
+   */
+  get configId() { return this.constructor.configId }
+}
+
+function _assertPlainObject(obj, name) {
+  if (obj.constructor != ({}).constructor) {
+    throw new Error(`Expected a plain object for '${name}', given '${obj.constructor.name}' instead.`)
+  }
+}
+
+class NamespaceTemplate {
+  /**
+   * A class used for generating namespaces where all classes share a config.
+   * 
+   * @param {any} defaultConfig The default value to use as the `config` property when the class is accessed in its raw form and not under a namespace.
+   * @param {Object} publicClasses An object containing all the public classes or objects that should be exposed as part of the namespace.
+   * @param {Object} internals An object containing **all** class that require any special `stache` properties. Configured versions of these classes will be available through the `_` property of the configured classes.
+   * 
+   * @example
+   * // Registration
+   * class MyPublicClass extends stache.Configurable {};
+   * class MyInternalClass extends stache.Configurable {};
+   * const defaultConfig = { myProp: 'default' };
+   * const template = new stache.NamespaceTemplate(defaultConfig, { MyPublicClass }, { MyInternalClass });
+   * // Usage
+   * const ns1 = template.createConfiguration({ myProp: 'value1' })
+   * const configuredCls = new ns1.MyPublicClass();
+   * console.log(configuredCls.config);  // { myProp: 'value1' }
+   * console.log(configuredCls._);  // { MyInternalClass: ... }
+   */
+  constructor(defaultConfig, publicClasses, internals = {}) {
+    _assertPlainObject(publicClasses, 'publicClasses');
+    _assertPlainObject(internals, 'internals');
+    this.defaultConfig = defaultConfig;
+    this.public = publicClasses;
+    this.internals = internals;
+    this.allClasses = { ...this.public, ...this.internals };
+    this._addDefaultsToClasses();
+  }
+
+  _addDefaultsToClasses() {
+    // Set default config for each class so that the config is still accessible
+    // Outside a configured namespace.
+    for (const Class of Object.values(this.allClasses)) {
+      if (_mightBeClass(Class)) {
+        if (!Class.__isConfigurable__) {
+          makeConfigurable(Class);
+        }
+        Class.__config__ = this.defaultConfig;
+        Class.__namespace__ = this.allClasses;
+        Class.__configId__ = 'default';
+      }
+    }
+  }
+
+  _createConfiguredSubclass(Class, config, configId, fullConfiguredNamespace) {
+    if (_mightBeClass(Class)) {
+      let SubClass;
+      if (Class.toString().startsWith("class")) {
+        // ES6 classes.
+        SubClass = class _Configured extends Class { };
+      } else {
+        // Functions, which *may* be old-style classes.
+        SubClass = function _Configured(...args) {
+          return Class.call(this, ...args)
+        };
+      }
+      // Add back getters to make sure they're copied over.
+      _makeConfigurable(SubClass, true, true);
+
+      // These static properties are used to populate (config, _, configId) 
+      // On both the instance and the class.
+      SubClass.__config__ = config;
+      SubClass.__namespace__ = fullConfiguredNamespace;
+      SubClass.__configId__ = configId;
+      return SubClass
+    } 
+      // In case the argument is not an extendable class.
+      return Class
+  }
+
+  /**
+   * Generate a namespace where each class's `config` property is set to the passed `config` value.
+   * 
+   * @param {any} config The configuration to store in the namespace. 
+   * @param {string | undefined} configId The identifier to set for the configuration. This will be available on each class's `configId` property. If not set, this will be a random UUID.
+   * @returns {Object} A namespace (object) containing all public classes that were passed in the constructor to `NamespaceTemplate`. Each will have a `config` value equal to the first argument to this function.
+   * 
+   * @example
+   * // Registration
+   * class MyPublicClass extends stache.Configurable {};
+   * class MyInternalClass extends stache.Configurable {};
+   * const defaultConfig = { myProp: 'default' };
+   * const template = new stache.NamespaceTemplate(defaultConfig, { MyPublicClass }, { MyInternalClass });
+   * // Usage
+   * const ns1 = template.createConfiguration({ myProp: 'value1' })
+   * const configuredCls = new ns1.MyPublicClass();
+   * console.log(configuredCls.config);  // { myProp: 'value1' }
+   * console.log(configuredCls._);  // { MyInternalClass: ... }
+   */
+  createConfiguration(config, configId = undefined) {
+    const template = this;
+    configId = configId || crypto.randomUUID();
+    // This is a function only because addScopeHandler and fullNamespace each
+    // Rely on each other.
+    const getConfiguredNamespace = () => fullNamespace,
+    cache = {},
+    // Proxy handler that rescopes every public class.
+    addScopeHandler = {
+      get(target, prop, _receiver) {  // eslint-disable-line no-unused-vars
+        const MaybeClass = target[prop];
+        return cache[prop] ?? (cache[prop] = template._createConfiguredSubclass(MaybeClass, config, configId, getConfiguredNamespace()))
+      }
+    },
+    publicNamespace = new Proxy(this.public, addScopeHandler),
+    fullNamespace = new Proxy(this.allClasses, addScopeHandler);
+    return publicNamespace
+  }
+}
+
+
+/**
+ * Register the default config for the namespace and return a function `withConfig` that can be used for generating new configured namespaces.
+ * 
+ * @param {any} defaultConfig The default value to use as the `config` property when the class is accessed in its raw form and not under a namespace.
+ * @param {Object} publicClasses An object containing all the public classes or objects that should be exposed as part of the namespace.
+ * @param {Object} internals An object containing **all** class that require any special `stache` properties. Configured versions of these classes will be available through the `_` property of the configured classes.
+ * 
+ * @returns A function `withConfig(config: Object, configId: string | undefined) -> Object` that creates a namespace where each class has the given `config` and optional `configId`. 
+ * @example
+ * // Registration
+ * class MyPublicClass extends stache.Configurable {};
+ * class MyInternalClass extends stache.Configurable {};
+ * const defaultConfig = { myProp: 'default' };
+ * const withConfig = registerAndCreateFactoryFn(defaultConfig, { MyPublicClass }, { MyInternalClass });
+ * // Usage
+ * const ns1 = withConfig({ myProp: 'value1' });
+ * const configuredCls = new ns1.MyPublicClass();
+ * console.log(configuredCls.config);  // { myProp: 'value1' }
+ * console.log(configuredCls._);  // { MyInternalClass: ... }
+ */
+function registerAndCreateFactoryFn(defaultConfig, publicClasses, internals = {}) {
+  const namespaceTemplate = new NamespaceTemplate(defaultConfig, publicClasses, internals);
+
+  /**
+   * Generate a namespace where each class's `config` property is set to the passed `config` value.
+   * 
+   * @param {any} config The configuration to store in the namespace. 
+   * @param {string | undefined} configId The identifier to set for the configuration. This will be available on each class's `configId` property. If not set, this will be a random UUID.
+   * @returns {Object} A namespace (object) containing all public classes that were passed to `registerAndCreateFactoryFn`. Each will have a `config` value equal to the first argument to this function.
+   * 
+   * @example
+   * // Registration
+   * class MyPublicClass extends stache.Configurable {};
+   * class MyInternalClass extends stache.Configurable {};
+   * const defaultConfig = { myProp: 'default' };
+   * const withConfig = registerAndCreateFactoryFn(defaultConfig, { MyPublicClass }, { MyInternalClass });
+   * // Usage
+   * const ns1 = withConfig({ myProp: 'value1' });
+   * const configuredCls = new ns1.MyPublicClass();
+   * console.log(configuredCls.config);  // { myProp: 'value1' }
+   * console.log(configuredCls._);  // { MyInternalClass: ... }
+   */
+  return function withConfig(config, configId = undefined) {
+    return namespaceTemplate.createConfiguration(config, configId)
+  }
+}
+
+var main$1 = {
+  makeConfigurable,
+  Configurable,
+  NamespaceTemplate,
+  registerAndCreateFactoryFn
+};
 
 class ToStringAndUUID extends TypedConfigurable {
     constructor() {
@@ -1217,6 +1523,116 @@ class ToStringAndUUID extends TypedConfigurable {
     static get audioContext() {
         return this.config.audioContext;
     }
+}
+
+var __classPrivateFieldSet = (undefined && undefined.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
+    if (kind === "m") throw new TypeError("Private method is not writable");
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
+    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
+};
+var __classPrivateFieldGet$7 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
+    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+};
+var _BaseEvent_defaultIgnored;
+class BaseEvent extends ToStringAndUUID {
+    constructor() {
+        super(...arguments);
+        this._isLocal = false;
+        _BaseEvent_defaultIgnored.set(this, false);
+    }
+    ignoreDefault() {
+        __classPrivateFieldSet(this, _BaseEvent_defaultIgnored, true, "f");
+    }
+    defaultIsIgnored() {
+        return __classPrivateFieldGet$7(this, _BaseEvent_defaultIgnored, "f");
+    }
+}
+_BaseEvent_defaultIgnored = new WeakMap();
+class BypassEvent extends BaseEvent {
+    constructor(shouldBypass) {
+        super();
+        this.shouldBypass = shouldBypass;
+        this._isLocal = true;
+    }
+}
+class MuteEvent extends BaseEvent {
+    constructor(shouldMute) {
+        super();
+        this.shouldMute = shouldMute;
+        this._isLocal = true;
+    }
+}
+var KeyEventType;
+(function (KeyEventType) {
+    KeyEventType["KEY_DOWN"] = "keydown";
+    KeyEventType["KEY_UP"] = "keyup";
+})(KeyEventType || (KeyEventType = {}));
+class KeyEvent extends BaseEvent {
+    constructor(eventType, eventPitch = 64, eventVelocity = 64, key) {
+        super();
+        this.eventType = eventType;
+        this.eventPitch = eventPitch;
+        this.eventVelocity = eventVelocity;
+        this.key = key !== null && key !== void 0 ? key : eventPitch;
+    }
+}
+
+var events = /*#__PURE__*/Object.freeze({
+    __proto__: null,
+    BaseEvent: BaseEvent,
+    BypassEvent: BypassEvent,
+    KeyEvent: KeyEvent,
+    get KeyEventType () { return KeyEventType; },
+    MuteEvent: MuteEvent
+});
+
+/**
+ * A decorator to allow properties to be computed once, only when needed.
+ *
+ * Usage:
+ *
+ * @example
+ * class A {
+ *   \@jit(Math.random)
+ *   iprop1: number
+ *
+ *   \@jit((_, propName) => "expensive computation of " + propName))
+ *   static sprop1: number
+ * }
+ *
+ */
+function lazyProperty(initializer) {
+    return function (target, prop) {
+        initializer = initializer.bind(target);
+        Object.defineProperty(target, prop, {
+            get() {
+                var _a;
+                const secretKey = `__${prop}__`;
+                return (_a = this[secretKey]) !== null && _a !== void 0 ? _a : (this[secretKey] = initializer(this, prop));
+            }
+        });
+    };
+}
+/**
+ * Declare that a function's parameters may be promises, and the function will perform its action once all promises are resolved and return a promise.
+ */
+function resolvePromiseArgs(obj, propName, descriptor) {
+    const func = descriptor.value;
+    descriptor.value = function (...args) {
+        // NOTE: 'this' within func will be unbound, but it is bound in 
+        // descriptor.value. So it must be rebound.
+        if (args.some(a => a instanceof Promise)) {
+            // Wait for all to be resolved, then call the function.
+            return Promise.all(args).then(vals => func.bind(this)(...vals));
+        }
+        else {
+            return func.bind(this)(...args);
+        }
+    };
+    return descriptor;
 }
 
 class AbstractInput extends ToStringAndUUID {
@@ -1484,52 +1900,6 @@ export class AudioParamControlOutput extends ControlOutput<any> implements Audio
     return this.map('setValueCurveAtTime', arguments)
   }
 } */
-
-/**
- * A decorator to allow properties to be computed once, only when needed.
- *
- * Usage:
- *
- * @example
- * class A {
- *   \@jit(Math.random)
- *   iprop1: number
- *
- *   \@jit((_, propName) => "expensive computation of " + propName))
- *   static sprop1: number
- * }
- *
- */
-function lazyProperty(initializer) {
-    return function (target, prop) {
-        initializer = initializer.bind(target);
-        Object.defineProperty(target, prop, {
-            get() {
-                var _a;
-                const secretKey = `__${prop}__`;
-                return (_a = this[secretKey]) !== null && _a !== void 0 ? _a : (this[secretKey] = initializer(this, prop));
-            }
-        });
-    };
-}
-/**
- * Declare that a function's parameters may be promises, and the function will perform its action once all promises are resolved and return a promise.
- */
-function resolvePromiseArgs(obj, propName, descriptor) {
-    const func = descriptor.value;
-    descriptor.value = function (...args) {
-        // NOTE: 'this' within func will be unbound, but it is bound in 
-        // descriptor.value. So it must be rebound.
-        if (args.some(a => a instanceof Promise)) {
-            // Wait for all to be resolved, then call the function.
-            return Promise.all(args).then(vals => func.bind(this)(...vals));
-        }
-        else {
-            return func.bind(this)(...args);
-        }
-    };
-    return descriptor;
-}
 
 var __decorate$3 = (undefined && undefined.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -2276,436 +2646,6 @@ class BaseComponent extends BaseConnectable {
     }
 }
 BaseComponent.instanceExists = false;
-
-class BufferComponent extends BaseComponent {
-    constructor(buffer) {
-        var _a;
-        super();
-        const numChannels = (_a = buffer === null || buffer === void 0 ? void 0 : buffer.numberOfChannels) !== null && _a !== void 0 ? _a : 2;
-        this.worklet = new AudioWorkletNode(this.audioContext, BUFFER_WORKLET_NAME, {
-            numberOfInputs: 1,
-            numberOfOutputs: 1,
-            outputChannelCount: [numChannels],
-            processorOptions: {
-                buffer,
-                bufferId: buffer ? getBufferId(buffer) : undefined
-            }
-        });
-        // @ts-ignore Property undefined.
-        this.worklet['__numInputChannels'] = numChannels;
-        // @ts-ignore Property undefined.
-        this.worklet['__numOutputChannels'] = numChannels;
-        // Input
-        this.buffer = this.defineControlInput('buffer', buffer, true).ofType(AudioBuffer);
-        this.time = this.defineAudioInput('time', this.worklet).ofType(Number);
-        // Output
-        this.output = this.defineAudioOutput('output', this.worklet).ofType(Number);
-        buffer && this.setBuffer(buffer);
-    }
-    get bufferId() {
-        return getBufferId(this.buffer.value);
-    }
-    setBuffer(buffer) {
-        this.worklet.port.postMessage({
-            buffer: bufferToFloat32Arrays(buffer),
-            bufferId: this.bufferId
-        });
-    }
-    inputDidUpdate(input, newValue) {
-        if (input == this.buffer) {
-            if (newValue.numberOfChannels != this.buffer.value.numberOfChannels) {
-                // TODO: better error message.
-                throw new Error("Wrong number of channels");
-            }
-            this.setBuffer(newValue);
-        }
-    }
-}
-
-function _throwUnregisteredError(Class) {
-  throw new ReferenceError(`Cannot access config. The class '${Class.name}' must be registered by including it within 'publicClasses' or 'internals' when building a NamespaceTemplate.`)
-}
-
-
-function _defineStaticAndInstanceGetter(Class, getterName, hiddenPropName) {
-  // Static getter returns the value of the hidden static prop.
-  Object.defineProperty(Class, getterName, {
-    get() {
-      return this[hiddenPropName] || _throwUnregisteredError(this)
-    }
-  });
-  // Instance getter delegates to the static getter.
-  Object.defineProperty(Class.prototype, getterName, {
-    get() {
-      return this.constructor[getterName]
-    }
-  });
-}
-
-function _mightBeClass(obj) {
-  return (obj instanceof Function) && (obj.prototype != undefined)
-}
-
-function _makeConfigurable(cls, inPlace=true, allowAlready=true) {
-  let Class;
-  if (inPlace) {
-    Class = cls;
-  } else {
-    Class = (class Class extends cls {});  // Hmm...
-  }
-  if (!allowAlready && (Class.__isConfigurable__ || Class.prototype instanceof Configurable)) {
-    throw new Error(`The class '${Class.name}' is already configurable.`)
-  }
-  // Define hidden static props. These are expected to be overridden:
-  // 1. By the defaults when the class is registered.
-  // 2. By a subclass when a namespace with a new config is created.
-  Class.__config__ = undefined;
-  Class.__namespace__ = undefined;
-  Class.__configId__ = undefined;
-  Class.__isConfigurable__ = true;
-
-  // Define hybrid getters for (config, _, configId)
-  _defineStaticAndInstanceGetter(Class, 'config', '__config__');
-  _defineStaticAndInstanceGetter(Class, '_', '__namespace__');
-  _defineStaticAndInstanceGetter(Class, 'configId', '__configId__');
-  return Class
-}
-
-/**
- * Define stache getters that allow the class to access `_`, `config`, and `configId`.
- * 
- * **NOTE:** Using this function is not strictly necessary and only helps detect when this class has not been properly registered. Prefer inheriting from `stache.Configurable`.
- * 
- * @param {Class} cls A class that you want to explicitly set as configurable.
- * @param {boolean} inPlace Whether to modify the class in-place.
- * @returns {Class} A version of `cls` with getters implemented for `_`, `config`, and `configId`.
- */
-function makeConfigurable(cls, inPlace=true) {
-  return _makeConfigurable(cls, inPlace)
-}
-
-/**
- * The base class for defining objects configurable by the `stache` library. Inheriting from this class is not strictly necessary to use library, but it comes with two advantages:
- * 1. Static analysis will recognize the `config`, `configId`, and `_` properties on the class ("stache properties").
- * 2. Easier bug fixing. An error will be thrown if you try to access the stache properties without adding the class to a `NamespaceTemplate`.
- * 
- * If inheriting from this class is not possible, calling `stache.makeConfigurable(MyClass)` will retain advantage #2.
- * 
- * @example
- * // Registration
- * class MyPublicClass extends stache.Configurable {};
- * class MyInternalClass extends stache.Configurable {};
- * const defaultConfig = { myProp: 'default' };
- * const withConfig = registerAndCreateFactoryFn(defaultConfig, { MyPublicClass }, { MyInternalClass });
- * // Usage
- * const ns1 = withConfig({ myProp: 'value1' });
- * const configuredCls = new ns1.MyPublicClass();
- * console.log(configuredCls.config);  // { myProp: 'value1' }
- * console.log(configuredCls._);  // { MyInternalClass: ... }
- */
-class Configurable {
-  /* @ignore */
-  static __isConfigurable__ = true
-
-  // These are expected to be overridden:
-  // 1. By the defaults when the class is registered.
-  // 2. By a subclass when a namespace with a new config is created.
-  /* @ignore */
-  static __config__  
-  /* @ignore */
-  static __namespace__ 
-  /* @ignore */
-  static __configId__ 
-
-  /**
-   * The configuration of the namespace this class belongs to.
-   * 
-   * This will be either:
-   * - The `defaultConfig` passed to the `NamespaceTemplate` constructor (if using the raw class).
-   * - The `config` value passed to `myNamespaceTemplate.createConfiguration` (if using the class under a configured namespace)
-   * @type {any}
-   */
-  static get config() {
-    return this.__config__ || _throwUnregisteredError(this)
-  }
-
-  /**
-   * The internal namespace that includes all other configurable classes.
-   * 
-   * **NOTE:** To obtain the version of a class that shares the configuration of `this`, you *must* use `this._.MyClass` to access the class instead of just `MyClass`.
-   * @type {Object}
-   */
-  static get _() {
-    return this.__namespace__ || _throwUnregisteredError(this)
-  }
-
-  /**
-   * The identifier of the configured namespace that this class belongs to. If this class is accessed in its raw form as opposed to under a namespace, this will be `'default'`.
-   * @type {string}
-   */
-  static get configId() {
-    return this.__configId__ || _throwUnregisteredError(this)
-  }
-
-  /**
-   * The configuration of the namespace this class belongs to.
-   * 
-   * This will be either:
-   * - The `defaultConfig` passed to the `NamespaceTemplate` constructor (if using the raw class).
-   * - The `config` value passed to `myNamespaceTemplate.createConfiguration` (if using the class under a configured namespace)
-   * @type {any}
-   */
-  get config() { return this.constructor.config }
-
-  /**
-   * The internal namespace that includes all other configurable classes.
-   * 
-   * **NOTE:** To obtain the version of a class that shares the configuration of `this`, you *must* use `this._.MyClass` to access the class instead of just `MyClass`.
-   * @type {Object}
-   */
-  get _() { return this.constructor._ }
-
-  /**
-   * The identifier of the configured namespace that this class belongs to. If this class is accessed in its raw form as opposed to under a namespace, this will be `'default'`.
-   * @type {string}
-   */
-  get configId() { return this.constructor.configId }
-}
-
-function _assertPlainObject(obj, name) {
-  if (obj.constructor != ({}).constructor) {
-    throw new Error(`Expected a plain object for '${name}', given '${obj.constructor.name}' instead.`)
-  }
-}
-
-class NamespaceTemplate {
-  /**
-   * A class used for generating namespaces where all classes share a config.
-   * 
-   * @param {any} defaultConfig The default value to use as the `config` property when the class is accessed in its raw form and not under a namespace.
-   * @param {Object} publicClasses An object containing all the public classes or objects that should be exposed as part of the namespace.
-   * @param {Object} internals An object containing **all** class that require any special `stache` properties. Configured versions of these classes will be available through the `_` property of the configured classes.
-   * 
-   * @example
-   * // Registration
-   * class MyPublicClass extends stache.Configurable {};
-   * class MyInternalClass extends stache.Configurable {};
-   * const defaultConfig = { myProp: 'default' };
-   * const template = new stache.NamespaceTemplate(defaultConfig, { MyPublicClass }, { MyInternalClass });
-   * // Usage
-   * const ns1 = template.createConfiguration({ myProp: 'value1' })
-   * const configuredCls = new ns1.MyPublicClass();
-   * console.log(configuredCls.config);  // { myProp: 'value1' }
-   * console.log(configuredCls._);  // { MyInternalClass: ... }
-   */
-  constructor(defaultConfig, publicClasses, internals = {}) {
-    _assertPlainObject(publicClasses, 'publicClasses');
-    _assertPlainObject(internals, 'internals');
-    this.defaultConfig = defaultConfig;
-    this.public = publicClasses;
-    this.internals = internals;
-    this.allClasses = { ...this.public, ...this.internals };
-    this._addDefaultsToClasses();
-  }
-
-  _addDefaultsToClasses() {
-    // Set default config for each class so that the config is still accessible
-    // Outside a configured namespace.
-    for (const Class of Object.values(this.allClasses)) {
-      if (_mightBeClass(Class)) {
-        if (!Class.__isConfigurable__) {
-          makeConfigurable(Class);
-        }
-        Class.__config__ = this.defaultConfig;
-        Class.__namespace__ = this.allClasses;
-        Class.__configId__ = 'default';
-      }
-    }
-  }
-
-  _createConfiguredSubclass(Class, config, configId, fullConfiguredNamespace) {
-    if (_mightBeClass(Class)) {
-      let SubClass;
-      if (Class.toString().startsWith("class")) {
-        // ES6 classes.
-        SubClass = class _Configured extends Class { };
-      } else {
-        // Functions, which *may* be old-style classes.
-        SubClass = function _Configured(...args) {
-          return Class.call(this, ...args)
-        };
-      }
-      // Add back getters to make sure they're copied over.
-      _makeConfigurable(SubClass, true, true);
-
-      // These static properties are used to populate (config, _, configId) 
-      // On both the instance and the class.
-      SubClass.__config__ = config;
-      SubClass.__namespace__ = fullConfiguredNamespace;
-      SubClass.__configId__ = configId;
-      return SubClass
-    } 
-      // In case the argument is not an extendable class.
-      return Class
-  }
-
-  /**
-   * Generate a namespace where each class's `config` property is set to the passed `config` value.
-   * 
-   * @param {any} config The configuration to store in the namespace. 
-   * @param {string | undefined} configId The identifier to set for the configuration. This will be available on each class's `configId` property. If not set, this will be a random UUID.
-   * @returns {Object} A namespace (object) containing all public classes that were passed in the constructor to `NamespaceTemplate`. Each will have a `config` value equal to the first argument to this function.
-   * 
-   * @example
-   * // Registration
-   * class MyPublicClass extends stache.Configurable {};
-   * class MyInternalClass extends stache.Configurable {};
-   * const defaultConfig = { myProp: 'default' };
-   * const template = new stache.NamespaceTemplate(defaultConfig, { MyPublicClass }, { MyInternalClass });
-   * // Usage
-   * const ns1 = template.createConfiguration({ myProp: 'value1' })
-   * const configuredCls = new ns1.MyPublicClass();
-   * console.log(configuredCls.config);  // { myProp: 'value1' }
-   * console.log(configuredCls._);  // { MyInternalClass: ... }
-   */
-  createConfiguration(config, configId = undefined) {
-    const template = this;
-    configId = configId || crypto.randomUUID();
-    // This is a function only because addScopeHandler and fullNamespace each
-    // Rely on each other.
-    const getConfiguredNamespace = () => fullNamespace,
-
-    // Proxy handler that rescopes every public class.
-    addScopeHandler = {
-      get(target, prop, _receiver) {  // eslint-disable-line no-unused-vars
-        const MaybeClass = target[prop];
-        return template._createConfiguredSubclass(MaybeClass, config, configId, getConfiguredNamespace())
-      }
-    },
-    publicNamespace = new Proxy(this.public, addScopeHandler),
-    fullNamespace = new Proxy(this.allClasses, addScopeHandler);
-    return publicNamespace
-  }
-}
-
-
-/**
- * Register the default config for the namespace and return a function `withConfig` that can be used for generating new configured namespaces.
- * 
- * @param {any} defaultConfig The default value to use as the `config` property when the class is accessed in its raw form and not under a namespace.
- * @param {Object} publicClasses An object containing all the public classes or objects that should be exposed as part of the namespace.
- * @param {Object} internals An object containing **all** class that require any special `stache` properties. Configured versions of these classes will be available through the `_` property of the configured classes.
- * 
- * @returns A function `withConfig(config: Object, configId: string | undefined) -> Object` that creates a namespace where each class has the given `config` and optional `configId`. 
- * @example
- * // Registration
- * class MyPublicClass extends stache.Configurable {};
- * class MyInternalClass extends stache.Configurable {};
- * const defaultConfig = { myProp: 'default' };
- * const withConfig = registerAndCreateFactoryFn(defaultConfig, { MyPublicClass }, { MyInternalClass });
- * // Usage
- * const ns1 = withConfig({ myProp: 'value1' });
- * const configuredCls = new ns1.MyPublicClass();
- * console.log(configuredCls.config);  // { myProp: 'value1' }
- * console.log(configuredCls._);  // { MyInternalClass: ... }
- */
-function registerAndCreateFactoryFn(defaultConfig, publicClasses, internals = {}) {
-  const namespaceTemplate = new NamespaceTemplate(defaultConfig, publicClasses, internals);
-
-  /**
-   * Generate a namespace where each class's `config` property is set to the passed `config` value.
-   * 
-   * @param {any} config The configuration to store in the namespace. 
-   * @param {string | undefined} configId The identifier to set for the configuration. This will be available on each class's `configId` property. If not set, this will be a random UUID.
-   * @returns {Object} A namespace (object) containing all public classes that were passed to `registerAndCreateFactoryFn`. Each will have a `config` value equal to the first argument to this function.
-   * 
-   * @example
-   * // Registration
-   * class MyPublicClass extends stache.Configurable {};
-   * class MyInternalClass extends stache.Configurable {};
-   * const defaultConfig = { myProp: 'default' };
-   * const withConfig = registerAndCreateFactoryFn(defaultConfig, { MyPublicClass }, { MyInternalClass });
-   * // Usage
-   * const ns1 = withConfig({ myProp: 'value1' });
-   * const configuredCls = new ns1.MyPublicClass();
-   * console.log(configuredCls.config);  // { myProp: 'value1' }
-   * console.log(configuredCls._);  // { MyInternalClass: ... }
-   */
-  return function withConfig(config, configId = undefined) {
-    return namespaceTemplate.createConfiguration(config, configId)
-  }
-}
-
-var main$1 = {
-  makeConfigurable,
-  Configurable,
-  NamespaceTemplate,
-  registerAndCreateFactoryFn
-};
-
-var __classPrivateFieldSet = (undefined && undefined.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
-    if (kind === "m") throw new TypeError("Private method is not writable");
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
-    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
-};
-var __classPrivateFieldGet$7 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
-    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-};
-var _BaseEvent_defaultIgnored;
-class BaseEvent extends ToStringAndUUID {
-    constructor() {
-        super(...arguments);
-        this._isLocal = false;
-        _BaseEvent_defaultIgnored.set(this, false);
-    }
-    ignoreDefault() {
-        __classPrivateFieldSet(this, _BaseEvent_defaultIgnored, true, "f");
-    }
-    defaultIsIgnored() {
-        return __classPrivateFieldGet$7(this, _BaseEvent_defaultIgnored, "f");
-    }
-}
-_BaseEvent_defaultIgnored = new WeakMap();
-class BypassEvent extends BaseEvent {
-    constructor(shouldBypass) {
-        super();
-        this.shouldBypass = shouldBypass;
-        this._isLocal = true;
-    }
-}
-class MuteEvent extends BaseEvent {
-    constructor(shouldMute) {
-        super();
-        this.shouldMute = shouldMute;
-        this._isLocal = true;
-    }
-}
-var KeyEventType;
-(function (KeyEventType) {
-    KeyEventType["KEY_DOWN"] = "keydown";
-    KeyEventType["KEY_UP"] = "keyup";
-})(KeyEventType || (KeyEventType = {}));
-class KeyEvent extends BaseEvent {
-    constructor(eventType, eventPitch = 64, eventVelocity = 64, key) {
-        super();
-        this.eventType = eventType;
-        this.eventPitch = eventPitch;
-        this.eventVelocity = eventVelocity;
-        this.key = key !== null && key !== void 0 ? key : eventPitch;
-    }
-}
-
-var events = /*#__PURE__*/Object.freeze({
-    __proto__: null,
-    BaseEvent: BaseEvent,
-    BypassEvent: BypassEvent,
-    KeyEvent: KeyEvent,
-    get KeyEventType () { return KeyEventType; },
-    MuteEvent: MuteEvent
-});
 
 class ADSR extends BaseComponent {
     constructor(attackDurationMs, decayDurationMs, sustainAmplitude, releaseDurationMs) {
@@ -13800,6 +13740,53 @@ class Bang extends VisualComponent {
 Bang.defaultHeight = 48;
 Bang.defaultWidth = 48;
 
+const BUFFER_WORKLET_NAME = "buffer-worklet";
+
+class BufferComponent extends BaseComponent {
+    constructor(buffer) {
+        var _a;
+        super();
+        const numChannels = (_a = buffer === null || buffer === void 0 ? void 0 : buffer.numberOfChannels) !== null && _a !== void 0 ? _a : 2;
+        this.worklet = new AudioWorkletNode(this.audioContext, BUFFER_WORKLET_NAME, {
+            numberOfInputs: 1,
+            numberOfOutputs: 1,
+            outputChannelCount: [numChannels],
+            processorOptions: {
+                buffer,
+                bufferId: buffer ? getBufferId(buffer) : undefined
+            }
+        });
+        // @ts-ignore Property undefined.
+        this.worklet['__numInputChannels'] = numChannels;
+        // @ts-ignore Property undefined.
+        this.worklet['__numOutputChannels'] = numChannels;
+        // Input
+        this.buffer = this.defineControlInput('buffer', buffer, true).ofType(AudioBuffer);
+        this.time = this.defineAudioInput('time', this.worklet).ofType(Number);
+        // Output
+        this.output = this.defineAudioOutput('output', this.worklet).ofType(Number);
+        buffer && this.setBuffer(buffer);
+    }
+    get bufferId() {
+        return getBufferId(this.buffer.value);
+    }
+    setBuffer(buffer) {
+        this.worklet.port.postMessage({
+            buffer: bufferToFloat32Arrays(buffer),
+            bufferId: this.bufferId
+        });
+    }
+    inputDidUpdate(input, newValue) {
+        if (input == this.buffer) {
+            if (newValue.numberOfChannels != this.buffer.value.numberOfChannels) {
+                // TODO: better error message.
+                throw new Error("Wrong number of channels");
+            }
+            this.setBuffer(newValue);
+        }
+    }
+}
+
 const BUFFER_WRITER_WORKLET_NAME = "buffer-writer-worklet";
 
 class BufferWriterComponent extends BaseComponent {
@@ -14014,165 +14001,6 @@ class FunctionComponent extends BaseComponent {
     }
 }
 
-class CompoundInput extends AbstractInput {
-    get left() {
-        return this.channels[0];
-    }
-    get right() {
-        var _a;
-        return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
-    }
-    get keys() {
-        return new Set(Object.keys(this.inputs));
-    }
-    get defaultInput() {
-        return this._defaultInput;
-    }
-    constructor(name, parent, inputs, defaultInput) {
-        super(name, parent, false);
-        this.name = name;
-        this.parent = parent;
-        this.activeChannel = undefined;
-        this.inputs = {};
-        let hasMultichannelInput = false;
-        // Define 'this.inputs' and 'this' interface for underlying inputs.
-        Object.keys(inputs).map(name => {
-            const input = inputs[name];
-            hasMultichannelInput || (hasMultichannelInput = input instanceof AudioRateInput && input.audioSink instanceof AudioNode);
-            if (Object.prototype.hasOwnProperty(name)) {
-                console.warn(`Cannot create top-level CompoundInput property '${name}' because it is reserved. Use 'inputs.${name}' instead.`);
-            }
-            for (const obj of [this, this.inputs]) {
-                Object.defineProperty(obj, name, {
-                    get() {
-                        return (this.activeChannel != undefined && input instanceof AudioRateInput) ? input.channels[this.activeChannel] : input;
-                    },
-                    enumerable: true
-                });
-            }
-        });
-        this.channels = createMultiChannelView(this, hasMultichannelInput);
-        this._defaultInput = defaultInput;
-    }
-    mapOverInputs(fn) {
-        const res = {};
-        for (const inputName of this.keys) {
-            res[inputName] = fn(this.inputs[inputName], inputName);
-        }
-        return res;
-    }
-    get numInputChannels() {
-        const ic = this.mapOverInputs(i => i.numInputChannels);
-        return Math.max(...Object.values(ic));
-    }
-    get value() {
-        return this.mapOverInputs(input => input.value);
-    }
-    setValue(value) {
-        if (isPlainObject(value) && Object.keys(value).every(k => this.keys.has(k))) {
-            // If each key is a valid value, assign it as such.
-            this.mapOverInputs((input, name) => input.setValue(value[name]));
-        }
-        else if (this.defaultInput) {
-            // Assume it's an input for the default input.
-            this.defaultInput.setValue(value);
-        }
-        else {
-            throw new Error(`The given compound input (${this}) has no default input, so setValue expected a plain JS object with keys equal to a subset of ${[...this.keys]}. Given: ${value} (${JSON.stringify(value)}). Did you intend to call setValue of one of its named inputs (.inputs[inputName])instead?`);
-        }
-    }
-}
-
-class CompoundOutput extends AbstractOutput {
-    connect(destination) {
-        let { component, input } = this.getDestinationInfo(destination);
-        if (input instanceof CompoundInput) {
-            // First priority: try to connect all to same-named inputs.
-            // TODO: could this requirement be configured to allow connection either:
-            // - When inputs are a superset
-            // - When any input matches
-            // TODO: might be good to check the types are compatible as well.
-            const inputIsSuperset = [...this.keys].every(v => input.keys.has(v));
-            if (inputIsSuperset) {
-                for (const key of this.keys) {
-                    this.outputs[key].connect(input.inputs[key]);
-                }
-            }
-        }
-        else if (this.defaultOutput) {
-            // Second priority: connect only default.
-            // TODO: implement logic in each "sub-output" connect handler.
-            this.defaultOutput.connect(input);
-        }
-        return component;
-    }
-    get keys() {
-        return new Set(Object.keys(this.outputs));
-    }
-    get left() {
-        return this.channels[0];
-    }
-    get right() {
-        var _a;
-        return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
-    }
-    get defaultOutput() {
-        return this._defaultOutput;
-    }
-    constructor(name, outputs, parent, defaultOutput) {
-        super(name, parent);
-        this.name = name;
-        this.parent = parent;
-        this.activeChannel = undefined;
-        this.outputs = {};
-        this._defaultOutput = defaultOutput;
-        let hasMultichannelInput = false;
-        // Define 'this.outputs' and 'this' interface for underlying inputs.
-        Object.keys(outputs).map(name => {
-            const output = outputs[name];
-            hasMultichannelInput || (hasMultichannelInput = output instanceof AudioRateOutput);
-            if (Object.prototype.hasOwnProperty(name)) {
-                console.warn(`Cannot create top-level CompoundOutput property '${name}' because it is reserved. Use 'outputs.${name}' instead.`);
-            }
-            for (const obj of [this, this.outputs]) {
-                Object.defineProperty(obj, name, {
-                    get() {
-                        return (this.activeChannel != undefined && output instanceof AudioRateOutput) ? output.channels[this.activeChannel] : output;
-                    },
-                    enumerable: true
-                });
-            }
-        });
-        this.channels = createMultiChannelView(this, hasMultichannelInput);
-    }
-    mapOverOutputs(fn) {
-        const res = {};
-        for (const outputName of this.keys) {
-            res[outputName] = fn(this.outputs[outputName], outputName);
-        }
-        return res;
-    }
-    get numOutputChannels() {
-        const ic = this.mapOverOutputs(i => i.numOutputChannels);
-        return Math.max(...Object.values(ic));
-    }
-}
-
-class FFTOutput extends CompoundOutput {
-    // TODO: add fftSize, etc.
-    constructor(name, magnitude, phase, sync, parent, fftSize = 128) {
-        super(name, { magnitude, phase, sync }, parent);
-        this.name = name;
-        this.parent = parent;
-        this.fftSize = fftSize;
-    }
-    ifft() {
-        const component = new this._.IFFTComponent(this.fftSize);
-        this.connect(component.fftIn);
-        return component;
-    }
-}
-
 // fft.js from https://github.com/indutny/fft.js/tree/master
 // @ts-ignore
 (function (t) { function r(e) { if (i[e])
@@ -14267,7 +14095,7 @@ class FFTComponent extends BaseComponent {
         const phaseGain = this.audioContext.createGain();
         const syncGain = this.audioContext.createGain();
         // Output
-        this.fftOut = new FFTOutput('fftOut', new AudioRateOutput('magnitude', magnitudeGain, this), new AudioRateOutput('phase', phaseGain, this), new AudioRateOutput('sync', syncGain, this), this, this.fftSize);
+        this.fftOut = new this._.FFTOutput('fftOut', new this._.AudioRateOutput('magnitude', magnitudeGain, this), new this._.AudioRateOutput('phase', phaseGain, this), new this._.AudioRateOutput('sync', syncGain, this), this, this.fftSize);
         this.defineInputOrOutput('fftOut', this.fftOut, this.outputs);
         realGain.connect(this.worklet, undefined, 0);
         imaginaryGain.connect(this.worklet, undefined, 1);
@@ -14277,18 +14105,6 @@ class FFTComponent extends BaseComponent {
     }
     ifft() {
         return this.fftOut.ifft();
-    }
-}
-
-// TODO: remove.
-// Could this be generalized to a "compound input", of which this is just a 
-// subclass?
-class FFTInput extends CompoundInput {
-    // TODO: add fftSize etc.
-    constructor(name, parent, magnitude, phase, sync) {
-        super(name, parent, { magnitude, phase, sync });
-        this.name = name;
-        this.parent = parent;
     }
 }
 
@@ -14307,7 +14123,7 @@ class IFFTComponent extends BaseComponent {
         const magnitudeGain = this.audioContext.createGain();
         const phaseGain = this.audioContext.createGain();
         const syncGain = this.audioContext.createGain();
-        this.fftIn = new FFTInput('fftIn', this, new AudioRateInput('magnitude', this, magnitudeGain), new AudioRateInput('phase', this, phaseGain), new AudioRateInput('sync', this, syncGain));
+        this.fftIn = new this._.FFTInput('fftIn', this, new this._.AudioRateInput('magnitude', this, magnitudeGain), new this._.AudioRateInput('phase', this, phaseGain), new this._.AudioRateInput('sync', this, syncGain));
         this.defineInputOrOutput('fftIn', this.fftIn, this.inputs);
         // Outputs
         const realGain = this.audioContext.createGain();
@@ -15066,6 +14882,226 @@ class Wave extends BaseComponent {
 }
 Wave.Type = WaveType;
 
+class CompoundInput extends AbstractInput {
+    get left() {
+        return this.channels[0];
+    }
+    get right() {
+        var _a;
+        return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
+    }
+    get keys() {
+        return new Set(Object.keys(this.inputs));
+    }
+    get defaultInput() {
+        return this._defaultInput;
+    }
+    constructor(name, parent, inputs, defaultInput) {
+        super(name, parent, false);
+        this.name = name;
+        this.parent = parent;
+        this.activeChannel = undefined;
+        this.inputs = {};
+        let hasMultichannelInput = false;
+        // Define 'this.inputs' and 'this' interface for underlying inputs.
+        Object.keys(inputs).map(name => {
+            const input = inputs[name];
+            hasMultichannelInput || (hasMultichannelInput = input instanceof AudioRateInput && input.audioSink instanceof AudioNode);
+            if (Object.prototype.hasOwnProperty(name)) {
+                console.warn(`Cannot create top-level CompoundInput property '${name}' because it is reserved. Use 'inputs.${name}' instead.`);
+            }
+            for (const obj of [this, this.inputs]) {
+                Object.defineProperty(obj, name, {
+                    get() {
+                        return (this.activeChannel != undefined && input instanceof AudioRateInput) ? input.channels[this.activeChannel] : input;
+                    },
+                    enumerable: true
+                });
+            }
+        });
+        this.channels = createMultiChannelView(this, hasMultichannelInput);
+        this._defaultInput = defaultInput;
+    }
+    mapOverInputs(fn) {
+        const res = {};
+        for (const inputName of this.keys) {
+            res[inputName] = fn(this.inputs[inputName], inputName);
+        }
+        return res;
+    }
+    get numInputChannels() {
+        const ic = this.mapOverInputs(i => i.numInputChannels);
+        return Math.max(...Object.values(ic));
+    }
+    get value() {
+        return this.mapOverInputs(input => input.value);
+    }
+    setValue(value) {
+        if (isPlainObject(value) && Object.keys(value).every(k => this.keys.has(k))) {
+            // If each key is a valid value, assign it as such.
+            this.mapOverInputs((input, name) => input.setValue(value[name]));
+        }
+        else if (this.defaultInput) {
+            // Assume it's an input for the default input.
+            this.defaultInput.setValue(value);
+        }
+        else {
+            throw new Error(`The given compound input (${this}) has no default input, so setValue expected a plain JS object with keys equal to a subset of ${[...this.keys]}. Given: ${value} (${JSON.stringify(value)}). Did you intend to call setValue of one of its named inputs (.inputs[inputName])instead?`);
+        }
+    }
+}
+
+// TODO: remove.
+// Could this be generalized to a "compound input", of which this is just a 
+// subclass?
+class FFTInput extends CompoundInput {
+    // TODO: add fftSize etc.
+    constructor(name, parent, magnitude, phase, sync) {
+        super(name, parent, { magnitude, phase, sync });
+        this.name = name;
+        this.parent = parent;
+    }
+}
+
+class CompoundOutput extends AbstractOutput {
+    connect(destination) {
+        let { component, input } = this.getDestinationInfo(destination);
+        if (input instanceof CompoundInput) {
+            // First priority: try to connect all to same-named inputs.
+            // TODO: could this requirement be configured to allow connection either:
+            // - When inputs are a superset
+            // - When any input matches
+            // TODO: might be good to check the types are compatible as well.
+            const inputIsSuperset = [...this.keys].every(v => input.keys.has(v));
+            if (inputIsSuperset) {
+                for (const key of this.keys) {
+                    this.outputs[key].connect(input.inputs[key]);
+                }
+            }
+        }
+        else if (this.defaultOutput) {
+            // Second priority: connect only default.
+            // TODO: implement logic in each "sub-output" connect handler.
+            this.defaultOutput.connect(input);
+        }
+        return component;
+    }
+    get keys() {
+        return new Set(Object.keys(this.outputs));
+    }
+    get left() {
+        return this.channels[0];
+    }
+    get right() {
+        var _a;
+        return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
+    }
+    get defaultOutput() {
+        return this._defaultOutput;
+    }
+    constructor(name, outputs, parent, defaultOutput) {
+        super(name, parent);
+        this.name = name;
+        this.parent = parent;
+        this.activeChannel = undefined;
+        this.outputs = {};
+        this._defaultOutput = defaultOutput;
+        let hasMultichannelInput = false;
+        // Define 'this.outputs' and 'this' interface for underlying inputs.
+        Object.keys(outputs).map(name => {
+            const output = outputs[name];
+            hasMultichannelInput || (hasMultichannelInput = output instanceof AudioRateOutput);
+            if (Object.prototype.hasOwnProperty(name)) {
+                console.warn(`Cannot create top-level CompoundOutput property '${name}' because it is reserved. Use 'outputs.${name}' instead.`);
+            }
+            for (const obj of [this, this.outputs]) {
+                Object.defineProperty(obj, name, {
+                    get() {
+                        return (this.activeChannel != undefined && output instanceof AudioRateOutput) ? output.channels[this.activeChannel] : output;
+                    },
+                    enumerable: true
+                });
+            }
+        });
+        this.channels = createMultiChannelView(this, hasMultichannelInput);
+    }
+    mapOverOutputs(fn) {
+        const res = {};
+        for (const outputName of this.keys) {
+            res[outputName] = fn(this.outputs[outputName], outputName);
+        }
+        return res;
+    }
+    get numOutputChannels() {
+        const ic = this.mapOverOutputs(i => i.numOutputChannels);
+        return Math.max(...Object.values(ic));
+    }
+}
+
+class FFTOutput extends CompoundOutput {
+    // TODO: add fftSize, etc.
+    constructor(name, magnitude, phase, sync, parent, fftSize = 128) {
+        super(name, { magnitude, phase, sync }, parent);
+        this.name = name;
+        this.parent = parent;
+        this.fftSize = fftSize;
+    }
+    ifft() {
+        const component = new this._.IFFTComponent(this.fftSize);
+        this.connect(component.fftIn);
+        return component;
+    }
+}
+
+function numberToString(n) {
+    return n >= 0.1 ? n.toPrecision(4) : n.toExponential(4);
+}
+function getFormattedChannelData(node) {
+    const values = node.analyzers.map(getCurrentSignalValue);
+    const valueStrings = values.map(numberToString).join(", ");
+    return node.formatString.replace(/\{\w*\}/g, `[${valueStrings}]`);
+}
+function getCurrentSignalValue(analyzer) {
+    const dataArray = new Float32Array(1);
+    analyzer.getFloatTimeDomainData(dataArray);
+    return dataArray[0];
+}
+class SignalLogger extends ToStringAndUUID {
+    constructor(samplePeriodMs = 1000) {
+        super();
+        this.samplePeriodMs = samplePeriodMs;
+        this.analysers = [];
+        this.start();
+    }
+    start() {
+        this.stop();
+        this.interval = window.setInterval(() => {
+            if (!this.analysers.length)
+                return;
+            const messages = this.analysers.map(getFormattedChannelData);
+            const logString = messages.join("\n");
+            console.log(logString);
+        }, this.samplePeriodMs);
+    }
+    stop() {
+        clearInterval(this.interval);
+    }
+    /**
+     * Register a node to be monitored.
+     */
+    register(output, formatString) {
+        const splitter = this.audioContext.createChannelSplitter(output.numOutputChannels);
+        output.connect(splitter);
+        const analyzers = [];
+        for (const i of range(output.numOutputChannels)) {
+            const analyzer = this.audioContext.createAnalyser();
+            splitter.connect(analyzer, i);
+            analyzers.push(analyzer);
+        }
+        this.analysers.push({ formatString, analyzers });
+    }
+}
+
 class BangDisplay extends BaseDisplay {
     _display($root, width, height) {
         this.$button = $(document.createElement('button'))
@@ -15379,6 +15415,7 @@ var internals = /*#__PURE__*/Object.freeze({
     ScriptProcessorExecutionContext: ScriptProcessorExecutionContext,
     ScrollingAudioMonitor: ScrollingAudioMonitor,
     ScrollingAudioMonitorDisplay: ScrollingAudioMonitorDisplay,
+    SignalLogger: SignalLogger,
     SimplePolyphonicSynth: SimplePolyphonicSynth,
     SliderDisplay: SliderDisplay,
     SlowDown: SlowDown,
@@ -15406,53 +15443,6 @@ var internals = /*#__PURE__*/Object.freeze({
 // TODO: Specify only a subset for public use
 var publicNamespace = Object.assign({}, internals);
 
-function numberToString(n) {
-    return n >= 0.1 ? n.toPrecision(4) : n.toExponential(4);
-}
-function getFormattedChannelData(node) {
-    const values = node.analyzers.map(getCurrentSignalValue);
-    const valueStrings = values.map(numberToString).join(", ");
-    return node.formatString.replace(/\{\w*\}/g, `[${valueStrings}]`);
-}
-function getCurrentSignalValue(analyzer) {
-    const dataArray = new Float32Array(1);
-    analyzer.getFloatTimeDomainData(dataArray);
-    return dataArray[0];
-}
-class SignalLogger extends ToStringAndUUID {
-    constructor(samplePeriodMs = 1000) {
-        super();
-        this.samplePeriodMs = samplePeriodMs;
-        this.analysers = [];
-        this.start();
-    }
-    start() {
-        this.stop();
-        this.interval = window.setInterval(() => {
-            const messages = this.analysers.map(getFormattedChannelData);
-            const logString = messages.join("\n");
-            console.log(logString);
-        }, this.samplePeriodMs);
-    }
-    stop() {
-        clearInterval(this.interval);
-    }
-    /**
-     * Register a node to be monitored.
-     */
-    register(output, formatString) {
-        const splitter = this.audioContext.createChannelSplitter(output.numOutputChannels);
-        output.connect(splitter);
-        const analyzers = [];
-        for (const i of range(output.numOutputChannels)) {
-            const analyzer = this.audioContext.createAnalyser();
-            splitter.connect(analyzer, i);
-            analyzers.push(analyzer);
-        }
-        this.analysers.push({ formatString, analyzers });
-    }
-}
-
 // lazy-init to 
 let logger;
 const defaultConfig = {
@@ -15469,6 +15459,15 @@ const defaultConfig = {
     workletPath: "dist/worklet.js"
 };
 
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __rest = (undefined && undefined.__rest) || function (s, e) {
     var t = {};
     for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
@@ -15482,12 +15481,14 @@ var __rest = (undefined && undefined.__rest) || function (s, e) {
 };
 const baseWithConfig = main$1.registerAndCreateFactoryFn(defaultConfig, publicNamespace, Object.assign({}, internals));
 const USER_GESTURES = ["change", "click", "contextmenu", "dblclick", "mouseup", "pointerup", "reset", "submit", "touchend"];
+let userHasInteracted = false;
 class IATopLevel {
     constructor(config, internals$1) {
         this.config = config;
         this.internals = internals$1;
         this.gestureListeners = [];
         this.runCalled = false;
+        this.isInitialized = false;
         this.out = new this.internals.AudioRateInput('out', undefined, config.audioContext.destination);
         this.util = util;
     }
@@ -15497,16 +15498,22 @@ class IATopLevel {
     createInitListeners() {
         const workletPromise = this.audioContext.audioWorklet.addModule(this.config.workletPath);
         const initAfterAsync = () => {
+            userHasInteracted = true;
             workletPromise.then(() => this.init(true), () => this.init(false));
         };
-        for (const gesture of USER_GESTURES) {
-            document.addEventListener(gesture, initAfterAsync, { once: true });
+        if (userHasInteracted) {
+            initAfterAsync();
+        }
+        else {
+            for (const gesture of USER_GESTURES) {
+                document.addEventListener(gesture, initAfterAsync, { once: true });
+            }
         }
     }
     init(workletAvailable) {
-        if (this.config.state.isInitialized)
+        if (this.isInitialized)
             return;
-        this.config.state.isInitialized = true;
+        this.isInitialized = true;
         this.config.state.workletIsAvailable = workletAvailable;
         workletAvailable || console.warn(`Unable to load worklet file from ${this.config.workletPath}. Worklet-based processing will be disabled. Verify the workletPath configuration setting is set correctly and the file is available.`);
         this.config.audioContext.resume();
@@ -15523,7 +15530,7 @@ class IATopLevel {
         if (!this.runCalled)
             this.createInitListeners();
         this.runCalled = true;
-        if (this.config.state.isInitialized) {
+        if (this.isInitialized) {
             callback(this.config.audioContext);
         }
         else {
@@ -15531,9 +15538,10 @@ class IATopLevel {
         }
     }
     withConfig(customConfigOptions = {}, configId) {
+        var _a;
+        (_a = customConfigOptions.logger) !== null && _a !== void 0 ? _a : (customConfigOptions.logger = new this.internals.SignalLogger());
         const config = Object.assign(Object.assign({}, this.config), customConfigOptions);
         const namespace = baseWithConfig(config, configId);
-        new IATopLevel(config, namespace);
         return new IATopLevel(config, namespace);
     }
     stackChannels(inputs) {
@@ -15571,7 +15579,7 @@ class IATopLevel {
         return loadFile(this.config.audioContext, fname);
     }
     bufferReader(arg) {
-        const bufferComponent = new BufferComponent();
+        const bufferComponent = new this.internals.BufferComponent();
         const buffer = isType(arg, String) ? this.read(arg) : arg;
         bufferComponent.buffer.setValue(buffer);
         return bufferComponent;
@@ -15601,9 +15609,17 @@ class IATopLevel {
         }
         return new this.internals.AudioComponent(source);
     }
-    createThread(_a = {}) {
-        var { name, audioContext } = _a, options = __rest(_a, ["name", "audioContext"]);
-        return this.withConfig(Object.assign({ audioContext: audioContext !== null && audioContext !== void 0 ? audioContext : new AudioContext() }, options), name);
+    createThread() {
+        return __awaiter(this, arguments, void 0, function* (_a = {}) {
+            var { name, audioContext } = _a, options = __rest(_a, ["name", "audioContext"]);
+            const obj = this.withConfig(Object.assign({ audioContext: audioContext !== null && audioContext !== void 0 ? audioContext : new AudioContext() }, options), name);
+            let resolve;
+            let p = new Promise((res, rej) => {
+                resolve = res;
+            });
+            obj.run(() => { resolve(obj); });
+            return p;
+        });
     }
 }
 

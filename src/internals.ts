@@ -50,6 +50,7 @@ export * from './shared/MidiListener.js';
 export * from './shared/MidiLearn.js';
 export * from './shared/multichannel.js';
 export * from './shared/events.js';
+export * from './shared/logger.js'
 export * from './shared/types.js';
 export * from './ui/BangDisplay.js'
 export * from './ui/BaseDisplay.js'

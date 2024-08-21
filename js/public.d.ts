@@ -89,6 +89,7 @@ declare const _default: {
     MuteEvent: typeof internals.MuteEvent;
     KeyEventType: typeof internals.KeyEventType;
     KeyEvent: typeof internals.KeyEvent;
+    SignalLogger: typeof internals.SignalLogger;
     Disconnect: typeof internals.Disconnect;
     disconnect: () => never;
     WaveType: typeof internals.WaveType;

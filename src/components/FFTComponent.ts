@@ -36,11 +36,11 @@ export class FFTComponent extends BaseComponent implements FFTStream {
     const syncGain = this.audioContext.createGain()
 
     // Output
-    this.fftOut = new FFTOutput(
+    this.fftOut = new this._.FFTOutput(
       'fftOut',
-      new AudioRateOutput('magnitude', magnitudeGain, this),
-      new AudioRateOutput('phase', phaseGain, this),
-      new AudioRateOutput('sync', syncGain, this),
+      new this._.AudioRateOutput('magnitude', magnitudeGain, this),
+      new this._.AudioRateOutput('phase', phaseGain, this),
+      new this._.AudioRateOutput('sync', syncGain, this),
       this,
       this.fftSize
     )

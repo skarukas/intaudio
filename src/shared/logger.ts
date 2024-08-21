@@ -33,6 +33,7 @@ export class SignalLogger extends ToStringAndUUID {
   start() {
     this.stop()
     this.interval = window.setInterval(() => {
+      if (!this.analysers.length) return
       const messages = this.analysers.map(getFormattedChannelData)
       const logString = messages.join("\n")
       console.log(logString)
