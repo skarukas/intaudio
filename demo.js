@@ -1,13 +1,13 @@
-import ia from "./dist/bundle.js"
+import intaudio from "./dist/bundle.js"
 
-if (!ia) {
+if (!intaudio) {
   throw new Error("Need audio library.")
 }
 
 // Determines which test cases to run.
 const TEST_MATCHER = /().*/
 
-ia.run(() => {
+intaudio.run(() => {
   const testNames = Object.keys(tests).filter(s => s.match(TEST_MATCHER))
   console.log("Running tests: " + testNames)
   const failedTests = []
@@ -15,13 +15,15 @@ ia.run(() => {
     const $testRoot = $(document.createElement('div'))
     try {
       const testCase = new TestCase(testName)
-      tests[testName].bind(testCase)($testRoot)
+      intaudio.createThread().then(ia => {
+        tests[testName].bind(testCase)({ $root: $testRoot, ia })
+      })
     } catch (e) {
       console.error(`Failed to execute test case ${testName}.`)
       console.error(e)
       failedTests.push(testName)
     }
-    ia.util.afterRender(() => {
+    intaudio.util.afterRender(() => {
       if ($testRoot.children().length) {
         $testRoot.appendTo('#root')
       }
@@ -71,7 +73,7 @@ class TestCase {
   }
   assertSignal(output, predicate, description = undefined, maxGapMs = 4000) {
     description ??= `assertSignal(${output}, ${predicate})`
-    if (!(output instanceof ia.internals.BaseConnectable)) {
+    if (!(output instanceof intaudio.internals.BaseConnectable)) {
       throw new Error("Expected the signal to be a connectable (output or component), got " + output)
     }
     const $listItem = appendTestSuccessScore(this.name)
@@ -153,7 +155,7 @@ function getColor(percent) {
   return interpolate(redColor, greenColor, percent / 100)
 }
 
-function createOscillator(freq = 440) {
+function createOscillator(ia, freq = 440) {
   let oscillator = ia.audioContext.createOscillator()
   oscillator.type = 'sine'
   oscillator.frequency.value = freq
@@ -163,7 +165,7 @@ function createOscillator(freq = 440) {
 
 // TESTS
 const tests = {
-  multiInputControlFunction() {
+  multiInputControlFunction({ ia}) {
     let subtractNumbers = new ia.internals.FunctionComponent((x, y) => x + y.toFixed(0))
     let val;
     subtractNumbers.connect(v => {
@@ -174,7 +176,7 @@ const tests = {
     subtractNumbers.$y.setValue(20)
     this.assertTrue(val == "1020", val)
   },
-  keyboardAndSynth($root) {
+  keyboardAndSynth({ ia, $root}) {
     const keyboard = new ia.internals.Keyboard(48)
     const synth = new ia.internals.SimplePolyphonicSynth()
     keyboard.addToDom($root)
@@ -203,9 +205,9 @@ const tests = {
     // Add a bunch of notes, then remove them.
     addNote(60)
   },
-  convertAudioToControl() {
+  convertAudioToControl({ ia, $root}) {
     // Conversion from audio to control signal
-    let oscillator = createOscillator()
+    let oscillator = createOscillator(ia)
     let oscillatorOutput = new ia.internals.AudioRateOutput('osc', oscillator)
 
     // TODO: This does't work because there's no way to processs 2 signals 
@@ -220,7 +222,7 @@ const tests = {
       oscillator.stop()
     }, 5000)
   },
-  generateWhiteNoise() {
+  generateWhiteNoise({ ia, $root}) {
     let whiteNoiseSource = ia.generate(() => Math.random() - 0.5)
     whiteNoiseSource.connect(ia.out)
     setTimeout(() => {
@@ -229,7 +231,7 @@ const tests = {
       whiteNoiseSource.output.audioNode.disconnect(ia.out)
     }, 2000)
   },
-  createBang($root) {
+  createBang({ ia, $root}) {
     let bang = new ia.internals.Bang()
     bang.addToDom($root)
     let bangs = 0
@@ -242,14 +244,14 @@ const tests = {
     bang.trigger()
     this.assertTrue(bangs == 3, bangs)
   },
-  adsrEnvelopeSimple($root) {
+  adsrEnvelopeSimple({ ia, $root}) {
     // This should:
     // - Play silence for 1 second
     // - Play attack and decay parts
     // - Release after another second
     let [a, d, s, r] = [100, 200, 0.1, 1000]
     let envelope = new ia.internals.ADSR(a, d, s, r)
-    let osc = new ia.internals.AudioComponent(createOscillator())
+    let osc = new ia.internals.Wave('sine', 440)
     let gain = ia.audioContext.createGain()
     gain.gain.value = 0
     let attackBang = new ia.internals.Bang()
@@ -267,14 +269,14 @@ const tests = {
     envelope.connect(new ia.internals.ScrollingAudioMonitor())
       .addToDom($root, { top: 48, width: 128, height: 48 })
   },
-  adsrSummingEnvelopes($root) {
+  adsrSummingEnvelopes({ ia, $root}) {
     let envelope1 = new ia.internals.ADSR(500, 200, 0.5, 1000)
     let envelope2 = new ia.internals.ADSR(20, 20, 0.5, 10)
     let attackBang = new ia.internals.Bang()
     let releaseBang = new ia.internals.Bang()
     attackBang.addToDom($root, { width: 48, height: 48 })
-    let oscillator = new ia.internals.AudioComponent(createOscillator(440))
-    let oscillator2 = new ia.internals.AudioComponent(createOscillator(220))
+    let oscillator = new ia.internals.Wave('sine', 440)
+    let oscillator2 = new ia.internals.Wave('sine', 220)
 
     const compoundEnvelope = ia.combine(
       { e1: envelope1, e2: envelope2, w: oscillator, w2: oscillator2, v: 0.5 }, (e1, e2, w, w2, v) => {
@@ -301,7 +303,7 @@ const tests = {
     compoundEnvelope.connect(v => v + 0.1).connect(monitor.input.channels[2])
     compoundEnvelope.connect(v => v - 0.1).connect(monitor.input.channels[3])
   },
-  adsrEnvelopeComplex() {
+  adsrEnvelopeComplex({ ia, $root}) {
     // This should:
     // - Play a sine at 400 Hz for 1 sec.
     // - Over 100 ms, move to 450 Hz
@@ -311,7 +313,7 @@ const tests = {
     let [a, d, s, r] = [1000, 10, 0.5, 1000]
     let envelope = new ia.internals.ADSR(a, d, s, r)
     let freq = 440
-    let osc = createOscillator(freq)
+    let osc = createOscillator(ia, freq)
     let scaled = envelope.connect(v => (v * 50) + freq)
     scaled.connect(osc.frequency)
     setTimeout(() => envelope.attackEvent.trigger(), 2000)
@@ -321,7 +323,7 @@ const tests = {
     }, 4000)
     new ia.internals.AudioComponent(osc).connect(ia.out)
   },
-  timeVaryingSignal($root) {
+  timeVaryingSignal({ ia, $root}) {
     let f1 = 880
     let signal = new ia.internals.TimeVaryingSignal(cy => {
       return Math.sin(cy * cy * f1) * 0.2
@@ -334,7 +336,7 @@ const tests = {
       signal.output.audioNode.disconnect(ia.out)
     }, 4000)
   },
-  typingKeyboardInput($root) {
+  typingKeyboardInput({ ia, $root}) {
     const keyInput = new ia.internals.TypingKeyboardMIDI()
     const uiKeyboard = new ia.internals.Keyboard()
     const synth = new ia.internals.SimplePolyphonicSynth()
@@ -347,7 +349,7 @@ const tests = {
     monitor.addToDom($root, { top: 64, width: 512, height: 64 })
     synth.connect(monitor)
   },
-  eliminateDuplicates() {
+  eliminateDuplicates({ ia, $root}) {
     const duplicateFilter = new ia.internals.IgnoreDuplicates()
     let envelope = new ia.internals.ADSR(100, 10, 0.5, 1000)
     // Log only when the signal changes
@@ -356,7 +358,7 @@ const tests = {
       .connect(v => console.log(v))
     envelope.attackEvent.trigger()
   },
-  setParamByDict() {
+  setParamByDict({ ia, $root}) {
     let envelope = new ia.internals.ADSR(100, 10, 0.5, 1000)
     let fn = new ia.internals.FunctionComponent(() => ({
       attackDurationMs: 1000,
@@ -368,7 +370,7 @@ const tests = {
     this.assertTrue(envelope.attackDurationMs.value == 1000, envelope.attackDurationMs.value)
     this.assertTrue(envelope.decayDurationMs.value == 100, envelope.decayDurationMs.value)
   },
-  audioParamByDictFailure() {
+  audioParamByDictFailure({ ia, $root}) {
     this.assertThrows(() => {
       new ia.internals.AudioTransformComponent(x => {
         return {
@@ -378,7 +380,7 @@ const tests = {
       })
     }, 'Unable to read outputs from processing function')
   },
-  sliderControl($root) {
+  sliderControl({ ia, $root}) {
     let slider = new ia.internals.RangeInputComponent()
     slider.addToDom($root, { width: 100, height: 20, rotateDeg: -90 })
     let inputs = []
@@ -400,7 +402,7 @@ const tests = {
       this.assertTrue(JSON.stringify(inputs) == JSON.stringify([30, 50]), inputs)
     }, 1000)
   },
-  namespaceConfig() {
+  namespaceConfig({ ia, $root}) {
     // Configs (stache) let you create functionally separate component graphs,  
     // with different global settings and AudioContexts.
     let audioContext = new AudioContext()
@@ -417,7 +419,7 @@ const tests = {
       && (configId == synth.configId),
       [configId, transformed.configId, synth.configId])
   },
-  crossNamespaceConnnectionFailure() {
+  crossNamespaceConnnectionFailure({ ia, $root}) {
     let audioContext = new AudioContext()
     let ia2 = ia.withConfig({ audioContext })
     let keyboard = new ia.internals.Keyboard()
@@ -426,7 +428,7 @@ const tests = {
       () => keyboard.connect(synth),
       "Unable to connect components from different namespaces.")
   },
-  crossNamespaceJoining() {
+  crossNamespaceJoining({ ia, $root}) {
     let thread1 = ia.createThread()
     let thread2 = ia.createThread()
     this.assertFalse(thread1.audioContext == thread2.audioContext)
@@ -436,14 +438,14 @@ const tests = {
     this.assertSignalEquals(mainThreadSignal, 3)
     mainThreadSignal.connect(ia.out)
   },
-  midiInput($demo) {
+  midiInput({ ia, $root}) {
     const midiIn = new ia.internals.MidiInputDevice("newest")
-    midiIn.addToDom($demo)
+    midiIn.addToDom($root)
     midiIn.midiOut.connect(v => console.log(v))
     midiIn.availableDevices.connect(v => console.log(v))
     midiIn.activeDevices.connect(v => console.log(v))
   },
-  mediaElement($root) {
+  mediaElement({ ia, $root}) {
     $root.append(`
     <div>
       <audio controls id="audio" crossorigin="anonymous">
@@ -465,7 +467,7 @@ const tests = {
       video.connect(ia.out)
     }, 1000)
   },
-  slowDown($root) {
+  slowDown({ ia, $root}){
     $root.append(`
     <div>
       <audio controls id="audio" crossorigin="anonymous">
@@ -483,9 +485,9 @@ const tests = {
       setTimeout(() => slow.start(), 5000)
     }, 1000)
   },
-  channelStackerAndSplitter($root) {
-    let oscillator = new ia.internals.AudioComponent(createOscillator(440))
-    let oscillator2 = new ia.internals.AudioComponent(createOscillator(445))
+  channelStackerAndSplitter({ ia, $root}) {
+    let oscillator = new ia.internals.Wave('sine', 440)
+    let oscillator2 = new ia.internals.Wave('sine', 445)
     const monitor = new ia.internals.ScrollingAudioMonitor()
     monitor.addToDom($root)
 
@@ -501,16 +503,16 @@ const tests = {
     left.connect(ia.out.left)
     right.connect(ia.out.right)
   },
-  transformAudio($root) {
-    let oscillator = new ia.internals.AudioComponent(createOscillator(440))
-    const monitor = new ia.internals.ScrollingAudioMonitor()
-    monitor.addToDom($root)
+  transformAudio({ ia, $root}) {
+    let oscillator = new ia.internals.Wave('sine', 440)
+    /* const monitor = new ia.internals.ScrollingAudioMonitor()
+    monitor.addToDom($root) */
 
     // Apply to each sample, across channels.
     const channelTransform = oscillator.transformAudio(({ left, right }) => {
       return [left, undefined, right, undefined]
     }, { useWorklet: true, dimension: "channels" })
-    channelTransform.connect(monitor.input.channels[2])
+    //channelTransform.connect(monitor.input.channels[2])
     this.assertEqual(channelTransform.numOutputChannels, 4)
     this.assertNonzeroSignal(channelTransform.output.channels[0])
     this.assertSilentSignal(channelTransform.output.channels[1])
@@ -524,7 +526,7 @@ const tests = {
       }
       return [left]
     }, { useWorklet: true, dimension: "all" })
-    ctTransform.connect(monitor.input.channels[1])
+    //ctTransform.connect(monitor.input.channels[1])
     this.assertEqual(ctTransform.numOutputChannels, 1)
     this.assertNonzeroSignal(ctTransform.output.left)
 
@@ -537,7 +539,7 @@ const tests = {
       }
       return -avg
     }, { useWorklet: true })
-    sampleTransform.connect(monitor.input.channels[0])
+    //sampleTransform.connect(monitor.input.channels[0])
 
     this.assertEqual(sampleTransform.numOutputChannels, 2)
     this.assertNonzeroSignal(sampleTransform.output.channels[0])
@@ -559,16 +561,16 @@ const tests = {
       }
       return arr
     }, { useWorklet: true, dimension: "time" })
-    timeTransform.connect(monitor.input.channels[3])
+    //timeTransform.connect(monitor.input.channels[3])
     this.assertNonzeroSignal(timeTransform.output.channels[0])
     this.assertNonzeroSignal(timeTransform.output.channels[1])
 
     this.assertEqual(timeTransform.numOutputChannels, 2)
   },
-  multipleInputTransformGainSlider($root) {
+  multipleInputTransformGainSlider({ ia, $root}) {
     let slider = new ia.internals.RangeInputComponent()
     slider.addToDom($root)
-    let oscillator = new ia.internals.AudioComponent(createOscillator(440))
+    let oscillator = new ia.internals.Wave('sine', 440)
     const monitor = new ia.internals.ScrollingAudioMonitor()
     monitor.addToDom($root, { top: 40 })
 
@@ -577,7 +579,7 @@ const tests = {
     }, { dimension: "none", useWorklet: true }).withInputs(oscillator, slider)
     transform.connect(monitor).connect(ia.out)
   },
-  variableDelayWithSlider($root) {
+  variableDelayWithSlider({ ia, $root}) {
     // Source: gated noise.
     const whiteNoiseSource = ia.generate(() => Math.random() - 0.5)
     const envelope = new ia.internals.ADSR(10, 50, 0, 10)
@@ -606,7 +608,7 @@ const tests = {
 
     delayedNoise.connect(monitor).connect(ia.out)
   },
-  variableDelaySinewave($root) {
+  variableDelaySinewave({ ia, $root}) {
     // Source: gated noise.
     const whiteNoiseSource = ia.generate(() => Math.random() - 0.5)
     const envelope = new ia.internals.ADSR(10, 50, 0, 10)
@@ -644,7 +646,7 @@ const tests = {
     monitor.addToDom($root, { top: 40 })
     delayedNoise.connect(monitor).connect(ia.out)
   },
-  bundleArray() {
+  bundleArray({ ia, $root}) {
     // Array destructuring and indexing.
     const a = ia.generate(() => 0.5)
     const b = ia.generate(() => -1)
@@ -655,7 +657,7 @@ const tests = {
     this.assertEqual(bundle[0], a)
     this.assertEqual(bundle[1], b)
   },
-  bundleObject() {
+  bundleObject({ ia, $root}) {
     const a = ia.generate(() => 0.5)
     const b = ia.generate(() => -1)
     // Object destructuring and indexing.
@@ -669,7 +671,7 @@ const tests = {
     this.assertSilentSignal(ia.bundle({ b, a }).connect((a, b) => a * 2 + b))
     this.assertNonzeroSignal(ia.bundle({ b, a }).connect((a) => a))
   },
-  perOutputArrayInput() {
+  perOutputArrayInput({ ia, $root}) {
     const a = ia.generate(() => 0.5)
     const b = ia.generate(() => -1)
     const bundle = ia.bundle([a, b])
@@ -683,7 +685,7 @@ const tests = {
     this.assertSignalEquals(a1, 5.5)
     this.assertSignalEquals(b1, -2)
   },
-  perOutputObjInput() {
+  perOutputObjInput({ ia, $root}) {
     const a = ia.generate(() => 0.5)
     const b = ia.generate(() => -1)
     const bundle = ia.bundle({ b, a })
@@ -694,7 +696,7 @@ const tests = {
     this.assertSignalEquals(modifiedBundle.a, 5.5)
     this.assertSignalEquals(modifiedBundle.b, -2)
   },
-  perChannel() {
+  perChannel({ ia, $root}) {
     const a = ia.generate(() => 0.5)
     const b = ia.generate(() => -1)
     // broken.... need to make this work for both outputs AND inputs
@@ -706,7 +708,7 @@ const tests = {
     this.assertSignalEquals(modifiedStack.output.left, 5.5)
     this.assertSignalEquals(modifiedStack.output.right, -2)
   },
-  processingPreservesPhase() {
+  processingPreservesPhase({ ia, $root}) {
     // Currently fails for both worklet and non-worklet.
     // Could there be some way to keep signals synced? (prob not)
     const signal = ia.generate(() => Math.random())
@@ -714,7 +716,7 @@ const tests = {
     const diff = ia.bundle([signal, processedSignal]).connect((x, y) => x - y)
     this.assertSilentSignal(diff)
   },
-  bufferComponent($root) {
+  bufferComponent({ ia, $root}) {
     ia.config.useWorkletByDefault = true
     const buffer = ia.bufferReader("assets/fugue.m4a")
     const timeRamp = ia.ramp('samples').transformAudio(
@@ -730,7 +732,7 @@ const tests = {
     monitor.addToDom($root)
     buffer.connect(monitor).connect(ia.out)
   },
-  bufferWriter() {
+  bufferWriter({ ia, $root}) {
     const buffer = new AudioBuffer({
       numberOfChannels: 2,
       length: 128,
@@ -761,7 +763,7 @@ const tests = {
       }))
     }
   },
-  twoBufferWriters() {
+  twoBufferWriters({ ia, $root}) {
     const buffer = new AudioBuffer({
       numberOfChannels: 2,
       length: 128,
@@ -801,7 +803,7 @@ const tests = {
       }))
     }
   },
-  bufferWriterAndReader() {
+  bufferWriterAndReader({ ia, $root}) {
     const buffer = new AudioBuffer({
       numberOfChannels: 2,
       length: 128,
@@ -825,7 +827,7 @@ const tests = {
     reader.logSignal()
   },
   /** Capture a live multichannel AudioBuffer from an audio stream. */
-  capture() {
+  capture({ ia, $root}) {
     // Generate stereo noise signal.
     // Each has a right channel which is silent. TODO: fix this. These should 
     // be single-channel signals.
@@ -848,7 +850,7 @@ const tests = {
       }
     })
   },
-  fftPassthrough($root) {
+  fftPassthrough({ ia, $root}) {
     // TODO: understand why this test doesn't pass when run in parallel... race 
     // condition with buffer reading?
     // TODO: Right channel of osc is muted (shouldn't be the case...)
@@ -922,7 +924,7 @@ const tests = {
     this.assertNonzeroSignal(passthrough)
   },
   // This is a wishlist example. TODO: implement required functionality.
-  combineAllDataTypes($root) {
+  combineAllDataTypes({ ia, $root}) {
     return // Not working yet.
     // Audio player.
     const player = ia.bufferReader("assets/fugue.m4a")
