@@ -424,7 +424,7 @@
     };
 
     class BaseBufferWorkletProcessor extends SafeAudioWorkletProcessor {
-        constructor({ numberOfInputs, numberOfOutputs, processorOptions: { bufferId, buffer } }) {
+        constructor({ processorOptions: { bufferId, buffer } }) {
             super();
             if (bufferId) {
                 this.bufferId = bufferId;

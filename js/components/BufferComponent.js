@@ -11,7 +11,7 @@ export class BufferComponent extends BaseComponent {
             numberOfOutputs: 1,
             outputChannelCount: [numChannels],
             processorOptions: {
-                buffer,
+                buffer: buffer ? bufferToFloat32Arrays(buffer) : undefined,
                 bufferId: buffer ? getBufferId(buffer) : undefined
             }
         });

@@ -1,9 +1,7 @@
 import { SafeAudioWorkletProcessor } from "./utils.js";
 export declare class BaseBufferWorkletProcessor extends SafeAudioWorkletProcessor {
     bufferId?: string;
-    constructor({ numberOfInputs, numberOfOutputs, processorOptions: { bufferId, buffer } }: {
-        numberOfInputs: number;
-        numberOfOutputs: number;
+    constructor({ processorOptions: { bufferId, buffer } }: {
         processorOptions: {
             bufferId?: string;
             buffer?: Float32Array[];
