@@ -5,7 +5,7 @@ if (!ia) {
 }
 
 // Determines which test cases to run.
-const TEST_MATCHER = /().*/
+const TEST_MATCHER = /(crossNamespaceJoining).*/
 
 ia.run(() => {
   const testNames = Object.keys(tests).filter(s => s.match(TEST_MATCHER))
@@ -419,22 +419,25 @@ const tests = {
   },
   crossNamespaceConnnectionFailure() {
     let audioContext = new AudioContext()
-    let ia2 = ia.withConfig({ audioContext })
     let keyboard = new ia.internals.Keyboard()
-    let synth = new ia2.internals.SimplePolyphonicSynth()
-    this.assertThrows(
-      () => keyboard.connect(synth),
-      "Unable to connect components from different namespaces.")
+    ia.createThread({ audioContext }).then(ia2 => {
+      let synth = new ia2.internals.SimplePolyphonicSynth()
+      this.assertThrows(
+        () => keyboard.connect(synth),
+        "Unable to connect components from different namespaces.")
+    })
   },
   crossNamespaceJoining() {
-    let thread1 = ia.createThread()
-    let thread2 = ia.createThread()
-    this.assertFalse(thread1.audioContext == thread2.audioContext)
-    const osc1 = new thread1.internals.TimeVaryingSignal(() => 1)
-    const osc2 = new thread2.internals.TimeVaryingSignal(() => 2)
-    const mainThreadSignal = ia.join([osc1, osc2])
-    this.assertSignalEquals(mainThreadSignal, 3)
-    mainThreadSignal.connect(ia.out)
+    Promise.all([ia.createThread(), ia.createThread()])
+      .then(([thread1, thread2]) => {
+        this.assertFalse(thread1.audioContext == thread2.audioContext)
+        this.assertFalse(ia.audioContext == thread2.audioContext)
+        const osc1 = new thread1.internals.TimeVaryingSignal(() => 1)
+        const osc2 = new thread2.internals.TimeVaryingSignal(() => 2)
+        const mainThreadSignal = ia.join([osc1, osc2])
+        this.assertSignalEquals(mainThreadSignal, 3)
+        mainThreadSignal.connect(ia.out)
+    })
   },
   midiInput($demo) {
     const midiIn = new ia.internals.MidiInputDevice("newest")
