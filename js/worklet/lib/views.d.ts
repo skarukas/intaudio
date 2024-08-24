@@ -12,6 +12,7 @@ export declare class ArrayView<T> implements WritableArrayLike<T>, Array<T> {
     private _proxy;
     protected get proxy(): this;
     protected constructor(privateConstructor: Symbol, get: (i: number) => T, set: (i: number, v: T) => void, length: number);
+    at(index: number): T | undefined;
     flatMap<U, This = undefined>(callback: (this: This, value: T, index: number, array: T[]) => U | ReadonlyArray<U>, thisArg?: This): U[];
     flat<A, D extends number = 1>(this: A, depth?: D): FlatArray<A, D>[];
     toLocaleString(): string;

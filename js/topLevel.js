@@ -28,14 +28,34 @@ import * as internalNamespace from './internals.js';
 import publicNamespace from './public.js';
 import * as init from './shared/init.js';
 const baseWithConfig = stache.registerAndCreateFactoryFn(init.defaultConfig, publicNamespace, Object.assign({}, internalNamespace));
-const USER_GESTURES = ["change", "click", "contextmenu", "dblclick", "mouseup", "pointerup", "reset", "submit", "touchend"];
-let userHasInteracted = false;
+class GestureListener {
+    constructor() {
+        this.userHasInteracted = false;
+        this.gestureListeners = [];
+        for (const gesture of GestureListener.USER_GESTURES) {
+            document.addEventListener(gesture, () => {
+                this.userHasInteracted = true;
+                this.gestureListeners.forEach(f => f());
+            }, { once: true });
+        }
+    }
+    waitForUserGesture() {
+        if (this.userHasInteracted) {
+            return Promise.resolve();
+        }
+        else {
+            return new Promise(res => { this.gestureListeners.push(res); });
+        }
+    }
+}
+GestureListener.USER_GESTURES = ["change", "click", "contextmenu", "dblclick", "mouseup", "pointerup", "reset", "submit", "touchend"];
+const GESTURE_LISTENER = new GestureListener();
 export class IATopLevel {
     constructor(config, internals) {
         this.config = config;
         this.internals = internals;
-        this.gestureListeners = [];
-        this.runCalled = false;
+        this.listeners = [];
+        this.initStarted = false;
         this.isInitialized = false;
         this.out = new this.internals.AudioRateInput('out', undefined, config.audioContext.destination);
         this.util = internalNamespace.util;
@@ -44,28 +64,22 @@ export class IATopLevel {
         return this.config.audioContext;
     }
     createInitListeners() {
-        const workletPromise = this.audioContext.audioWorklet.addModule(this.config.workletPath);
-        const initAfterAsync = () => {
-            userHasInteracted = true;
-            workletPromise.then(() => this.init(true), () => this.init(false));
-        };
-        if (userHasInteracted) {
-            initAfterAsync();
-        }
-        else {
-            for (const gesture of USER_GESTURES) {
-                document.addEventListener(gesture, initAfterAsync, { once: true });
-            }
-        }
+        Promise.all([
+            this.audioContext.audioWorklet.addModule(this.config.workletPath), GESTURE_LISTENER.waitForUserGesture()
+        ]).then(() => {
+            this.onSuccessfulInit(true);
+        }, () => {
+            this.onSuccessfulInit(false);
+        });
     }
-    init(workletAvailable) {
+    onSuccessfulInit(workletAvailable) {
         if (this.isInitialized)
             return;
         this.isInitialized = true;
         this.config.state.workletIsAvailable = workletAvailable;
         workletAvailable || console.warn(`Unable to load worklet file from ${this.config.workletPath}. Worklet-based processing will be disabled. Verify the workletPath configuration setting is set correctly and the file is available.`);
         this.config.audioContext.resume();
-        for (const listener of this.gestureListeners) {
+        for (const listener of this.listeners) {
             listener(this.config.audioContext);
         }
     }
@@ -75,15 +89,26 @@ export class IATopLevel {
      * @param callback A function to run once the audio engine is ready.
      */
     run(callback) {
-        if (!this.runCalled)
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this.init();
+            return callback(this.audioContext);
+        });
+    }
+    init() {
+        let resolve;
+        let p = new Promise(res => resolve = res);
+        if (!this.initStarted)
             this.createInitListeners();
-        this.runCalled = true;
+        this.initStarted = true;
         if (this.isInitialized) {
-            callback(this.config.audioContext);
+            return Promise.resolve(true);
         }
         else {
-            this.gestureListeners.push(callback);
+            this.listeners.push(() => {
+                resolve(true);
+            });
         }
+        return p;
     }
     withConfig(customConfigOptions = {}, configId) {
         var _a;

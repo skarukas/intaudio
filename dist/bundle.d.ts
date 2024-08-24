@@ -1859,17 +1859,18 @@ declare class IATopLevel {
     util: typeof util_d;
     constructor(config: AudioConfig, internals: typeof internalNamespace);
     get audioContext(): AudioContext;
-    private gestureListeners;
-    private runCalled;
+    private listeners;
+    private initStarted;
     private createInitListeners;
     isInitialized: boolean;
-    private init;
+    private onSuccessfulInit;
     /**
      * Register a function to be called once the audio engine is ready and a user gesture has been performed.
      *
      * @param callback A function to run once the audio engine is ready.
      */
-    run(callback: (ctx?: AudioContext) => void): void;
+    run<T>(callback: (ctx?: AudioContext) => T): Promise<T>;
+    init(): Promise<boolean>;
     withConfig(customConfigOptions?: Partial<AudioConfig>, configId?: string): IATopLevel;
     stackChannels(inputs: Connectable[]): ChannelStacker;
     generate(fn: (t: number) => number, timeMeasure?: TimeMeasure): TimeVaryingSignal;

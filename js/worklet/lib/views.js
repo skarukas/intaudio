@@ -40,6 +40,9 @@ export class ArrayView {
             throw new Error("Instances must be constructed using one of the ArrayView.create*() methods.");
         }
     }
+    at(index) {
+        return this.get(index);
+    }
     flatMap(callback, thisArg) {
         return Array.prototype.flatMap.call(this.proxy, callback, thisArg);
     }

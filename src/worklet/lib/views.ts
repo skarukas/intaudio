@@ -50,6 +50,9 @@ export class ArrayView<T> implements WritableArrayLike<T>, Array<T> {
       throw new Error("Instances must be constructed using one of the ArrayView.create*() methods.")
     }
   }
+  at(index: number): T | undefined {
+    return this.get(index)
+  }
   flatMap<U, This = undefined>(callback: (this: This, value: T, index: number, array: T[]) => U | ReadonlyArray<U>, thisArg?: This): U[] {
     return <U[]>Array.prototype.flatMap.call(this.proxy, <any>callback, thisArg)
   }
@@ -89,7 +92,7 @@ export class ArrayView<T> implements WritableArrayLike<T>, Array<T> {
     return ArrayView.createSliceView(this.proxy, start, end)
   }
   sort(compareFn?: (a: T, b: T) => number): this {
-    return <this>Array.prototype.sort.call(this.proxy, compareFn)
+    return Array.prototype.sort.call(this.proxy, compareFn) as any
   }
   splice(start: number, deleteCount?: number): T[];
   splice(start: number, deleteCount: number, ...items: T[]): T[];

@@ -21,8 +21,30 @@ const baseWithConfig = stache.registerAndCreateFactoryFn(
   publicNamespace,
   { ...internalNamespace }
 )
-const USER_GESTURES = ["change", "click", "contextmenu", "dblclick", "mouseup", "pointerup", "reset", "submit", "touchend"]
-let userHasInteracted = false
+
+class GestureListener {
+  private static USER_GESTURES = ["change", "click", "contextmenu", "dblclick", "mouseup", "pointerup", "reset", "submit", "touchend"] as const
+  userHasInteracted = false
+  gestureListeners: Function[] = []
+
+  constructor() {
+    for (const gesture of GestureListener.USER_GESTURES) {
+      document.addEventListener(gesture, () => {
+        this.userHasInteracted = true
+        this.gestureListeners.forEach(f => f())
+      }, { once: true })
+    }
+  }
+  waitForUserGesture(): Promise<void> {
+    if (this.userHasInteracted) {
+      return Promise.resolve()
+    } else {
+      return new Promise(res => { this.gestureListeners.push(res) })
+    }
+  }
+}
+
+const GESTURE_LISTENER = new GestureListener()
 
 export class IATopLevel {
   out: AudioRateInput
@@ -37,24 +59,19 @@ export class IATopLevel {
   get audioContext() {
     return this.config.audioContext
   }
-  private gestureListeners: ((ctx?: AudioContext) => any)[] = []
-  private runCalled: boolean = false
+  private listeners: ((ctx?: AudioContext) => any)[] = []
+  private initStarted: boolean = false
   private createInitListeners() {
-    const workletPromise = this.audioContext.audioWorklet.addModule(this.config.workletPath)
-    const initAfterAsync = () => {
-      userHasInteracted = true
-      workletPromise.then(() => this.init(true), () => this.init(false))
-    }
-    if (userHasInteracted) {
-      initAfterAsync()
-    } else {
-      for (const gesture of USER_GESTURES) {
-        document.addEventListener(gesture, initAfterAsync, { once: true })
-      }
-    }
+    Promise.all([
+      this.audioContext.audioWorklet.addModule(this.config.workletPath), GESTURE_LISTENER.waitForUserGesture()
+    ]).then(() => {
+      this.onSuccessfulInit(true)
+    }, () => {
+      this.onSuccessfulInit(false)
+    })
   }
   isInitialized: boolean = false
-  private init(workletAvailable: boolean) {
+  private onSuccessfulInit(workletAvailable: boolean) {
     if (this.isInitialized) return
     this.isInitialized = true
 
@@ -62,7 +79,7 @@ export class IATopLevel {
     workletAvailable || console.warn(`Unable to load worklet file from ${this.config.workletPath}. Worklet-based processing will be disabled. Verify the workletPath configuration setting is set correctly and the file is available.`)
 
     this.config.audioContext.resume()
-    for (const listener of this.gestureListeners) {
+    for (const listener of this.listeners) {
       listener(this.config.audioContext)
     }
   }
@@ -72,15 +89,24 @@ export class IATopLevel {
    * 
    * @param callback A function to run once the audio engine is ready.
    */
-  run(callback: (ctx?: AudioContext) => void) {
-    if (!this.runCalled) this.createInitListeners()
-    this.runCalled = true
+  async run<T>(callback: (ctx?: AudioContext) => T): Promise<T> {
+    await this.init();
+    return callback(this.audioContext);
+  }
+  init(): Promise<boolean> {
+    let resolve: Function;
+    let p = new Promise<boolean>(res => resolve = res)
+    if (!this.initStarted) this.createInitListeners()
+    this.initStarted = true
 
     if (this.isInitialized) {
-      callback(this.config.audioContext)
+      return Promise.resolve(true)
     } else {
-      this.gestureListeners.push(callback)
+      this.listeners.push(() => {
+        resolve(true)
+      })
     }
+    return p
   }
 
   withConfig(
