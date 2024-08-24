@@ -1,4 +1,4 @@
-import ia from "./dist/bundle.js"
+import ia from "../dist/bundle.js"
 
 if (!ia) {
   throw new Error("Need audio library.")
