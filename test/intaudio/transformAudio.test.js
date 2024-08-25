@@ -1,6 +1,8 @@
 import ia from "../../dist/bundle.js"
 import { expect } from "@esm-bundle/chai";
-import { intaudioInit, expectNonzeroSignal, expectSilentSignal, expectSignalEqual, DEFAULT_SAMPLE_RATE, expectSamples } from "./testUtils.js";
+import { ChunkTester, DEFAULT_SAMPLE_RATE, SamplerTester, intaudioInit } from "./testUtils.js";
+
+const sampleTester = new SamplerTester()
 
 beforeEach(async () => {
   await intaudioInit()
@@ -19,10 +21,10 @@ for (const useWorklet of [true, false]) {
       expect(channelTransform.numOutputChannels).to.equal(4)
 
       return Promise.all([
-        expectNonzeroSignal(channelTransform.output.channels[0]),
-        expectSilentSignal(channelTransform.output.channels[1]),
-        expectNonzeroSignal(channelTransform.output.channels[2]),
-        expectSilentSignal(channelTransform.output.channels[3]),
+        sampleTester.expectNonzero(channelTransform.output.channels[0]),
+        sampleTester.expectSilent(channelTransform.output.channels[1]),
+        sampleTester.expectNonzero(channelTransform.output.channels[2]),
+        sampleTester.expectSilent(channelTransform.output.channels[3]),
       ])
     })
 
@@ -35,7 +37,7 @@ for (const useWorklet of [true, false]) {
         return [left]
       }, { useWorklet, dimension: "all" })
       expect(ctTransform.numOutputChannels).to.equal(1)
-      return expectNonzeroSignal(ctTransform.output.left)
+      return sampleTester.expectNonzero(ctTransform.output.left)
     })
 
     it("applies an operation across channels and time", async () => {
@@ -51,8 +53,8 @@ for (const useWorklet of [true, false]) {
       }, { useWorklet, windowSize })
       expect(sampleTransform.numOutputChannels).to.equal(2)
       return Promise.all([
-        expectNonzeroSignal(sampleTransform.output.channels[0]),
-        expectNonzeroSignal(sampleTransform.output.channels[1])
+        sampleTester.expectNonzero(sampleTransform.output.channels[0]),
+        sampleTester.expectNonzero(sampleTransform.output.channels[1])
       ])
     })
 
@@ -67,8 +69,8 @@ for (const useWorklet of [true, false]) {
       }, { useWorklet, dimension: "time" })
       expect(timeTransform.numOutputChannels).to.equal(2)
       return Promise.all([
-        expectNonzeroSignal(timeTransform.output.channels[0]),
-        expectNonzeroSignal(timeTransform.output.channels[1])
+        sampleTester.expectNonzero(timeTransform.output.channels[0]),
+        sampleTester.expectNonzero(timeTransform.output.channels[1])
       ])
     })
 
@@ -88,12 +90,12 @@ for (const useWorklet of [true, false]) {
       }, { dimension: "channels", windowSize, useWorklet })
       expect(thisSampleTransform.numOutputChannels).to.equal(6)
       return Promise.all([
-        expectNonzeroSignal(thisSampleTransform.output.channels[0]),
-        expectSignalEqual(thisSampleTransform.output.channels[1], DEFAULT_SAMPLE_RATE),
-        expectNonzeroSignal(thisSampleTransform.output.channels[2]),
-        expectSignalEqual(thisSampleTransform.output.channels[3], -1),  
-        expectNonzeroSignal(thisSampleTransform.output.channels[4]),
-        expectSignalEqual(thisSampleTransform.output.channels[5], windowSize)
+        sampleTester.expectNonzero(thisSampleTransform.output.channels[0]),
+        sampleTester.expectEqual(thisSampleTransform.output.channels[1], DEFAULT_SAMPLE_RATE),
+        sampleTester.expectNonzero(thisSampleTransform.output.channels[2]),
+        sampleTester.expectEqual(thisSampleTransform.output.channels[3], -1),  
+        sampleTester.expectNonzero(thisSampleTransform.output.channels[4]),
+        sampleTester.expectEqual(thisSampleTransform.output.channels[5], windowSize)
       ])
     })
 
@@ -104,30 +106,26 @@ for (const useWorklet of [true, false]) {
       }, { useWorklet })
       expect(transformedSignal.numOutputChannels).to.equal(2)
       return Promise.all([
-        expectNonzeroSignal(transformedSignal.output.channels[0]),
-        expectNonzeroSignal(transformedSignal.output.channels[1])
+        sampleTester.expectNonzero(transformedSignal.output.channels[0]),
+        sampleTester.expectNonzero(transformedSignal.output.channels[1])
       ])
     })
 
     it("has access to previous outputs", async () => {
       const oscillator = new ia.internals.Wave('sine', 440)
       const transformedSignal = oscillator.transformAudio(function (x) {
-        // Repeating ramp up to 255
-        return (this.previousOutputs()[0] + 1) % 256
+        // Alternate between 0 and 1.
+        return 1 - this.previousOutputs()[0]
       }, { useWorklet })
       expect(transformedSignal.numOutputChannels).to.equal(2)
       return Promise.all([
-        // Expect to be split 50-50 between [0, 128) and [128, 256)
-        expectSamples(
-          transformedSignal.output.channels[0],
-          x => x.to.be.lessThan(128),
-          { passRatio: 0.2 }
+        // Expect to be split 50-50 between 0 and 1
+        ChunkTester.expectNonzero(
+          transformedSignal.output.channels[0], { passRatio: 0.4 }
         ),
-        expectSamples(
-          transformedSignal.output.channels[0],
-          x => x.to.be.greaterThanOrEqual(128),
-          { passRatio: 0.2 }
-        ),
+        ChunkTester.expectSilent(
+          transformedSignal.output.channels[0], { passRatio: 0.4 }
+        )
       ])
     })
   })

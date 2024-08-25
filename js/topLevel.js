@@ -151,6 +151,9 @@ export class IATopLevel {
     read(fname) {
         return loadFile(this.config.audioContext, fname);
     }
+    func(fn) {
+        return new this.internals.FunctionComponent(fn);
+    }
     bufferReader(arg) {
         const bufferComponent = new this.internals.BufferComponent();
         const buffer = isType(arg, String) ? this.read(arg) : arg;

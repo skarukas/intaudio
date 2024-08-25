@@ -5,9 +5,11 @@ import { sendMouse } from '@web/test-runner-commands';
 
 use(chaiAsPromised)
 
-export const DEFAULT_SAMPLE_DURATION_MS = 500
-export const DEFAULT_SAMPLING_PERIOD_MS = 10
-export const DEFAULT_SAMPLING_PASS_RATIO = 0.9
+export const defaults = {
+  SAMPLE_DURATION_MS: 250,
+  SAMPLING_PERIOD_MS: 10,
+  SAMPLING_PASS_RATIO: 0.9
+}
 export const DEFAULT_SAMPLE_RATE = new AudioContext().sampleRate
 
 export async function intaudioInit() {
@@ -17,6 +19,129 @@ export async function intaudioInit() {
     button: 'right'
   })
   await ia.init()
+}
+
+class SignalTester {
+  constructor({
+    passRatio = defaults.SAMPLING_PASS_RATIO,
+    trimLeadingZeros = true
+  }) {
+    this.passRatio = passRatio
+    this.trimLeadingZeros = trimLeadingZeros
+  }
+
+  /**
+   * Run a test against sampled values from an `intaudio` signal, and assert that the passing ratio is greater than a cutoff.
+   * 
+   * NOTE: this is an asynchronous test, so it must be returned in a chai test OR chained to the `done` callback.
+   * 
+   * @example
+   * it("runs audio tests", async () => {
+   *   return Promise.all([
+   *     expectSamples(mySignal, x => x.to.equal(1)),
+   *     expectSamples(myOtherSignal, x => x.to.be.greaterThan(0.5)),
+   *   ])
+   * })
+   * 
+   * @example
+   * it("tests the signal is equal to 1", async done => {
+   *   expectSamples(mySignal, x => x.to.equal(1)).then(done)
+   * })
+   * 
+   * 
+   * @param {*} signal An intaudio `AudioStream` to run a test against.
+   * @param {*} fn A function to apply to a chai Assertion, e.g. `x => x.to.equal(1)`
+   * @returns 
+   */
+  expect(signal, fn) {
+    return new Promise((resolve, reject) => {
+      this.getSignalValues(signal).then(samples => {
+        if (this.trimLeadingZeros) {
+          const firstNonzeroIndex = samples.findIndex(x => x != 0)
+          if (firstNonzeroIndex != -1) {
+            samples = samples.slice(firstNonzeroIndex)
+          }
+        }
+        expectMost(samples, fn, this.passRatio, `Assertion on ${signal}`)
+        resolve()
+      }).catch(reject)
+    })
+  }
+
+  getSignalValues(signal) {
+    throw new Error("Not implemented.")
+  }
+
+  expectNonzero(signal) {
+    return this.expect(signal, x => x.to.not.be.equal(0))
+  }
+
+  expectSilent(signal) {
+    return this.expectEqual(signal, 0)
+  }
+
+  expectEqual(signal, value) {
+    return this.expect(signal, x => x.to.be.equal(value))
+  }
+
+  static expect(signal, fn, options = {}) {
+    return new this(options).expect(signal, fn)
+  }
+
+  static expectNonzero(signal, options = {}) {
+    return new this(options).expectNonzero(signal)
+  }
+
+  static expectSilent(signal, options = {}) {
+    return new this(options).expectSilent(signal)
+  }
+
+  static expectEqual(signal, value, options = {}) {
+    return new this(options).expectEqual(signal, value)
+  }
+}
+
+export class SamplerTester extends SignalTester {
+  constructor({
+    passRatio = defaults.SAMPLING_PASS_RATIO,
+    durationMs = defaults.SAMPLE_DURATION_MS,
+    samplingPeriodMs = defaults.SAMPLING_PERIOD_MS,
+    trimLeadingZeros = true
+  } = {}) {
+    super({ passRatio, trimLeadingZeros })
+    this.durationMs = durationMs
+    this.samplingPeriodMs = samplingPeriodMs
+  }
+
+  async getSignalValues(signal) {
+    let samples = []
+    signal.sampleSignal(this.samplingPeriodMs).connect(v => samples.push(v))
+    await wait(this.durationMs)
+    return samples
+  }
+}
+
+export function wait(ms) {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms)
+  })
+}
+
+export class ChunkTester extends SignalTester {
+  constructor({
+    numSamples = 128,
+    passRatio = defaults.SAMPLING_PASS_RATIO,
+    trimLeadingZeros = true
+  } = {}) {
+    super({ passRatio, trimLeadingZeros })
+    this.numSamples = numSamples
+  }
+
+  async getSignalValues(signal) {
+    // TODO: times out when worklet is not enabled ... (?)
+    const buffers = await signal.capture(this.numSamples)
+    return buffers[0].getChannelData(0)
+  }
 }
 
 export function expectMost(arr, fn, passRatio = 1, message="") {
@@ -41,110 +166,4 @@ export function expectMost(arr, fn, passRatio = 1, message="") {
   ${exampleFailures.join("\n  ")}
 True pass ratio was not high enough`
   expect(truePassRatio).to.be.greaterThanOrEqual(passRatio, message)
-}
-
-/**
- * Run a test against sampled values from an `intaudio` signal, and assert that the passing ratio is greater than a cutoff.
- * 
- * NOTE: this is an asynchronous test, so it must be returned in a chai test OR chained to the `done` callback.
- * 
- * @example
- * it("runs audio tests", async () => {
- *   return Promise.all([
- *     expectSamples(mySignal, x => x.to.equal(1)),
- *     expectSamples(myOtherSignal, x => x.to.be.greaterThan(0.5)),
- *   ])
- * })
- * 
- * @example
- * it("tests the signal is equal to 1", async done => {
- *   expectSamples(mySignal, x => x.to.equal(1)).then(done)
- * })
- * 
- * 
- * @param {*} signal An intaudio `AudioStream` to run a test against.
- * @param {*} fn A function to apply to a chai Assertion, e.g. `x => x.to.equal(1)`
- * @param {*} options passRatio: The acceptable lower bound for passing. durationMs: How long to sample the signal. samplingPeriodMs: How often to sample the signal.
- * @returns 
- */
-export function expectSamples(
-  signal,
-  fn,
-  {
-    passRatio = DEFAULT_SAMPLING_PASS_RATIO,
-    durationMs = DEFAULT_SAMPLE_DURATION_MS,
-    samplingPeriodMs = DEFAULT_SAMPLING_PERIOD_MS,
-    trimLeadingZeros = true
-  } = {}
-) {
-  // Set up sampling.
-  let sampledSignal = []
-  let resolve, reject
-  signal.sampleSignal(samplingPeriodMs).connect(v => sampledSignal.push(v))
-
-  // Stop sampling and read sampled signal.
-  setTimeout(() => {
-    try {
-      if (trimLeadingZeros) {
-        const firstNonzeroIndex = sampledSignal.findIndex(x => x != 0)
-        if (firstNonzeroIndex != -1) {
-          sampledSignal = sampledSignal.slice(firstNonzeroIndex)
-        }
-      }
-      expectMost(sampledSignal, fn, passRatio, `Assertion on ${signal}`)
-      resolve()
-    } catch (e) {
-      reject(e)
-    }
-  }, durationMs)
-  return new Promise((res, rej) => { resolve = res; reject = rej })
-}
-
-export function expectNonzeroSignal(
-  signal,   
-  {
-    passRatio = DEFAULT_SAMPLING_PASS_RATIO,
-    durationMs = DEFAULT_SAMPLE_DURATION_MS,
-    samplingPeriodMs = DEFAULT_SAMPLING_PERIOD_MS,
-    trimLeadingZeros = true
-  } = {}
-) {
-  return expectSamples(
-    signal,
-    x => x.to.not.be.equal(0),
-    { passRatio, durationMs, samplingPeriodMs, trimLeadingZeros }
-  )
-}
-
-export function expectSilentSignal(
-  signal,   
-  {
-    passRatio = DEFAULT_SAMPLING_PASS_RATIO,
-    durationMs = DEFAULT_SAMPLE_DURATION_MS,
-    samplingPeriodMs = DEFAULT_SAMPLING_PERIOD_MS,
-    trimLeadingZeros = true
-  } = {}
-) {
-  return expectSignalEqual(
-    signal,
-    0,
-    { passRatio, durationMs, samplingPeriodMs, trimLeadingZeros }
-  )
-}
-
-export function expectSignalEqual(
-  signal,
-  value,
-  {
-    passRatio = DEFAULT_SAMPLING_PASS_RATIO,
-    durationMs = DEFAULT_SAMPLE_DURATION_MS,
-    samplingPeriodMs = DEFAULT_SAMPLING_PERIOD_MS,
-    trimLeadingZeros = true
-  } = {}
-) {
-  return expectSamples(
-    signal,
-    x => x.to.be.equal(value),
-    { passRatio, durationMs, samplingPeriodMs, trimLeadingZeros }
-  )
 }

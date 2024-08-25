@@ -7,6 +7,7 @@ import { AnyFn } from "../shared/types.js"
 import { AbstractInput } from "../io/input/AbstractInput.js"
 import { ControlInput } from "../io/input/ControlInput.js"
 import { ControlOutput } from "../io/output/ControlOutput.js"
+import { enumerate, isPlainObject, range } from "../shared/util.js"
 
 // TODO: create shared base class with AudioTransformComponent.
 export class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any, T5 = any, R = any> extends BaseComponent {
@@ -34,27 +35,31 @@ export class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any,
     super()
     const descriptor = describeFunction(fn)
     const parameters = descriptor.parameters
-
+    let argInfos: { hasDefault: boolean, name: string }[] = []
     for (let i = 0; i < parameters.length; i++) {
       const arg = parameters[i]
-      const inputName = "$" + arg.name
-      const indexName = "$" + i
-      const isRequired = !arg.hasDefault
-      if (arg.destructureType == "rest") {
-        // Can't use it or anything after it
+      if (arg.destructureType == "spread") {
+        // Fill it with 10 extra args.
+        const restArgs = (range(10) as any).fill({ hasDefault: true, name: undefined })
+        argInfos.push(...restArgs)
         break
       } else if (arg.destructureType) {
-        throw new Error(`Invalid function for FunctionComponent. Parameters cannot use array or object destructuring. Given: ${arg.rawName}`)
+        arg.name = undefined
       }
-
-
+      argInfos.push(arg)
+    }
+    for (const [i, arg] of enumerate(argInfos)) {
       // Define input and its alias.
+      const indexName = "$" + i
       // @ts-ignore Improper index type.
-      this[inputName] = this.defineControlInput(inputName, constants.UNSET_VALUE, isRequired)
+      this[indexName] = this.defineControlInput(indexName, constants.UNSET_VALUE, !arg.hasDefault)
+      if (arg.name) {
+        const inputName = "$" + arg.name
+        // @ts-ignore Improper index type.
+        this[inputName] = this.defineInputAlias(inputName, this[indexName])
+      }
       // @ts-ignore Improper index type.
-      this[indexName] = this.defineInputAlias(indexName, this[inputName])
-      // @ts-ignore Improper index type.
-      this._orderedFunctionInputs.push(this[inputName])
+      this._orderedFunctionInputs.push(this[indexName])
     }
     let requiredArgs = parameters.filter((a: any) => !a.hasDefault)
     if (requiredArgs.length == 1) {
@@ -67,7 +72,14 @@ export class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any,
   }
   inputDidUpdate<T>(input: ControlInput<T>, newValue: T) {
     const args = this._orderedFunctionInputs.map(eachInput => eachInput.value)
-    const result = this.fn(...args)
+    let definedArgsLength: number = args.length
+    for (const i of range(args.length).reverse()) {
+      if (args[i] != constants.UNSET_VALUE) {
+        definedArgsLength = i + 1
+        break
+      }
+    }
+    const result = this.fn(...args.slice(0, definedArgsLength))
     this.output.setValue(result)
   }
   override __call__(...inputs: Array<Connectable | unknown>): this;
@@ -79,15 +91,15 @@ export class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any,
   override withInputs(inputDict: { [name: string]: Connectable | unknown }): this;
   override withInputs(...inputs: any): this {
     let inputDict: { [name: string]: Connectable | unknown } = {};
-    if (inputs[0]?.connect) {  // instanceof Connectable
+    if (isPlainObject(inputs[0])) {
+      inputDict = inputs[0]
+    } else {
       if (inputs.length > this._orderedFunctionInputs.length) {
         throw new Error(`Too many inputs for the call() method on ${this}. Expected ${this._orderedFunctionInputs.length} but got ${inputs.length}.`)
       }
       for (let i = 0; i < inputs.length; i++) {
         inputDict["$" + i] = inputs[i]
       }
-    } else {
-      inputDict = inputs[0]
     }
     super.withInputs(inputDict)
     return this

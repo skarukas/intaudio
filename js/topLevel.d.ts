@@ -1,5 +1,5 @@
 import { Component } from "./components/base/Component.js";
-import { MaybePromise, ObjectOf, ObjectOrArrayOf, TimeMeasure } from "./shared/types.js";
+import { AnyFn, MaybePromise, ObjectOf, ObjectOrArrayOf, TimeMeasure } from "./shared/types.js";
 import { Connectable } from "./shared/base/Connectable.js";
 import { AudioRecordingComponent } from "./components/AudioRecordingComponent.js";
 import { BufferWriterComponent } from "./components/BufferWriterComponent.js";
@@ -34,6 +34,7 @@ export declare class IATopLevel {
     bundle(inputs: ObjectOrArrayOf<Component>): internalNamespace.BundleComponent<ObjectOf<Component<internalNamespace.AnyInput, internalNamespace.AnyOutput>>>;
     ramp(units: TimeMeasure): Connectable;
     read(fname: string): Promise<AudioBuffer>;
+    func<T0, T1, T2, T3, T4, T5, R>(fn: AnyFn<T0, T1, T2, T3, T4, T5, R>): internalNamespace.FunctionComponent<T0, T1, T2, T3, T4, T5, R>;
     bufferReader(fname: string): BufferComponent;
     bufferReader(buffer: MaybePromise<AudioBuffer>): BufferComponent;
     bufferWriter(buffer: AudioBuffer): BufferWriterComponent;

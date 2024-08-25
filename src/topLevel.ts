@@ -1,5 +1,5 @@
 import { Component } from "./components/base/Component.js";
-import { MaybePromise, ObjectOf, ObjectOrArrayOf, TimeMeasure } from "./shared/types.js";
+import { AnyFn, MaybePromise, ObjectOf, ObjectOrArrayOf, TimeMeasure } from "./shared/types.js";
 import { Connectable } from "./shared/base/Connectable.js";
 import { defineTimeRamp, isFunction, isType, loadFile, zip } from "./shared/util.js";
 import { AudioRecordingComponent } from "./components/AudioRecordingComponent.js";
@@ -164,6 +164,12 @@ export class IATopLevel {
 
   read(fname: string): Promise<AudioBuffer> {
     return loadFile(this.config.audioContext, fname)
+  }
+
+  func<T0, T1, T2, T3, T4, T5, R>(
+    fn: AnyFn<T0, T1, T2, T3, T4, T5, R>
+  ): internalNamespace.FunctionComponent<T0, T1, T2, T3, T4, T5, R> {
+    return new this.internals.FunctionComponent(fn)
   }
 
   bufferReader(fname: string): BufferComponent

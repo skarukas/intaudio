@@ -1,11 +1,11 @@
 export default {
-  concurrency: 10,
+  concurrency: 2,
   nodeResolve: true,
   files: "**/*.test.js",
   testFramework: {
     config: {
       ui: 'bdd',
-      timeout: '30000',
+      timeout: '5000',
     },
   },
   testRunnerHtml: testFramework => `
