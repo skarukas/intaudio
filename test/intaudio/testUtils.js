@@ -5,6 +5,9 @@ import { sendMouse } from '@web/test-runner-commands';
 
 use(chaiAsPromised)
 
+export const DEFAULT_SAMPLE_DURATION_MS = 500
+export const DEFAULT_SAMPLING_PERIOD_MS = 10
+export const DEFAULT_SAMPLING_PASS_RATIO = 0.9
 export const DEFAULT_SAMPLE_RATE = new AudioContext().sampleRate
 
 export async function intaudioInit() {
@@ -67,15 +70,27 @@ True pass ratio was not high enough`
 export function expectSamples(
   signal,
   fn,
-  { passRatio = 0.90, durationMs = 5000, samplingPeriodMs = 40 } = {}
+  {
+    passRatio = DEFAULT_SAMPLING_PASS_RATIO,
+    durationMs = DEFAULT_SAMPLE_DURATION_MS,
+    samplingPeriodMs = DEFAULT_SAMPLING_PERIOD_MS,
+    trimLeadingZeros = true
+  } = {}
 ) {
-  // TODO: instead of passRatio, allow leading silence to be truncated (if
-  // only some of the signal is zero).
-  const sampledSignal = []
-  signal.sampleSignal(samplingPeriodMs).connect(v => sampledSignal.push(v))
+  // Set up sampling.
+  let sampledSignal = []
   let resolve, reject
+  signal.sampleSignal(samplingPeriodMs).connect(v => sampledSignal.push(v))
+
+  // Stop sampling and read sampled signal.
   setTimeout(() => {
     try {
+      if (trimLeadingZeros) {
+        const firstNonzeroIndex = sampledSignal.findIndex(x => x != 0)
+        if (firstNonzeroIndex != -1) {
+          sampledSignal = sampledSignal.slice(firstNonzeroIndex)
+        }
+      }
       expectMost(sampledSignal, fn, passRatio, `Assertion on ${signal}`)
       resolve()
     } catch (e) {
@@ -85,14 +100,51 @@ export function expectSamples(
   return new Promise((res, rej) => { resolve = res; reject = rej })
 }
 
-export function expectNonzeroSignal(signal) {
-  return expectSamples(signal, x => x.to.not.be.equal(0))
+export function expectNonzeroSignal(
+  signal,   
+  {
+    passRatio = DEFAULT_SAMPLING_PASS_RATIO,
+    durationMs = DEFAULT_SAMPLE_DURATION_MS,
+    samplingPeriodMs = DEFAULT_SAMPLING_PERIOD_MS,
+    trimLeadingZeros = true
+  } = {}
+) {
+  return expectSamples(
+    signal,
+    x => x.to.not.be.equal(0),
+    { passRatio, durationMs, samplingPeriodMs, trimLeadingZeros }
+  )
 }
 
-export function expectSilentSignal(signal) {
-  return expectSignalEqual(signal, 0)
+export function expectSilentSignal(
+  signal,   
+  {
+    passRatio = DEFAULT_SAMPLING_PASS_RATIO,
+    durationMs = DEFAULT_SAMPLE_DURATION_MS,
+    samplingPeriodMs = DEFAULT_SAMPLING_PERIOD_MS,
+    trimLeadingZeros = true
+  } = {}
+) {
+  return expectSignalEqual(
+    signal,
+    0,
+    { passRatio, durationMs, samplingPeriodMs, trimLeadingZeros }
+  )
 }
 
-export function expectSignalEqual(signal, value) {
-  return expectSamples(signal, x => x.to.be.equal(value))
+export function expectSignalEqual(
+  signal,
+  value,
+  {
+    passRatio = DEFAULT_SAMPLING_PASS_RATIO,
+    durationMs = DEFAULT_SAMPLE_DURATION_MS,
+    samplingPeriodMs = DEFAULT_SAMPLING_PERIOD_MS,
+    trimLeadingZeros = true
+  } = {}
+) {
+  return expectSamples(
+    signal,
+    x => x.to.be.equal(value),
+    { passRatio, durationMs, samplingPeriodMs, trimLeadingZeros }
+  )
 }
