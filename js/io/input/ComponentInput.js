@@ -18,21 +18,19 @@ export class ComponentInput extends AudioRateInput {
         /* this._value = defaultInput?.value */
     }
     setValue(value) {
-        var _a;
-        /*     console.log("setting value")
-            console.log([value, this.toString()]) */
+        var _a, _b, _c, _d;
         this.validate(value);
         // JS objects represent collections of parameter names and values
         const isPlainObject = (value === null || value === void 0 ? void 0 : value.constructor) === Object;
         if (isPlainObject && !value["_raw"]) {
             // Validate each param is defined in the target.
-            for (let key in value) {
-                if (!(this.parent && key in this.parent.inputs)) {
-                    throw new Error(`Given parameter object ${JSON.stringify(value)} but destination ${this.parent} has no input named '${key}'. To pass a raw object without changing properties, set _raw: true on the object.`);
+            for (const key in value) {
+                if (!(this.parent && (key in this.parent.inputs || "$" + key in this.parent.inputs))) {
+                    throw new Error(`Given parameter object ${JSON.stringify(value)} but destination ${this.parent} has no input named '${key}' or '$${key}'. To pass a raw object without changing properties, set _raw: true on the object.`);
                 }
             }
-            for (let key in value) {
-                (_a = this.parent) === null || _a === void 0 ? void 0 : _a.inputs[key].setValue(value[key]);
+            for (const key in value) {
+                (_d = ((_b = (_a = this.parent) === null || _a === void 0 ? void 0 : _a.inputs[key]) !== null && _b !== void 0 ? _b : (_c = this.parent) === null || _c === void 0 ? void 0 : _c.inputs["$" + key])) === null || _d === void 0 ? void 0 : _d.setValue(value[key]);
             }
         }
         else if (this.defaultInput == undefined) {

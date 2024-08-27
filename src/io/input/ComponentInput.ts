@@ -28,21 +28,20 @@ export class ComponentInput<T> extends AudioRateInput {
     /* this._value = defaultInput?.value */
   }
   setValue(value: any) {
-    /*     console.log("setting value")
-        console.log([value, this.toString()]) */
     this.validate(value)
     // JS objects represent collections of parameter names and values
     const isPlainObject = value?.constructor === Object
     if (isPlainObject && !value["_raw"]) {
 
       // Validate each param is defined in the target.
-      for (let key in <object>value) {
-        if (!(this.parent && key in this.parent.inputs)) {
-          throw new Error(`Given parameter object ${JSON.stringify(value)} but destination ${this.parent} has no input named '${key}'. To pass a raw object without changing properties, set _raw: true on the object.`)
+      for (const key in <object>value) {
+        // TODO: refactor "$" + key to a shared method.
+        if (!(this.parent && (key in this.parent.inputs || "$" + key in this.parent.inputs))) {
+          throw new Error(`Given parameter object ${JSON.stringify(value)} but destination ${this.parent} has no input named '${key}' or '$${key}'. To pass a raw object without changing properties, set _raw: true on the object.`)
         }
       }
-      for (let key in <object>value) {
-        this.parent?.inputs[key].setValue(value[key])
+      for (const key in <object>value) {
+        (this.parent?.inputs[key] ?? this.parent?.inputs["$" + key])?.setValue(value[key])
       }
     } else if (this.defaultInput == undefined) {
       const inputs = this.parent == undefined ? [] : Object.keys(this.parent.inputs)

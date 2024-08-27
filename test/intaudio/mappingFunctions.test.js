@@ -119,4 +119,47 @@ describe(`Mapping function (FunctionComponent)`, () => {
     expect(envelope.decayDurationMs.value).to.equal(100)
     expect(envelope.isMuted.value).to.be.true
   })
+
+  it("fills multiple parameters when it receives an object", done => {
+    const setParamsComponent = ia.func(() => ({ a: "a", b: "b", c: "c" }))
+    setParamsComponent
+      .connect((a, b, c) => [a, b, c])
+      .connect(x => {
+        expect(x).to.deep.equal(["a", "b", "c"])
+        done()
+      })
+    setParamsComponent.triggerInput()
+  })
+
+  it("passes an object directly when _raw is set", done => {
+    const createRawObject = ia.func(() => ({ _raw: true, a: "a", b: "b" }))
+    createRawObject
+      .connect(obj => [obj.a, obj.b])
+      .connect(x => {
+        expect(x).to.deep.equal(["a", "b"])
+        done()
+      })
+    createRawObject.triggerInput()
+  })
+
+  it("doesn't understand a plain object when no parameters match", () => {
+    const createObject = ia.func(() => ({ a: "a", b: "b" }))
+    createObject.connect(obj => [obj.a, obj.b])
+    expect(createObject.triggerInput).to.throw(/Given parameter object {"a":"a","b":"b"} but destination .* has no input named 'a' or '\$a'. To pass a raw object without changing properties, set _raw: true on the object/g)
+  })
+
+  it("passes a 'non-plain' object as a single value", done => {
+    class AB {
+      a = "a"
+      b = "b"
+    }
+    const createAB = ia.func(() => new AB())
+    createAB
+      .connect(obj => [obj.a, obj.b])
+      .connect(x => {
+        expect(x).to.deep.equal(["a", "b"])
+        done()
+      })
+    createAB.triggerInput()
+  })
 })
