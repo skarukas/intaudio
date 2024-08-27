@@ -6,7 +6,7 @@ beforeEach(async () => {
   await intaudioInit()
 })
 
-describe(`Mapping function (FunctionComponent)`, () => {
+describe("Mapping function (FunctionComponent)", () => {
   it("allows inputs to be accessed by name on the component", done => {
     const addOneComponent = ia.func(x => x + 1)
     addOneComponent.connect(x => {

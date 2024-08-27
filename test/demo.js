@@ -657,6 +657,8 @@ const tests = {
     this.assertEqual(o2, b)
     this.assertEqual(bundle[0], a)
     this.assertEqual(bundle[1], b)
+    this.assertSilentSignal(bundle.connect((a, b) => a * 2 + b))
+    this.assertNonzeroSignal(bundle.connect(a => a))
   },
   bundleObject() {
     const a = ia.generate(() => 0.5)
@@ -667,8 +669,6 @@ const tests = {
     this.assertEqual(bundle.o2, b)
 
     // Applying functions to ordered and named inputs.
-    this.assertSilentSignal(ia.bundle([a, b]).connect((a, b) => a * 2 + b))
-    this.assertNonzeroSignal(ia.bundle([a, b]).connect((a) => a))
     this.assertSilentSignal(ia.bundle({ b, a }).connect((a, b) => a * 2 + b))
     this.assertNonzeroSignal(ia.bundle({ b, a }).connect((a) => a))
   },
