@@ -6,7 +6,7 @@ import { AbstractOutput } from "../io/output/AbstractOutput.js";
 import { CompoundOutput } from "../io/output/CompoundOutput.js";
 import { Connectable } from "../shared/base/Connectable.js";
 import { CanBeConnectedTo, KeysLike, ObjectOf, ObjectOrArrayOf } from "../shared/types.js";
-import { isType } from "../shared/util.js";
+import { enumerate, isType } from "../shared/util.js";
 import { map } from "../worklet/lib/utils.js";
 import { AudioTransformComponent } from "./AudioTransformComponent.js";
 import { BaseComponent } from "./base/BaseComponent.js";
@@ -37,11 +37,16 @@ export class BundleComponent<ComponentDict extends ObjectOf<Component>> extends 
       this.componentValues = Object.values(components)
       this.componentObject = components
     }
-    for (const key in this.componentObject) {
+    for (const [i, key] of enumerate(Object.keys(this.componentObject))) {
       // @ts-ignore No index signature.
       // TODO: export intersection with index signature type.
       this[key] = this.componentObject[key]
       this.defineInputAlias(key, this.componentObject[key].getDefaultInput())
+      if (i + '' != key) {
+        // @ts-ignore No index signature.
+        this[i] = this.componentObject[key]
+        this.defineInputAlias(i, this.componentObject[key].getDefaultInput())
+      }
       if (this.componentObject[key].defaultOutput) {
         this.defineOutputAlias(key, this.componentObject[key].defaultOutput)
       }

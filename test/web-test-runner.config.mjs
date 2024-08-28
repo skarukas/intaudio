@@ -1,5 +1,5 @@
 export default {
-  concurrency: 2,
+  concurrency: 1,
   nodeResolve: true,
   files: "**/*.test.js",
   testFramework: {

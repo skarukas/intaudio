@@ -25,6 +25,7 @@ export class ComponentInput extends AudioRateInput {
         if (isPlainObject && !value["_raw"]) {
             // Validate each param is defined in the target.
             for (const key in value) {
+                // TODO: refactor "$" + key to a shared method.
                 if (!(this.parent && (key in this.parent.inputs || "$" + key in this.parent.inputs))) {
                     throw new Error(`Given parameter object ${JSON.stringify(value)} but destination ${this.parent} has no input named '${key}' or '$${key}'. To pass a raw object without changing properties, set _raw: true on the object.`);
                 }

@@ -4,6 +4,7 @@ var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
 };
 var _AudioRateSignalSampler_instances, _AudioRateSignalSampler_setInterval;
+import { HighResolutionTimer } from "../shared/HighResolutionTimer.js";
 import { Disconnect } from "../shared/types.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 // TODO: make this multi-channel.
@@ -28,12 +29,12 @@ export class AudioRateSignalSampler extends BaseComponent {
         return dataArray[0];
     }
     stop() {
-        // TODO: figure out how to actually stop this...
-        window.clearInterval(this.interval);
+        var _a;
+        (_a = this.timer) === null || _a === void 0 ? void 0 : _a.stop();
     }
     inputAdded(source) {
         var _a;
-        if (this.interval) {
+        if (this.timer) {
             throw new Error("AudioToControlConverter can only have one input.");
         }
         __classPrivateFieldGet(this, _AudioRateSignalSampler_instances, "m", _AudioRateSignalSampler_setInterval).call(this, (_a = this.samplePeriodMs.value) !== null && _a !== void 0 ? _a : this.config.defaultSamplePeriodMs);
@@ -46,7 +47,7 @@ export class AudioRateSignalSampler extends BaseComponent {
     }
 }
 _AudioRateSignalSampler_instances = new WeakSet(), _AudioRateSignalSampler_setInterval = function _AudioRateSignalSampler_setInterval(period) {
-    this.interval = window.setInterval(() => {
+    this.timer = new HighResolutionTimer(period, () => {
         try {
             const signal = this.getCurrentSignalValue();
             this.controlOutput.setValue(signal);
@@ -57,5 +58,6 @@ _AudioRateSignalSampler_instances = new WeakSet(), _AudioRateSignalSampler_setIn
                 throw e;
             }
         }
-    }, period);
+    });
+    this.timer.run();
 };

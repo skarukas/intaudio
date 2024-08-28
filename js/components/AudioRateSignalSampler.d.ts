@@ -5,7 +5,7 @@ import { ControlOutput } from "../io/output/ControlOutput.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 export declare class AudioRateSignalSampler extends BaseComponent {
     #private;
-    private interval;
+    private timer;
     audioInput: AudioRateInput;
     samplePeriodMs: ControlInput<number>;
     controlOutput: ControlOutput<number>;

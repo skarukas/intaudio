@@ -1980,6 +1980,7 @@ class ComponentInput extends AudioRateInput {
         if (isPlainObject && !value["_raw"]) {
             // Validate each param is defined in the target.
             for (const key in value) {
+                // TODO: refactor "$" + key to a shared method.
                 if (!(this.parent && (key in this.parent.inputs || "$" + key in this.parent.inputs))) {
                     throw new Error(`Given parameter object ${JSON.stringify(value)} but destination ${this.parent} has no input named '${key}' or '$${key}'. To pass a raw object without changing properties, set _raw: true on the object.`);
                 }
@@ -11097,6 +11098,38 @@ class AudioTransformComponent extends BaseComponent {
     }
 }
 
+// https://gist.github.com/jvlppm/b4fd92e4579d59d0a9ea5656b865e0d2
+class HighResolutionTimer {
+    constructor(duration, callback) {
+        this.duration = duration;
+        this.callback = callback;
+        this.totalTicks = 0;
+        this.deltaTime = 0;
+    }
+    run() {
+        let lastTime = this.currentTime;
+        this.currentTime = Date.now();
+        if (!this.startTime) {
+            this.startTime = this.currentTime;
+        }
+        if (lastTime !== undefined) {
+            this.deltaTime = (this.currentTime - lastTime);
+        }
+        this.callback(this);
+        let nextTick = this.duration - (this.currentTime - (this.startTime + (this.totalTicks * this.duration)));
+        this.totalTicks++;
+        this.timer = setTimeout(() => {
+            this.run();
+        }, nextTick);
+    }
+    stop() {
+        if (this.timer !== undefined) {
+            clearTimeout(this.timer);
+            this.timer = undefined;
+        }
+    }
+}
+
 var __classPrivateFieldGet$6 = (undefined && undefined.__classPrivateFieldGet) || function (receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -11125,12 +11158,12 @@ class AudioRateSignalSampler extends BaseComponent {
         return dataArray[0];
     }
     stop() {
-        // TODO: figure out how to actually stop this...
-        window.clearInterval(this.interval);
+        var _a;
+        (_a = this.timer) === null || _a === void 0 ? void 0 : _a.stop();
     }
     inputAdded(source) {
         var _a;
-        if (this.interval) {
+        if (this.timer) {
             throw new Error("AudioToControlConverter can only have one input.");
         }
         __classPrivateFieldGet$6(this, _AudioRateSignalSampler_instances, "m", _AudioRateSignalSampler_setInterval).call(this, (_a = this.samplePeriodMs.value) !== null && _a !== void 0 ? _a : this.config.defaultSamplePeriodMs);
@@ -11143,7 +11176,7 @@ class AudioRateSignalSampler extends BaseComponent {
     }
 }
 _AudioRateSignalSampler_instances = new WeakSet(), _AudioRateSignalSampler_setInterval = function _AudioRateSignalSampler_setInterval(period) {
-    this.interval = window.setInterval(() => {
+    this.timer = new HighResolutionTimer(period, () => {
         try {
             const signal = this.getCurrentSignalValue();
             this.controlOutput.setValue(signal);
@@ -11154,7 +11187,8 @@ _AudioRateSignalSampler_instances = new WeakSet(), _AudioRateSignalSampler_setIn
                 throw e;
             }
         }
-    }, period);
+    });
+    this.timer.run();
 };
 
 class MidiListener extends ToStringAndUUID {
@@ -14170,11 +14204,16 @@ class BundleComponent extends BaseComponent {
             this.componentValues = Object.values(components);
             this.componentObject = components;
         }
-        for (const key in this.componentObject) {
+        for (const [i, key] of enumerate(Object.keys(this.componentObject))) {
             // @ts-ignore No index signature.
             // TODO: export intersection with index signature type.
             this[key] = this.componentObject[key];
             this.defineInputAlias(key, this.componentObject[key].getDefaultInput());
+            if (i + '' != key) {
+                // @ts-ignore No index signature.
+                this[i] = this.componentObject[key];
+                this.defineInputAlias(i, this.componentObject[key].getDefaultInput());
+            }
             if (this.componentObject[key].defaultOutput) {
                 this.defineOutputAlias(key, this.componentObject[key].defaultOutput);
             }

@@ -980,7 +980,7 @@ declare class AudioTransformComponent<D extends AudioDimension = "none"> extends
 
 declare class AudioRateSignalSampler extends BaseComponent {
     #private;
-    private interval;
+    private timer;
     audioInput: AudioRateInput;
     samplePeriodMs: ControlInput<number>;
     controlOutput: ControlOutput<number>;

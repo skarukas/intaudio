@@ -1,9 +1,28 @@
 import ia from "../../dist/bundle.js"
-import { expect, use } from "@esm-bundle/chai";
+import { expect, use, Assertion } from "@esm-bundle/chai";
 import chaiAsPromised from 'chai-as-promised';
 import { sendMouse } from '@web/test-runner-commands';
 
 use(chaiAsPromised)
+
+// Fix broken equal behavior.
+Assertion.overwriteMethod('equal', function (_super) {
+  return function assertEqual(val) {
+    if (this._obj instanceof Function || val instanceof Function) {
+      this.assert(
+        this._obj === val,
+        "expected #{this} to === #{exp}",
+        "expected #{this} to !=== #{exp}",
+        // There is some weird bug where when this is a function, the test 
+        // hangs. So convert it to a string first.
+        val + "", 
+        this._obj + ""
+    );
+    } else {
+      _super.apply(this, arguments);
+    }
+  };
+});
 
 export const defaults = {
   SAMPLE_DURATION_MS: 250,
@@ -103,20 +122,26 @@ class SignalTester {
 
 export class SamplerTester extends SignalTester {
   constructor({
-    passRatio = defaults.SAMPLING_PASS_RATIO,
-    durationMs = defaults.SAMPLE_DURATION_MS,
-    samplingPeriodMs = defaults.SAMPLING_PERIOD_MS,
+    passRatio = 0.9,
+    numSamples = 20,
+    samplingPeriodMs = 50,
     trimLeadingZeros = true
   } = {}) {
     super({ passRatio, trimLeadingZeros })
-    this.durationMs = durationMs
+    this.numSamples = numSamples
     this.samplingPeriodMs = samplingPeriodMs
   }
-
+  
   async getSignalValues(signal) {
     let samples = []
-    signal.sampleSignal(this.samplingPeriodMs).connect(v => samples.push(v))
-    await wait(this.durationMs)
+    const counter = new PromiseCounter(this.numSamples)
+    signal.sampleSignal(this.samplingPeriodMs).connect(v => {
+      if (samples.length < this.numSamples) {
+        samples.push(v)
+        counter.tick()
+      }
+    })
+    await counter.wait()
     return samples
   }
 }
@@ -127,19 +152,59 @@ export function wait(ms) {
   })
 }
 
+/**
+ * Usage:
+ * @example
+ * async function countToThree() {
+ *   const counter = new PromiseCounter(3)
+ * 
+ *   const interval = setInterval(() => {
+ *     counter.tick()
+ *   }, 1000)
+ * 
+ *   await counter.wait()
+ *   clearInterval()
+ *   return 
+ * }
+ */
+export class PromiseCounter {
+  #resolved = false
+  constructor(numExpectedCalls) {
+    this.numExpectedCalls = numExpectedCalls
+  }
+  tick() {
+    if (--this.numExpectedCalls <= 0) {
+      this.resolve && this.resolve()
+      this.#resolved = true
+    }
+  }
+  wait() {
+    return new Promise(res => {
+      this.resolve = res
+      if (this.#resolved) {
+        res()
+      }
+    })
+  }
+}
+
 export class ChunkTester extends SignalTester {
   constructor({
-    numSamples = 128,
+    numSamples = 2000,
     passRatio = defaults.SAMPLING_PASS_RATIO,
+    delayMs = 500,
     trimLeadingZeros = true
   } = {}) {
     super({ passRatio, trimLeadingZeros })
     this.numSamples = numSamples
+    this.delayMs = delayMs
   }
 
   async getSignalValues(signal) {
+    const recorder = ia.recorder(signal)
     // TODO: times out when worklet is not enabled ... (?)
-    const buffers = await signal.capture(this.numSamples)
+    this.delayMs && await wait(this.delayMs)
+    const buffers = await recorder.capture(this.numSamples)
     return buffers[0].getChannelData(0)
   }
 }

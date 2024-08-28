@@ -1,3 +1,3 @@
 import { runTests } from "./transformAudioTests.js";
 
-runTests(false)
+runTests(true)

@@ -2,12 +2,13 @@ import { AudioRateInput } from "../io/input/AudioRateInput.js"
 import { ControlInput } from "../io/input/ControlInput.js"
 import { AbstractOutput } from "../io/output/AbstractOutput.js"
 import { ControlOutput } from "../io/output/ControlOutput.js"
+import { HighResolutionTimer } from "../shared/HighResolutionTimer.js"
 import { Disconnect } from "../shared/types.js"
 import { BaseComponent } from "./base/BaseComponent.js"
 
 // TODO: make this multi-channel.
 export class AudioRateSignalSampler extends BaseComponent {
-  private interval: number | undefined
+  private timer: HighResolutionTimer | undefined
   audioInput: AudioRateInput
   samplePeriodMs: ControlInput<number>
   controlOutput: ControlOutput<number>
@@ -34,7 +35,7 @@ export class AudioRateSignalSampler extends BaseComponent {
     return dataArray[0]
   }
   #setInterval(period: number) {
-    this.interval = window.setInterval(() => {
+    this.timer = new HighResolutionTimer(period, () => {
       try {
         const signal = this.getCurrentSignalValue()
         this.controlOutput.setValue(signal)
@@ -44,14 +45,14 @@ export class AudioRateSignalSampler extends BaseComponent {
           throw e
         }
       }
-    }, period)
+    })
+    this.timer.run()
   }
   stop() {
-    // TODO: figure out how to actually stop this...
-    window.clearInterval(this.interval)
+    this.timer?.stop()
   }
   inputAdded(source: AbstractOutput<any>) {
-    if (this.interval) {
+    if (this.timer) {
       throw new Error("AudioToControlConverter can only have one input.")
     }
     this.#setInterval(this.samplePeriodMs.value ?? this.config.defaultSamplePeriodMs)
