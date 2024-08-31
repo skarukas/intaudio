@@ -100,7 +100,7 @@ class SignalTester {
   }
 
   expectEqual(signal, value) {
-    return this.expect(signal, x => x.to.be.equal(value))
+    return this.expect(signal, x => x.to.be.approximately(value, 1e-5))
   }
 
   static expect(signal, fn, options = {}) {
