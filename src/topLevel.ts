@@ -123,6 +123,7 @@ export class IATopLevel {
     return this.internals.ChannelStacker.fromInputs(inputs)
   }
 
+  // TODO: implement a method constant(val) that defines a constant signal.
   generate(
     fn: (t: number) => number,
     timeMeasure: TimeMeasure = TimeMeasure.SECONDS

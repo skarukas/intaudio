@@ -72,19 +72,25 @@ class SignalTester {
    * @param {*} fn A function to apply to a chai Assertion, e.g. `x => x.to.equal(1)`
    * @returns 
    */
-  expect(signal, fn) {
-    return new Promise((resolve, reject) => {
-      this.getSignalValues(signal).then(samples => {
-        if (this.trimLeadingZeros) {
-          const firstNonzeroIndex = samples.findIndex(x => x != 0)
-          if (firstNonzeroIndex != -1) {
-            samples = samples.slice(firstNonzeroIndex)
-          }
-        }
-        expectMost(samples, fn, this.passRatio, `Assertion on ${signal}`)
-        resolve()
-      }).catch(reject)
-    })
+  async expect(signal, fn) {
+    let samples = await this.getSignalValues(signal)
+    samples = this._maybeTrimLeadingZeros(samples)
+    expectMost(samples, fn, this.passRatio, `Assertion on ${signal}`)
+  }
+
+  _maybeTrimLeadingZeros(samples) {
+    if (this.trimLeadingZeros) {
+      const firstNonzeroIndex = samples.findIndex(x => x != 0)
+      if (firstNonzeroIndex != -1) {
+        return samples.slice(firstNonzeroIndex)
+      }
+    }
+    return samples
+  }
+
+  async expectSamples(signal, fn) {
+    const chunk = await this.getSignalValues(signal)
+    return fn(expect(chunk))
   }
 
   getSignalValues(signal) {
@@ -117,6 +123,10 @@ class SignalTester {
 
   static expectEqual(signal, value, options = {}) {
     return new this(options).expectEqual(signal, value)
+  }
+
+  static expectSamples(signal, fn, options = {}) {
+    return new this(options).expectSamples(signal, fn)
   }
 }
 
@@ -231,4 +241,8 @@ export function expectMost(arr, fn, passRatio = 1, message="") {
   ${exampleFailures.join("\n  ")}
 True pass ratio was not high enough`
   expect(truePassRatio).to.be.greaterThanOrEqual(passRatio, message)
+}
+
+export function approxEqual(a, b, e=1e-5) {
+  return Math.abs(a - b) < e
 }
