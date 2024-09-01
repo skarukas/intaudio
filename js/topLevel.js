@@ -120,6 +120,7 @@ export class IATopLevel {
     stackChannels(inputs) {
         return this.internals.ChannelStacker.fromInputs(inputs);
     }
+    // TODO: implement a method constant(val) that defines a constant signal.
     generate(fn, timeMeasure = TimeMeasure.SECONDS) {
         if (isFunction(fn)) {
             return new this.internals.TimeVaryingSignal(fn, timeMeasure);

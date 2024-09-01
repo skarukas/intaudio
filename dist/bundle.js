@@ -13877,7 +13877,8 @@ class ChannelSplitter extends BaseComponent {
         this.outputChannels = [];
         this.inputChannelGroups = inputChannelGroups;
         this.length = inputChannelGroups.length;
-        this.splitter = this.audioContext.createChannelSplitter();
+        const maxChannelIndex = Math.max(...inputChannelGroups.map(grp => Math.max(...grp)));
+        this.splitter = this.audioContext.createChannelSplitter(maxChannelIndex + 1);
         this.input = this.defineAudioInput('input', this.splitter);
         this.createMergedOutputs(inputChannelGroups);
     }
@@ -15625,6 +15626,7 @@ class IATopLevel {
     stackChannels(inputs) {
         return this.internals.ChannelStacker.fromInputs(inputs);
     }
+    // TODO: implement a method constant(val) that defines a constant signal.
     generate(fn, timeMeasure = TimeMeasure.SECONDS) {
         if (isFunction(fn)) {
             return new this.internals.TimeVaryingSignal(fn, timeMeasure);

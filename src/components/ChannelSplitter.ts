@@ -14,7 +14,10 @@ export class ChannelSplitter extends BaseComponent implements Iterable<AudioRate
     super()
     this.inputChannelGroups = inputChannelGroups
     this.length = inputChannelGroups.length
-    this.splitter = this.audioContext.createChannelSplitter()
+    const maxChannelIndex = Math.max(
+      ...inputChannelGroups.map(grp => Math.max(...grp))
+    )
+    this.splitter = this.audioContext.createChannelSplitter(maxChannelIndex + 1)
     this.input = this.defineAudioInput('input', this.splitter)
     this.createMergedOutputs(inputChannelGroups)
   }
