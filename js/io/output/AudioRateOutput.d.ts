@@ -50,4 +50,5 @@ export declare class AudioRateOutput extends AbstractOutput<number> implements M
      */
     capture(numSamples: number): Promise<AudioBuffer[]>;
     fft(fftSize?: number): FFTStream;
+    toChannels(numChannels: number, mode?: 'speakers' | 'discrete' | 'repeat'): Component;
 }

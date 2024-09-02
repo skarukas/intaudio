@@ -38,8 +38,11 @@ function createChannelView(multiChannelIO, activeChannel) {
             if (p === 'activeChannel') {
                 return activeChannel;
             }
-            else if (['channels', 'left', 'right'].includes(String(p))) {
-                throw new Error(`Forbidden property: '${String(p)}'. A channel view stores only a single channel.`);
+            else if (['left', 'right'].includes(String(p))) {
+                return receiver;
+            }
+            else if (p === 'channels') {
+                return toMultiChannelArray([receiver]);
             }
             else {
                 return Reflect.get(target, p, receiver);

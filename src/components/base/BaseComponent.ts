@@ -565,4 +565,10 @@ export abstract class BaseComponent<
   fft(fftSize: number = 128): FFTStream {
     return this.getAudioOutputProperty('fft')(fftSize)
   }
+  toChannels(
+    numChannels: number,
+    mode: 'speakers' | 'discrete' | 'repeat' = 'speakers'
+  ): Component {
+    return this.getAudioOutputProperty('toChannels')(numChannels, mode)
+  }
 }

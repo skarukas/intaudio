@@ -11,6 +11,10 @@ export interface AudioSignalStream extends Connectable {
   logSignal({ samplePeriodMs, format }: { samplePeriodMs?: number, format: string }): this;
   splitChannels(): Iterable<AudioSignalStream>;
   splitChannels(...inputChannelGroups: number[][]): Iterable<AudioSignalStream>;
+  toChannels(
+    numChannels: number,
+    mode?: 'speakers' | 'discrete' | 'repeat'
+  ): Component;
 
   // Lots of overloads.
   transformAudio(

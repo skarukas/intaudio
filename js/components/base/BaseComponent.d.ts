@@ -134,4 +134,5 @@ export declare abstract class BaseComponent<InputTypes extends AnyInput = AnyInp
         dimension?: "none";
     }): Component;
     fft(fftSize?: number): FFTStream;
+    toChannels(numChannels: number, mode?: 'speakers' | 'discrete' | 'repeat'): Component;
 }

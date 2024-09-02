@@ -386,5 +386,8 @@ export class BaseComponent extends BaseConnectable {
     fft(fftSize = 128) {
         return this.getAudioOutputProperty('fft')(fftSize);
     }
+    toChannels(numChannels, mode = 'speakers') {
+        return this.getAudioOutputProperty('toChannels')(numChannels, mode);
+    }
 }
 BaseComponent.instanceExists = false;

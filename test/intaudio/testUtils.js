@@ -32,11 +32,15 @@ export const defaults = {
 export const DEFAULT_SAMPLE_RATE = new AudioContext().sampleRate
 
 export async function intaudioInit() {
-  await sendMouse({
-    type: 'click',
-    position: [0, 0],
-    button: 'right'
-  })
+  try {
+    await sendMouse({
+      type: 'click',
+      position: [0, 0],
+      button: 'right'
+    })
+  } catch (e) {
+    console.error(e)
+  }
   await ia.init()
 }
 

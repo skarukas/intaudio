@@ -1,4 +1,5 @@
 import { connectWebAudioChannels, createMultiChannelView, getNumInputChannels, getNumOutputChannels } from "../../shared/multichannel.js";
+import { range } from "../../shared/util.js";
 import { AudioRateInput } from "../input/AudioRateInput.js";
 import { ComponentInput } from "../input/ComponentInput.js";
 import { HybridInput } from "../input/HybridInput.js";
@@ -124,5 +125,27 @@ export class AudioRateOutput extends AbstractOutput {
         this.connect(component.realInput);
         this.connect(component.imaginaryInput);
         return component.fftOut;
+    }
+    toChannels(numChannels, mode = 'speakers') {
+        if (mode == 'repeat') {
+            // Custom mode -- repeat all the channels you have to fill the target.
+            let c = 0;
+            const channels = [];
+            for (const _ of range(numChannels)) {
+                channels.push(this.channels[c]);
+                // Cycle over available channels.
+                c = (c + 1) % this.numOutputChannels;
+            }
+            return this._.ChannelStacker.fromInputs(channels);
+        }
+        else {
+            // Native WebAudio up- or down-mixing to the right number of channels.
+            const gain = new GainNode(this.audioContext, {
+                channelCount: numChannels,
+                channelCountMode: "explicit",
+                channelInterpretation: mode
+            });
+            return this.connect(gain);
+        }
     }
 }

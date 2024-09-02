@@ -1783,8 +1783,11 @@ function createChannelView(multiChannelIO, activeChannel) {
             if (p === 'activeChannel') {
                 return activeChannel;
             }
-            else if (['channels', 'left', 'right'].includes(String(p))) {
-                throw new Error(`Forbidden property: '${String(p)}'. A channel view stores only a single channel.`);
+            else if (['left', 'right'].includes(String(p))) {
+                return receiver;
+            }
+            else if (p === 'channels') {
+                return toMultiChannelArray([receiver]);
             }
             else {
                 return Reflect.get(target, p, receiver);
@@ -2152,6 +2155,28 @@ class AudioRateOutput extends AbstractOutput {
         this.connect(component.realInput);
         this.connect(component.imaginaryInput);
         return component.fftOut;
+    }
+    toChannels(numChannels, mode = 'speakers') {
+        if (mode == 'repeat') {
+            // Custom mode -- repeat all the channels you have to fill the target.
+            let c = 0;
+            const channels = [];
+            for (const _ of range(numChannels)) {
+                channels.push(this.channels[c]);
+                // Cycle over available channels.
+                c = (c + 1) % this.numOutputChannels;
+            }
+            return this._.ChannelStacker.fromInputs(channels);
+        }
+        else {
+            // Native WebAudio up- or down-mixing to the right number of channels.
+            const gain = new GainNode(this.audioContext, {
+                channelCount: numChannels,
+                channelCountMode: "explicit",
+                channelInterpretation: mode
+            });
+            return this.connect(gain);
+        }
     }
 }
 
@@ -2645,6 +2670,9 @@ class BaseComponent extends BaseConnectable {
     }
     fft(fftSize = 128) {
         return this.getAudioOutputProperty('fft')(fftSize);
+    }
+    toChannels(numChannels, mode = 'speakers') {
+        return this.getAudioOutputProperty('toChannels')(numChannels, mode);
     }
 }
 BaseComponent.instanceExists = false;

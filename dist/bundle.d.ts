@@ -311,6 +311,7 @@ interface AudioSignalStream extends Connectable {
     }): this;
     splitChannels(): Iterable<AudioSignalStream>;
     splitChannels(...inputChannelGroups: number[][]): Iterable<AudioSignalStream>;
+    toChannels(numChannels: number, mode?: 'speakers' | 'discrete' | 'repeat'): Component;
     transformAudio(fn: (input: MultiChannelArray<Float32Array>) => (number[] | Float32Array)[], { windowSize, useWorklet, dimension }: {
         windowSize?: number;
         useWorklet?: boolean;
@@ -386,6 +387,7 @@ declare class AudioRateOutput extends AbstractOutput<number> implements MultiCha
      */
     capture(numSamples: number): Promise<AudioBuffer[]>;
     fft(fftSize?: number): FFTStream;
+    toChannels(numChannels: number, mode?: 'speakers' | 'discrete' | 'repeat'): Component;
 }
 
 declare class HybridInput<T> extends AbstractInput<T> implements MultiChannel<HybridInput<T>> {
@@ -599,6 +601,7 @@ declare abstract class BaseComponent<InputTypes extends AnyInput = AnyInput, Out
         dimension?: "none";
     }): Component;
     fft(fftSize?: number): FFTStream;
+    toChannels(numChannels: number, mode?: 'speakers' | 'discrete' | 'repeat'): Component;
 }
 
 type I$1 = {
