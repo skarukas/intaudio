@@ -1,6 +1,6 @@
 import ia from "../../dist/bundle.js"
 import { expect } from "@esm-bundle/chai";
-import { ChunkTester, intaudioInit, wait } from "./testUtils.js";
+import { ChunkTester, intaudioInit, wait, skip } from "./testUtils.js";
 
 beforeEach(async () => {
   await intaudioInit()
@@ -31,7 +31,7 @@ describe("ia.stackChannels", () => {
   
   // Does not reflect the current functionality.
   // TODO: implement a version that downmixes instead of stacking.
-  xit("downmixes inputs so that each input is a channel", async () => {
+  skip.it("downmixes inputs so that each input is a channel", async () => {
     const left = ia.generate(() => 1)
     const right = ia.generate(() => 2)
     const stereoSignal = ia.stackChannels([left, right])
@@ -44,7 +44,7 @@ describe("ia.stackChannels", () => {
   })
 
   // Times out due to CPU overload--TODO: increase efficiency.
-  xit("supports up to 32 channels", async () => {
+  skip.it("supports up to 32 channels", async () => {
     const tester = new ChunkTester({ delayMs: 0 })
     const maxChannels = 32
     // Channel i has constant value i.

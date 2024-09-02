@@ -246,3 +246,8 @@ True pass ratio was not high enough`
 export function approxEqual(a, b, e=1e-5) {
   return Math.abs(a - b) < e
 }
+
+export const skip =  { it: xit }
+export function skipIf(condition) {
+  return condition ? skip : { it }
+}
