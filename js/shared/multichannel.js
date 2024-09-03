@@ -44,6 +44,9 @@ function createChannelView(multiChannelIO, activeChannel) {
             else if (p === 'channels') {
                 return toMultiChannelArray([receiver]);
             }
+            else if (p == '_uuid') {
+                return Reflect.get(target, p, receiver) + "-c" + activeChannel;
+            }
             else {
                 return Reflect.get(target, p, receiver);
             }

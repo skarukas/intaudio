@@ -1,6 +1,6 @@
 import { Component } from "../../components/base/Component.js";
 import { BaseConnectable } from "../../shared/base/BaseConnectable.js";
-import { Constructor } from "../../shared/types.js";
+import { Constructor, ObjectOf } from "../../shared/types.js";
 import { HasTypeValidator } from "../HasTypeValidator.js";
 import { AbstractInput } from "../input/AbstractInput.js";
 export declare abstract class AbstractOutput<T = any> extends BaseConnectable implements HasTypeValidator {
@@ -8,7 +8,7 @@ export declare abstract class AbstractOutput<T = any> extends BaseConnectable im
     parent?: Component | undefined;
     protected validate: (value: any) => void;
     constructor(name: string | number, parent?: Component | undefined);
-    connections: AbstractInput[];
+    connections: ObjectOf<AbstractInput>;
     abstract get numOutputChannels(): number;
     callbacks: Array<(val?: T) => void>;
     ofType(type: Constructor | string): this;

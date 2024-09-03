@@ -72,7 +72,10 @@ export class AudioRateOutput
       this.activeChannel,
       input.activeChannel
     )
-    this.connections.push(input)
+    if (input._uuid in this.connections) {
+      throw new Error(`The given input ${input} (${input._uuid}) is already connected.`)
+    }
+    this.connections[input._uuid] = input
     component?.wasConnectedTo(this)
     return component
   }

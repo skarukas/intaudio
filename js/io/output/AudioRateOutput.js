@@ -51,7 +51,10 @@ export class AudioRateOutput extends AbstractOutput {
             throw new Error(`Can only connect audio-rate outputs to inputs that support audio-rate signals. Given: ${input}. Use 'AudioRateSignalSampler' to force a conversion.`);
         }
         this.connectNodes(this.audioNode, input.audioSink, this.activeChannel, input.activeChannel);
-        this.connections.push(input);
+        if (input._uuid in this.connections) {
+            throw new Error(`The given input ${input} (${input._uuid}) is already connected.`);
+        }
+        this.connections[input._uuid] = input;
         component === null || component === void 0 ? void 0 : component.wasConnectedTo(this);
         return component;
     }

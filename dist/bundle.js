@@ -1789,6 +1789,9 @@ function createChannelView(multiChannelIO, activeChannel) {
             else if (p === 'channels') {
                 return toMultiChannelArray([receiver]);
             }
+            else if (p == '_uuid') {
+                return Reflect.get(target, p, receiver) + "-c" + activeChannel;
+            }
             else {
                 return Reflect.get(target, p, receiver);
             }
@@ -2009,7 +2012,7 @@ class AbstractOutput extends BaseConnectable {
         this.name = name;
         this.parent = parent;
         this.validate = () => null;
-        this.connections = [];
+        this.connections = {};
         this.callbacks = [];
     }
     ofType(type) {
@@ -2081,7 +2084,10 @@ class AudioRateOutput extends AbstractOutput {
             throw new Error(`Can only connect audio-rate outputs to inputs that support audio-rate signals. Given: ${input}. Use 'AudioRateSignalSampler' to force a conversion.`);
         }
         this.connectNodes(this.audioNode, input.audioSink, this.activeChannel, input.activeChannel);
-        this.connections.push(input);
+        if (input._uuid in this.connections) {
+            throw new Error(`The given input ${input} (${input._uuid}) is already connected.`);
+        }
+        this.connections[input._uuid] = input;
         component === null || component === void 0 ? void 0 : component.wasConnectedTo(this);
         return component;
     }
@@ -2232,7 +2238,10 @@ class ControlOutput extends AbstractOutput {
             converter.connect(input);
             input = converter.input;
         }
-        this.connections.push(input);
+        if (input._uuid in this.connections) {
+            throw new Error(`The given input ${input} (${input._uuid}) is already connected.`);
+        }
+        this.connections[input._uuid] = input;
         return component;
     }
     setValue(value, rawObject = false) {
@@ -2241,7 +2250,7 @@ class ControlOutput extends AbstractOutput {
         if ((value === null || value === void 0 ? void 0 : value.constructor) === Object && rawObject) {
             value = Object.assign({ _raw: true }, value);
         }
-        for (let c of this.connections) {
+        for (let c of Object.values(this.connections)) {
             c.setValue(value);
         }
         for (const callback of this.callbacks) {

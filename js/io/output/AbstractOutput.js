@@ -6,7 +6,7 @@ export class AbstractOutput extends BaseConnectable {
         this.name = name;
         this.parent = parent;
         this.validate = () => null;
-        this.connections = [];
+        this.connections = {};
         this.callbacks = [];
     }
     ofType(type) {

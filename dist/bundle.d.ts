@@ -113,7 +113,7 @@ declare abstract class AbstractOutput<T = any> extends BaseConnectable implement
     parent?: Component | undefined;
     protected validate: (value: any) => void;
     constructor(name: string | number, parent?: Component | undefined);
-    connections: AbstractInput[];
+    connections: ObjectOf<AbstractInput>;
     abstract get numOutputChannels(): number;
     callbacks: Array<(val?: T) => void>;
     ofType(type: Constructor | string): this;

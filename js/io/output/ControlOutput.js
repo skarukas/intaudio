@@ -23,7 +23,10 @@ export class ControlOutput extends AbstractOutput {
             converter.connect(input);
             input = converter.input;
         }
-        this.connections.push(input);
+        if (input._uuid in this.connections) {
+            throw new Error(`The given input ${input} (${input._uuid}) is already connected.`);
+        }
+        this.connections[input._uuid] = input;
         return component;
     }
     setValue(value, rawObject = false) {
@@ -32,7 +35,7 @@ export class ControlOutput extends AbstractOutput {
         if ((value === null || value === void 0 ? void 0 : value.constructor) === Object && rawObject) {
             value = Object.assign({ _raw: true }, value);
         }
-        for (let c of this.connections) {
+        for (let c of Object.values(this.connections)) {
             c.setValue(value);
         }
         for (const callback of this.callbacks) {
