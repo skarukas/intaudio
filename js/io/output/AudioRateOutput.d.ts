@@ -3,6 +3,7 @@ import { AudioSignalStream } from "../../shared/AudioSignalStream.js";
 import { FFTStream } from "../../shared/FFTStream.js";
 import { CanBeConnectedTo, MultiChannel } from "../../shared/types.js";
 import { MultiChannelArray } from "../../worklet/lib/types.js";
+import { AbstractInput } from "../input/AbstractInput.js";
 import { AbstractOutput } from "./AbstractOutput.js";
 export declare class AudioRateOutput extends AbstractOutput<number> implements MultiChannel<AudioRateOutput>, AudioSignalStream {
     name: string | number;
@@ -20,6 +21,7 @@ export declare class AudioRateOutput extends AbstractOutput<number> implements M
     private connectNodes;
     connect<T extends Component>(destination: T): T;
     connect<T extends CanBeConnectedTo>(destination: T): Component | undefined;
+    disconnect(destination?: Component | AbstractInput): void;
     sampleSignal(samplePeriodMs?: number): Component;
     logSignal({ samplePeriodMs, format }?: {
         samplePeriodMs?: number;
@@ -44,7 +46,6 @@ export declare class AudioRateOutput extends AbstractOutput<number> implements M
         useWorklet?: boolean;
         dimension?: "none";
     }): Component;
-    disconnect(destination: CanBeConnectedTo): void;
     /**
      * Return the current audio samples.
      */

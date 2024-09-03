@@ -114,9 +114,20 @@ export class IATopLevel {
     configId?: string
   ) {
     customConfigOptions.logger ??= new this.internals.SignalLogger()
+    customConfigOptions.state = {
+      workletIsAvailable: false,
+      components: {}
+    }
     const config = { ...this.config, ...customConfigOptions }
     const namespace: typeof this.internals = baseWithConfig(config, configId)
     return new IATopLevel(config, namespace)
+  }
+
+  disconnectAll() {
+    for (const component of Object.values(this.config.state.components)) {
+      component.disconnect()
+    }
+    this.config.state.components = {}
   }
 
   stackChannels(inputs: Connectable[]) {

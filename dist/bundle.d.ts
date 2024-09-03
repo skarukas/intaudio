@@ -82,6 +82,7 @@ declare namespace events_d {
 
 interface Connectable {
     connect<T extends CanBeConnectedTo>(destination: T): Component | undefined;
+    disconnect(destination?: Component | AbstractInput): void;
     get isAudioStream(): boolean;
     get isStftStream(): boolean;
     get isControlStream(): boolean;
@@ -90,6 +91,7 @@ interface Connectable {
 declare abstract class BaseConnectable extends ToStringAndUUID implements Connectable {
     abstract connect<T extends Component>(destination: T): T;
     abstract connect<T extends CanBeConnectedTo>(destination: T): Component | undefined;
+    abstract disconnect(destination?: Component | AbstractInput): void;
     abstract get defaultOutput(): AbstractOutput | undefined;
     get isAudioStream(): boolean;
     get isStftStream(): boolean;
@@ -337,6 +339,7 @@ interface AudioSignalStream extends Connectable {
 declare class ControlOutput<T> extends AbstractOutput<T> {
     numOutputChannels: number;
     connect<T extends CanBeConnectedTo>(destination: T): Component | undefined;
+    disconnect(destination?: Component | AbstractInput): void;
     setValue(value: T | Promise<T>, rawObject?: boolean): void;
     onUpdate(callback: (val?: T) => void): void;
 }
@@ -357,6 +360,7 @@ declare class AudioRateOutput extends AbstractOutput<number> implements MultiCha
     private connectNodes;
     connect<T extends Component>(destination: T): T;
     connect<T extends CanBeConnectedTo>(destination: T): Component | undefined;
+    disconnect(destination?: Component | AbstractInput): void;
     sampleSignal(samplePeriodMs?: number): Component;
     logSignal({ samplePeriodMs, format }?: {
         samplePeriodMs?: number;
@@ -381,7 +385,6 @@ declare class AudioRateOutput extends AbstractOutput<number> implements MultiCha
         useWorklet?: boolean;
         dimension?: "none";
     }): Component;
-    disconnect(destination: CanBeConnectedTo): void;
     /**
      * Return the current audio samples.
      */
@@ -442,6 +445,7 @@ declare class CompoundOutput<OutputsDict extends ObjectOf<AbstractOutput>> exten
     parent?: Component | undefined;
     connect<T extends Component>(destination: T): T;
     connect<T extends CanBeConnectedTo>(destination: T): Component;
+    disconnect(destination?: Component | AbstractInput): void;
     channels: MultiChannelArray<this>;
     activeChannel: number | undefined;
     outputs: OutputsDict;
@@ -536,6 +540,7 @@ declare abstract class BaseComponent<InputTypes extends AnyInput = AnyInput, Out
     setBypassed(isBypassed?: boolean): void;
     setMuted(isMuted?: boolean): void;
     connect<T extends CanBeConnectedTo>(destination: T): Component | undefined;
+    disconnect(destination?: Component | AbstractInput): void;
     withInputs(argDict: {
         [name: string | number]: Connectable | unknown;
     }): this;
@@ -1793,8 +1798,8 @@ declare abstract class TypedConfigurable extends CallableInstance<any, any> impl
 type AudioConfig = {
     audioContext: AudioContext;
     state: {
-        isInitialized: boolean;
         workletIsAvailable: boolean;
+        components: ObjectOf<Connectable>;
     };
     logger: SignalLogger;
     defaultSamplePeriodMs: number;
@@ -1875,6 +1880,7 @@ declare class IATopLevel {
     run<T>(callback: (ctx?: AudioContext) => T): Promise<T>;
     init(): Promise<boolean>;
     withConfig(customConfigOptions?: Partial<AudioConfig>, configId?: string): IATopLevel;
+    disconnectAll(): void;
     stackChannels(inputs: Connectable[]): ChannelStacker;
     generate(fn: (t: number) => number, timeMeasure?: TimeMeasure): TimeVaryingSignal;
     combine(inputs: Connectable[] | ObjectOf<Connectable>, fn: Function, options?: {}): Component;

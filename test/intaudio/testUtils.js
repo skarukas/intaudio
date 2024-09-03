@@ -3,6 +3,10 @@ import { expect, use, Assertion } from "@esm-bundle/chai";
 import chaiAsPromised from 'chai-as-promised';
 import { sendMouse } from '@web/test-runner-commands';
 
+afterEach(() => {
+  ia.disconnectAll()
+})
+
 use(chaiAsPromised)
 
 // Fix broken equal behavior.

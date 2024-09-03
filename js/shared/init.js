@@ -4,8 +4,8 @@ let logger;
 export const defaultConfig = {
     audioContext: new AudioContext(),
     state: {
-        isInitialized: false,
-        workletIsAvailable: false
+        workletIsAvailable: false,
+        components: {}
     },
     get logger() {
         return logger !== null && logger !== void 0 ? logger : (logger = new SignalLogger());

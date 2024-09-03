@@ -58,6 +58,24 @@ export class AudioRateOutput extends AbstractOutput {
         component === null || component === void 0 ? void 0 : component.wasConnectedTo(this);
         return component;
     }
+    disconnect(destination) {
+        if (destination == undefined) {
+            for (const input of Object.values(this.connections)) {
+                this.disconnect(input);
+            }
+        }
+        else {
+            const { input } = this.getDestinationInfo(destination);
+            // Disconnect audio node.
+            // TODO: this doesn't work for channel views because the target is 
+            // the channel merger / splitter created in the process.
+            try {
+                this.audioNode.disconnect(input.audioSink);
+            }
+            catch (_a) { }
+            delete this.connections[input._uuid];
+        }
+    }
     sampleSignal(samplePeriodMs) {
         return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs));
     }
@@ -108,10 +126,6 @@ export class AudioRateOutput extends AbstractOutput {
         };
         const transformer = new this._.AudioTransformComponent(fn, options);
         return this.connect(transformer.inputs[0]); // First input of the function.
-    }
-    disconnect(destination) {
-        // TODO: implement this and utilize it for temporary components / nodes.
-        console.warn("Disconnect not yet supported.");
     }
     /**
      * Return the current audio samples.

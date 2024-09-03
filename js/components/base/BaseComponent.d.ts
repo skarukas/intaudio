@@ -69,6 +69,7 @@ export declare abstract class BaseComponent<InputTypes extends AnyInput = AnyInp
     setBypassed(isBypassed?: boolean): void;
     setMuted(isMuted?: boolean): void;
     connect<T extends CanBeConnectedTo>(destination: T): Component | undefined;
+    disconnect(destination?: Component | AbstractInput): void;
     withInputs(argDict: {
         [name: string | number]: Connectable | unknown;
     }): this;

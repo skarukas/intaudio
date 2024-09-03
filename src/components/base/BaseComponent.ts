@@ -58,6 +58,8 @@ export abstract class BaseComponent<
     this._reservedInputs = [this.isBypassed, this.isMuted, this.triggerInput]
     this._reservedOutputs = []
     this.preventIOOverwrites()
+    // Register component.
+    this.config.state.components[this._uuid] = this
   }
   logSignal({
     samplePeriodMs = 1000,
@@ -285,6 +287,11 @@ export abstract class BaseComponent<
     }
     output.connect(input)
     return component
+  }
+  disconnect(destination?: Component | AbstractInput): void {
+    for (const output of Object.values(this.outputs)) {
+      output.disconnect(destination)
+    }
   }
   withInputs(argDict: { [name: string | number]: Connectable | unknown }): this {
     for (const name in argDict) {

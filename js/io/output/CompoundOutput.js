@@ -25,6 +25,11 @@ export class CompoundOutput extends AbstractOutput {
         }
         return component;
     }
+    disconnect(destination) {
+        for (const output of Object.values(this.outputs)) {
+            output.disconnect(destination);
+        }
+    }
     get keys() {
         return new Set(Object.keys(this.outputs));
     }

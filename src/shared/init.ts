@@ -7,8 +7,8 @@ let logger: SignalLogger
 export const defaultConfig: AudioConfig = {
   audioContext: new AudioContext(),
   state: {
-    isInitialized: false,
-    workletIsAvailable: false
+    workletIsAvailable: false,
+    components: {}
   },
   get logger(): SignalLogger {
     return logger ?? (logger = new SignalLogger())

@@ -1,6 +1,7 @@
 import { Component } from "../../components/base/Component.js"
 import { resolvePromiseArgs } from "../../shared/decorators.js"
 import { CanBeConnectedTo } from "../../shared/types.js"
+import { AbstractInput } from "../input/AbstractInput.js"
 import { AudioRateInput } from "../input/AudioRateInput.js"
 import { ComponentInput } from "../input/ComponentInput.js"
 import { AbstractOutput } from "./AbstractOutput.js"
@@ -22,6 +23,16 @@ export class ControlOutput<T> extends AbstractOutput<T> {
     }
     this.connections[input._uuid] = input
     return component
+  }
+  disconnect(destination?: Component | AbstractInput): void {
+    if (destination == undefined) {
+      for (const input of Object.values(this.connections)) {
+        this.disconnect(input)
+      }
+    } else {
+      const { input } = this.getDestinationInfo(destination)
+      delete this.connections[input._uuid]
+    }
   }
   @resolvePromiseArgs
   setValue(value: T | Promise<T>, rawObject: boolean = false) {

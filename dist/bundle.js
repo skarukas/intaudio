@@ -2091,6 +2091,24 @@ class AudioRateOutput extends AbstractOutput {
         component === null || component === void 0 ? void 0 : component.wasConnectedTo(this);
         return component;
     }
+    disconnect(destination) {
+        if (destination == undefined) {
+            for (const input of Object.values(this.connections)) {
+                this.disconnect(input);
+            }
+        }
+        else {
+            const { input } = this.getDestinationInfo(destination);
+            // Disconnect audio node.
+            // TODO: this doesn't work for channel views because the target is 
+            // the channel merger / splitter created in the process.
+            try {
+                this.audioNode.disconnect(input.audioSink);
+            }
+            catch (_a) { }
+            delete this.connections[input._uuid];
+        }
+    }
     sampleSignal(samplePeriodMs) {
         return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs));
     }
@@ -2141,10 +2159,6 @@ class AudioRateOutput extends AbstractOutput {
         };
         const transformer = new this._.AudioTransformComponent(fn, options);
         return this.connect(transformer.inputs[0]); // First input of the function.
-    }
-    disconnect(destination) {
-        // TODO: implement this and utilize it for temporary components / nodes.
-        console.warn("Disconnect not yet supported.");
     }
     /**
      * Return the current audio samples.
@@ -2244,6 +2258,17 @@ class ControlOutput extends AbstractOutput {
         this.connections[input._uuid] = input;
         return component;
     }
+    disconnect(destination) {
+        if (destination == undefined) {
+            for (const input of Object.values(this.connections)) {
+                this.disconnect(input);
+            }
+        }
+        else {
+            const { input } = this.getDestinationInfo(destination);
+            delete this.connections[input._uuid];
+        }
+    }
     setValue(value, rawObject = false) {
         value = value;
         this.validate(value);
@@ -2313,6 +2338,8 @@ class BaseComponent extends BaseConnectable {
         this._reservedInputs = [this.isBypassed, this.isMuted, this.triggerInput];
         this._reservedOutputs = [];
         this.preventIOOverwrites();
+        // Register component.
+        this.config.state.components[this._uuid] = this;
     }
     logSignal({ samplePeriodMs = 1000, format } = {}) {
         this.getAudioOutputProperty('logSignal')({
@@ -2489,6 +2516,11 @@ class BaseComponent extends BaseConnectable {
         }
         output.connect(input);
         return component;
+    }
+    disconnect(destination) {
+        for (const output of Object.values(this.outputs)) {
+            output.disconnect(destination);
+        }
     }
     withInputs(argDict) {
         var _a, _b;
@@ -15077,6 +15109,11 @@ class CompoundOutput extends AbstractOutput {
         }
         return component;
     }
+    disconnect(destination) {
+        for (const output of Object.values(this.outputs)) {
+            output.disconnect(destination);
+        }
+    }
     get keys() {
         return new Set(Object.keys(this.outputs));
     }
@@ -15539,8 +15576,8 @@ let logger;
 const defaultConfig = {
     audioContext: new AudioContext(),
     state: {
-        isInitialized: false,
-        workletIsAvailable: false
+        workletIsAvailable: false,
+        components: {}
     },
     get logger() {
         return logger !== null && logger !== void 0 ? logger : (logger = new SignalLogger());
@@ -15656,9 +15693,19 @@ class IATopLevel {
     withConfig(customConfigOptions = {}, configId) {
         var _a;
         (_a = customConfigOptions.logger) !== null && _a !== void 0 ? _a : (customConfigOptions.logger = new this.internals.SignalLogger());
+        customConfigOptions.state = {
+            workletIsAvailable: false,
+            components: {}
+        };
         const config = Object.assign(Object.assign({}, this.config), customConfigOptions);
         const namespace = baseWithConfig(config, configId);
         return new IATopLevel(config, namespace);
+    }
+    disconnectAll() {
+        for (const component of Object.values(this.config.state.components)) {
+            component.disconnect();
+        }
+        this.config.state.components = {};
     }
     stackChannels(inputs) {
         return this.internals.ChannelStacker.fromInputs(inputs);

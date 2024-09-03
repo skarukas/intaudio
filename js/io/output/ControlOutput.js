@@ -29,6 +29,17 @@ export class ControlOutput extends AbstractOutput {
         this.connections[input._uuid] = input;
         return component;
     }
+    disconnect(destination) {
+        if (destination == undefined) {
+            for (const input of Object.values(this.connections)) {
+                this.disconnect(input);
+            }
+        }
+        else {
+            const { input } = this.getDestinationInfo(destination);
+            delete this.connections[input._uuid];
+        }
+    }
     setValue(value, rawObject = false) {
         value = value;
         this.validate(value);

@@ -2,6 +2,7 @@ import { Component } from "../../components/base/Component.js";
 import { createMultiChannelView } from "../../shared/multichannel.js";
 import { CanBeConnectedTo, KeysLike, MultiChannel, ObjectOf } from "../../shared/types.js";
 import { MultiChannelArray } from "../../worklet/lib/types.js";
+import { AbstractInput } from "../input/AbstractInput.js";
 import { CompoundInput } from "../input/CompoundInput.js";
 import { AbstractOutput } from "./AbstractOutput.js";
 import { AudioRateOutput } from "./AudioRateOutput.js";
@@ -35,6 +36,11 @@ export class CompoundOutput<OutputsDict extends ObjectOf<AbstractOutput>>
       this.defaultOutput.connect(input)
     }
     return component
+  }
+  disconnect(destination?: Component | AbstractInput): void {
+    for (const output of Object.values(this.outputs)) {
+      output.disconnect(destination)
+    }
   }
 
   channels: MultiChannelArray<this>;

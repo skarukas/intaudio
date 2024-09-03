@@ -28,6 +28,7 @@ export declare class IATopLevel {
     run<T>(callback: (ctx?: AudioContext) => T): Promise<T>;
     init(): Promise<boolean>;
     withConfig(customConfigOptions?: Partial<AudioConfig>, configId?: string): IATopLevel;
+    disconnectAll(): void;
     stackChannels(inputs: Connectable[]): internalNamespace.ChannelStacker;
     generate(fn: (t: number) => number, timeMeasure?: TimeMeasure): internalNamespace.TimeVaryingSignal;
     combine(inputs: Connectable[] | ObjectOf<Connectable>, fn: Function, options?: {}): Component;

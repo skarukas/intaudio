@@ -19,6 +19,8 @@ export class BaseComponent extends BaseConnectable {
         this._reservedInputs = [this.isBypassed, this.isMuted, this.triggerInput];
         this._reservedOutputs = [];
         this.preventIOOverwrites();
+        // Register component.
+        this.config.state.components[this._uuid] = this;
     }
     logSignal({ samplePeriodMs = 1000, format } = {}) {
         this.getAudioOutputProperty('logSignal')({
@@ -195,6 +197,11 @@ export class BaseComponent extends BaseConnectable {
         }
         output.connect(input);
         return component;
+    }
+    disconnect(destination) {
+        for (const output of Object.values(this.outputs)) {
+            output.disconnect(destination);
+        }
     }
     withInputs(argDict) {
         var _a, _b;

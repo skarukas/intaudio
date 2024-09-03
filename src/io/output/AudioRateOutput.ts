@@ -6,6 +6,7 @@ import { connectWebAudioChannels, createMultiChannelView, getNumInputChannels, g
 import { CanBeConnectedTo, MultiChannel, WebAudioConnectable } from "../../shared/types.js"
 import { range } from "../../shared/util.js"
 import { AudioDimension, MultiChannelArray } from "../../worklet/lib/types.js"
+import { AbstractInput } from "../input/AbstractInput.js"
 import { AudioRateInput } from "../input/AudioRateInput.js"
 import { ComponentInput } from "../input/ComponentInput.js"
 import { HybridInput } from "../input/HybridInput.js"
@@ -78,6 +79,20 @@ export class AudioRateOutput
     this.connections[input._uuid] = input
     component?.wasConnectedTo(this)
     return component
+  }
+  disconnect(destination?: Component | AbstractInput): void {
+    if (destination == undefined) {
+      for (const input of Object.values(this.connections)) {
+        this.disconnect(input)
+      }
+    } else {
+      const { input } = this.getDestinationInfo(destination)
+      // Disconnect audio node.
+      // TODO: this doesn't work for channel views because the target is 
+      // the channel merger / splitter created in the process.
+      try { this.audioNode.disconnect((input as any).audioSink) } catch { }
+      delete this.connections[input._uuid]
+    }
   }
   sampleSignal(samplePeriodMs?: number): Component {
     return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs))
@@ -190,10 +205,6 @@ export class AudioRateOutput
     }
     const transformer = new this._.AudioTransformComponent(fn, options)
     return <Component>this.connect(transformer.inputs[0])  // First input of the function.
-  }
-  disconnect(destination: CanBeConnectedTo) {
-    // TODO: implement this and utilize it for temporary components / nodes.
-    console.warn("Disconnect not yet supported.")
   }
   /**
    * Return the current audio samples.

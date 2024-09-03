@@ -113,9 +113,19 @@ export class IATopLevel {
     withConfig(customConfigOptions = {}, configId) {
         var _a;
         (_a = customConfigOptions.logger) !== null && _a !== void 0 ? _a : (customConfigOptions.logger = new this.internals.SignalLogger());
+        customConfigOptions.state = {
+            workletIsAvailable: false,
+            components: {}
+        };
         const config = Object.assign(Object.assign({}, this.config), customConfigOptions);
         const namespace = baseWithConfig(config, configId);
         return new IATopLevel(config, namespace);
+    }
+    disconnectAll() {
+        for (const component of Object.values(this.config.state.components)) {
+            component.disconnect();
+        }
+        this.config.state.components = {};
     }
     stackChannels(inputs) {
         return this.internals.ChannelStacker.fromInputs(inputs);

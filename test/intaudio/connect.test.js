@@ -25,6 +25,7 @@ describe("The connect() method", () => {
     signal.channels[0].connect(splitter.input.channels[0])
     signal.channels[1].connect(splitter.input.channels[1])
     signal.channels[2].connect(splitter.input.channels[2])
+
     await ChunkTester.expectEqual(splitter.outputChannels[0], 1)
     await ChunkTester.expectEqual(splitter.outputChannels[1], 2)
     await ChunkTester.expectEqual(splitter.outputChannels[2], 3)

@@ -7,6 +7,7 @@ import { ToStringAndUUID } from "./ToStringAndUUID.js";
 export declare abstract class BaseConnectable extends ToStringAndUUID implements Connectable {
     abstract connect<T extends Component>(destination: T): T;
     abstract connect<T extends CanBeConnectedTo>(destination: T): Component | undefined;
+    abstract disconnect(destination?: Component | AbstractInput): void;
     abstract get defaultOutput(): AbstractOutput | undefined;
     get isAudioStream(): boolean;
     get isStftStream(): boolean;

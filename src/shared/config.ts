@@ -3,6 +3,8 @@ import stache from 'stache-config';
 import CallableInstance from "callable-instance";
 import public_namespace from '../public.js'
 import { SignalLogger } from './logger.js';
+import { Connectable } from './base/Connectable.js';
+import { ObjectOf } from './types.js';
 
 export abstract class TypedConfigurable extends CallableInstance<any, any> implements stache.Configurable {
   constructor() {
@@ -35,8 +37,8 @@ export abstract class TypedConfigurable extends CallableInstance<any, any> imple
 export type AudioConfig = {
   audioContext: AudioContext,
   state: {
-    isInitialized: boolean,
-    workletIsAvailable: boolean
+    workletIsAvailable: boolean,
+    components: ObjectOf<Connectable>
   },
   logger: SignalLogger,
   defaultSamplePeriodMs: number,
