@@ -12,6 +12,14 @@ export declare class ArrayView<T> implements WritableArrayLike<T>, Array<T> {
     private _proxy;
     protected get proxy(): this;
     protected constructor(privateConstructor: Symbol, get: (i: number) => T, set: (i: number, v: T) => void, length: number);
+    findLast<S extends T>(predicate: (value: T, index: number, array: T[]) => value is S, thisArg?: any): S | undefined;
+    findLast(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): T | undefined;
+    findLastIndex(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): number;
+    toReversed(): T[];
+    toSorted(compareFn?: ((a: T, b: T) => number) | undefined): T[];
+    toSpliced(start: number, deleteCount: number, ...items: T[]): T[];
+    toSpliced(start: number, deleteCount?: number): T[];
+    with(index: number, value: T): T[];
     at(index: number): T | undefined;
     flatMap<U, This = undefined>(callback: (this: This, value: T, index: number, array: T[]) => U | ReadonlyArray<U>, thisArg?: This): U[];
     flat<A, D extends number = 1>(this: A, depth?: D): FlatArray<A, D>[];

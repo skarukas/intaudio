@@ -1799,7 +1799,7 @@ type AudioConfig = {
     audioContext: AudioContext;
     state: {
         workletIsAvailable: boolean;
-        components: ObjectOf<Connectable>;
+        components: ObjectOf<WeakRef<Connectable>>;
     };
     logger: SignalLogger;
     defaultSamplePeriodMs: number;

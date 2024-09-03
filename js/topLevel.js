@@ -122,8 +122,9 @@ export class IATopLevel {
         return new IATopLevel(config, namespace);
     }
     disconnectAll() {
-        for (const component of Object.values(this.config.state.components)) {
-            component.disconnect();
+        var _a;
+        for (const componentRef of Object.values(this.config.state.components)) {
+            (_a = componentRef.deref()) === null || _a === void 0 ? void 0 : _a.disconnect();
         }
         this.config.state.components = {};
     }

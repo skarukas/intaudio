@@ -586,6 +586,25 @@ class ArrayView {
             throw new Error("Instances must be constructed using one of the ArrayView.create*() methods.");
         }
     }
+    findLast(predicate, thisArg) {
+        return Array.prototype.findLast.call(this.proxy, predicate, thisArg);
+    }
+    findLastIndex(predicate, thisArg) {
+        return Array.prototype.findLastIndex.call(this.proxy, predicate, thisArg);
+    }
+    toReversed() {
+        return ArrayView.createReversedView(this);
+    }
+    toSorted(compareFn) {
+        return Array.prototype.toSorted.call(this.proxy, compareFn);
+    }
+    toSpliced(...args) {
+        // @ts-ignore 
+        return Array.prototype.toSpliced.call(this.proxy, ...args);
+    }
+    with(index, value) {
+        return Array.prototype.with.call(this.proxy, index, value);
+    }
     at(index) {
         return this.get(index);
     }
@@ -2339,7 +2358,7 @@ class BaseComponent extends BaseConnectable {
         this._reservedOutputs = [];
         this.preventIOOverwrites();
         // Register component.
-        this.config.state.components[this._uuid] = this;
+        this.config.state.components[this._uuid] = new WeakRef(this);
     }
     logSignal({ samplePeriodMs = 1000, format } = {}) {
         this.getAudioOutputProperty('logSignal')({
@@ -2517,6 +2536,8 @@ class BaseComponent extends BaseConnectable {
         output.connect(input);
         return component;
     }
+    // TODO: Implement disconnecting for "intermediate" nodes that are not an 
+    // input or output.
     disconnect(destination) {
         for (const output of Object.values(this.outputs)) {
             output.disconnect(destination);
@@ -15702,8 +15723,9 @@ class IATopLevel {
         return new IATopLevel(config, namespace);
     }
     disconnectAll() {
-        for (const component of Object.values(this.config.state.components)) {
-            component.disconnect();
+        var _a;
+        for (const componentRef of Object.values(this.config.state.components)) {
+            (_a = componentRef.deref()) === null || _a === void 0 ? void 0 : _a.disconnect();
         }
         this.config.state.components = {};
     }

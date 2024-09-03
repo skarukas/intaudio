@@ -20,7 +20,7 @@ export class BaseComponent extends BaseConnectable {
         this._reservedOutputs = [];
         this.preventIOOverwrites();
         // Register component.
-        this.config.state.components[this._uuid] = this;
+        this.config.state.components[this._uuid] = new WeakRef(this);
     }
     logSignal({ samplePeriodMs = 1000, format } = {}) {
         this.getAudioOutputProperty('logSignal')({
@@ -198,6 +198,8 @@ export class BaseComponent extends BaseConnectable {
         output.connect(input);
         return component;
     }
+    // TODO: Implement disconnecting for "intermediate" nodes that are not an 
+    // input or output.
     disconnect(destination) {
         for (const output of Object.values(this.outputs)) {
             output.disconnect(destination);

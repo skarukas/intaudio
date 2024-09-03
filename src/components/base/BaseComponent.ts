@@ -59,7 +59,7 @@ export abstract class BaseComponent<
     this._reservedOutputs = []
     this.preventIOOverwrites()
     // Register component.
-    this.config.state.components[this._uuid] = this
+    this.config.state.components[this._uuid] = new WeakRef(this)
   }
   logSignal({
     samplePeriodMs = 1000,
@@ -288,6 +288,8 @@ export abstract class BaseComponent<
     output.connect(input)
     return component
   }
+  // TODO: Implement disconnecting for "intermediate" nodes that are not an 
+  // input or output.
   disconnect(destination?: Component | AbstractInput): void {
     for (const output of Object.values(this.outputs)) {
       output.disconnect(destination)

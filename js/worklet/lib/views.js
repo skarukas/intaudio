@@ -40,6 +40,25 @@ export class ArrayView {
             throw new Error("Instances must be constructed using one of the ArrayView.create*() methods.");
         }
     }
+    findLast(predicate, thisArg) {
+        return Array.prototype.findLast.call(this.proxy, predicate, thisArg);
+    }
+    findLastIndex(predicate, thisArg) {
+        return Array.prototype.findLastIndex.call(this.proxy, predicate, thisArg);
+    }
+    toReversed() {
+        return ArrayView.createReversedView(this);
+    }
+    toSorted(compareFn) {
+        return Array.prototype.toSorted.call(this.proxy, compareFn);
+    }
+    toSpliced(...args) {
+        // @ts-ignore 
+        return Array.prototype.toSpliced.call(this.proxy, ...args);
+    }
+    with(index, value) {
+        return Array.prototype.with.call(this.proxy, index, value);
+    }
     at(index) {
         return this.get(index);
     }

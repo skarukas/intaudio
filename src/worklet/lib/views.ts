@@ -50,6 +50,29 @@ export class ArrayView<T> implements WritableArrayLike<T>, Array<T> {
       throw new Error("Instances must be constructed using one of the ArrayView.create*() methods.")
     }
   }
+  findLast<S extends T>(predicate: (value: T, index: number, array: T[]) => value is S, thisArg?: any): S | undefined;
+  findLast(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): T | undefined;
+  findLast(predicate: any, thisArg?: unknown): any {
+    return Array.prototype.findLast.call(this.proxy, predicate, thisArg)
+  }
+  findLastIndex(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): number {
+    return Array.prototype.findLastIndex.call(this.proxy, predicate, thisArg)
+  }
+  toReversed(): T[] {
+    return ArrayView.createReversedView(this)
+  }
+  toSorted(compareFn?: ((a: T, b: T) => number) | undefined): T[] {
+    return Array.prototype.toSorted.call(this.proxy, compareFn)
+  }
+  toSpliced(start: number, deleteCount: number, ...items: T[]): T[];
+  toSpliced(start: number, deleteCount?: number): T[];
+  toSpliced(...args: any[]): T[] {
+    // @ts-ignore 
+    return Array.prototype.toSpliced.call(this.proxy, ...args)
+  }
+  with(index: number, value: T): T[] {
+    return Array.prototype.with.call(this.proxy, index, value)
+  }
   at(index: number): T | undefined {
     return this.get(index)
   }
