@@ -1,7 +1,7 @@
 import { Component } from "../../components/base/Component.js"
-import { AbstractInput } from "./AbstractInput.js"
 import constants from "../../shared/constants.js"
 import { resolvePromiseArgs } from "../../shared/decorators.js"
+import { AbstractInput } from "./AbstractInput.js"
 
 export class ControlInput<T> extends AbstractInput<T> {
   readonly numInputChannels: number = 1

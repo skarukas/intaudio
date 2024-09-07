@@ -1,4 +1,5 @@
 import { Component } from "../../components/base/Component.js";
+import { NodeOutputPort } from "../../shared/AudioPort.js";
 import { AudioSignalStream } from "../../shared/AudioSignalStream.js";
 import { FFTStream } from "../../shared/FFTStream.js";
 import { CanBeConnectedTo, MultiChannel } from "../../shared/types.js";
@@ -7,11 +8,11 @@ import { AbstractInput } from "../input/AbstractInput.js";
 import { AbstractOutput } from "./AbstractOutput.js";
 export declare class AudioRateOutput extends AbstractOutput<number> implements MultiChannel<AudioRateOutput>, AudioSignalStream {
     name: string | number;
-    audioNode: AudioNode;
     parent?: Component | undefined;
     private _channels;
     activeChannel: undefined;
-    constructor(name: string | number, audioNode: AudioNode, parent?: Component | undefined);
+    port: NodeOutputPort;
+    constructor(name: string | number, port: NodeOutputPort | AudioNode, parent?: Component | undefined);
     get channels(): MultiChannelArray<AudioRateOutput>;
     get left(): AudioRateOutput;
     get right(): AudioRateOutput;

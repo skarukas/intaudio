@@ -26,7 +26,7 @@ export class CompoundInput extends AbstractInput {
         // Define 'this.inputs' and 'this' interface for underlying inputs.
         Object.keys(inputs).map(name => {
             const input = inputs[name];
-            hasMultichannelInput || (hasMultichannelInput = input instanceof AudioRateInput && input.audioSink instanceof AudioNode);
+            hasMultichannelInput || (hasMultichannelInput = input instanceof AudioRateInput && input.port instanceof AudioNode);
             if (Object.prototype.hasOwnProperty(name)) {
                 console.warn(`Cannot create top-level CompoundInput property '${name}' because it is reserved. Use 'inputs.${name}' instead.`);
             }

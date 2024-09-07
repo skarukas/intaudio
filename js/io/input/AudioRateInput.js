@@ -1,18 +1,21 @@
-import { AbstractInput } from "./AbstractInput.js";
 import constants from "../../shared/constants.js";
-import { createMultiChannelView, getNumInputChannels } from "../../shared/multichannel.js";
+import { createMultiChannelView } from "../../shared/multichannel.js";
 import { isType } from "../../shared/util.js";
+import { AbstractInput } from "./AbstractInput.js";
 export class AudioRateInput extends AbstractInput {
     get numInputChannels() {
-        return this.activeChannel ? 1 : getNumInputChannels(this.audioSink);
+        return this.activeChannel ? 1 : this.port.numChannels;
     }
-    constructor(name, parent, audioSink) {
+    constructor(name, parent, port) {
+        var _a;
         super(name, parent, false);
         this.name = name;
         this.parent = parent;
-        this.audioSink = audioSink;
         this.activeChannel = undefined;
-        this.channels = createMultiChannelView(this, audioSink instanceof AudioNode);
+        this.port = isType(port, [AudioNode, AudioParam])
+            ? new this._.NodeInputPort(port)
+            : port;
+        this.channels = createMultiChannelView(this, ((_a = this.port) === null || _a === void 0 ? void 0 : _a.node) instanceof AudioNode);
     }
     get left() {
         return this.channels[0];
@@ -22,15 +25,15 @@ export class AudioRateInput extends AbstractInput {
         return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
     }
     get value() {
-        return this.audioSink instanceof AudioParam ? this.audioSink.value : 0;
+        return this.port.node instanceof AudioParam ? this.port.node.value : 0;
     }
     setValue(value) {
         this.validate(value);
         if (value == constants.TRIGGER) {
             value = this.value;
         }
-        if (this.audioSink instanceof AudioParam && isType(value, Number)) {
-            this.audioSink.setValueAtTime(value, 0);
+        if (this.port.node instanceof AudioParam && isType(value, Number)) {
+            this.port.node.setValueAtTime(value, 0);
         }
     }
 }

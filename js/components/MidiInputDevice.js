@@ -1,7 +1,7 @@
-import { SelectDisplay } from "../ui/SelectDisplay.js";
-import { mapLikeToObject } from "../shared/util.js";
 import { MidiLearn } from "../shared/MidiLearn.js";
 import { MidiAccessListener, MidiMessageListener } from "../shared/MidiListener.js";
+import { mapLikeToObject } from "../shared/util.js";
+import { SelectDisplay } from "../ui/SelectDisplay.js";
 import { VisualComponent } from "./base/VisualComponent.js";
 export var DefaultDeviceBehavior;
 (function (DefaultDeviceBehavior) {

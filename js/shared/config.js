@@ -1,3 +1,4 @@
+// @ts-ignore
 import CallableInstance from "callable-instance";
 export class TypedConfigurable extends CallableInstance {
     constructor() {

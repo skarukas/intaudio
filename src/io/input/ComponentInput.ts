@@ -2,9 +2,9 @@
 // let i = new ComponentInput(parent)
 
 import { BaseComponent } from "../../components/base/BaseComponent.js"
+import { NodeInputPort } from "../../shared/AudioPort.js"
 import { AbstractInput } from "./AbstractInput.js"
 import { AudioRateInput } from "./AudioRateInput.js"
-import { HybridInput } from "./HybridInput.js"
 
 // TODO: replace this whole class with compound input. This may require 
 // refactoring of some code that relies on this class being a AudioRateInput 
@@ -22,8 +22,8 @@ export class ComponentInput<T> extends AudioRateInput {
     parent: BaseComponent,
     defaultInput?: AbstractInput<T>
   ) {
-    const audioNode = (defaultInput instanceof AudioRateInput || defaultInput instanceof HybridInput) ? defaultInput.audioSink : undefined
-    super(name, parent, <any>audioNode)  // TODO: fix this issue...
+    const port = defaultInput instanceof AudioRateInput ? defaultInput.port : undefined
+    super(name, parent, port as NodeInputPort)  // TODO: fix this issue...
     this._defaultInput = defaultInput
     /* this._value = defaultInput?.value */
   }

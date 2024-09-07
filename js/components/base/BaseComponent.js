@@ -1,7 +1,6 @@
 import { BaseConnectable } from "../../shared/base/BaseConnectable.js";
-import constants from "../../shared/constants.js";
 import { AudioRateOutput } from "../../io/output/AudioRateOutput.js";
-import { HybridOutput } from "../../io/output/HybridOutput.js";
+import constants from "../../shared/constants.js";
 import { arrayToObject, enumerate, isFunction, zip } from "../../shared/util.js";
 const SPEC_MATCH_REST_SYMBOL = "*";
 const SPEC_SPLIT_SYMBOL = ",";
@@ -82,12 +81,8 @@ export class BaseComponent extends BaseConnectable {
         let input = new this._.CompoundInput(name, this, inputs, defaultInput);
         return this.defineInputOrOutput(name, input, this.inputs);
     }
-    defineAudioInput(name, destinationNode) {
-        let input = new this._.AudioRateInput(name, this, destinationNode);
-        return this.defineInputOrOutput(name, input, this.inputs);
-    }
-    defineHybridInput(name, destinationNode, defaultValue = constants.UNSET_VALUE, isRequired = false) {
-        let input = new this._.HybridInput(name, this, destinationNode, defaultValue, isRequired);
+    defineAudioInput(name, port) {
+        const input = new this._.AudioRateInput(name, this, port);
         return this.defineInputOrOutput(name, input, this.inputs);
     }
     defineCompoundOutput(name, outputs, defaultOutput) {
@@ -98,12 +93,8 @@ export class BaseComponent extends BaseConnectable {
         let output = new this._.ControlOutput(name, this);
         return this.defineInputOrOutput(name, output, this.outputs);
     }
-    defineAudioOutput(name, audioNode) {
-        let output = new this._.AudioRateOutput(name, audioNode, this);
-        return this.defineInputOrOutput(name, output, this.outputs);
-    }
-    defineHybridOutput(name, audioNode) {
-        let output = new this._.HybridOutput(name, audioNode, this);
+    defineAudioOutput(name, port) {
+        const output = new this._.AudioRateOutput(name, port, this);
         return this.defineInputOrOutput(name, output, this.outputs);
     }
     setDefaultInput(input) {
@@ -233,7 +224,7 @@ export class BaseComponent extends BaseConnectable {
     }
     getChannelsBySpecs(channelSpecs) {
         const output = this.defaultOutput;
-        if (!(output instanceof AudioRateOutput || output instanceof HybridOutput)) {
+        if (!(output instanceof AudioRateOutput)) {
             throw new Error("No default audio-rate output found. Select a specific output to use this operation.");
         }
         // Convert to stringified numbers.

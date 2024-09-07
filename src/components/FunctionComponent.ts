@@ -1,12 +1,12 @@
 import { Connectable } from "../shared/base/Connectable.js"
-import { BaseComponent } from "./base/BaseComponent.js"
 import constants from "../shared/constants.js"
+import { BaseComponent } from "./base/BaseComponent.js"
 // @ts-ignore No d.ts file.
 import describeFunction from 'function-descriptor'
-import { AnyFn } from "../shared/types.js"
 import { AbstractInput } from "../io/input/AbstractInput.js"
 import { ControlInput } from "../io/input/ControlInput.js"
 import { ControlOutput } from "../io/output/ControlOutput.js"
+import { AnyFn } from "../shared/types.js"
 import { enumerate, isPlainObject, range } from "../shared/util.js"
 
 // TODO: create shared base class with AudioTransformComponent.

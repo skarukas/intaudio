@@ -1,8 +1,8 @@
 
 import { Keyboard } from "../components/Keyboard.js";
 import constants from "../shared/constants.js";
-import { KeyEvent, KeyEventType } from "../shared/events.js"
-import { BaseDisplay } from "./BaseDisplay.js"
+import { KeyEvent, KeyEventType } from "../shared/events.js";
+import { BaseDisplay } from "./BaseDisplay.js";
 declare var $: JQueryStatic;
 
 export class KeyboardDisplay extends BaseDisplay<Keyboard> {

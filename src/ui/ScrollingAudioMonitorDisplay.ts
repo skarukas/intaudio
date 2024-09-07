@@ -1,7 +1,7 @@
 import { ScrollingAudioMonitor } from "../components/ScrollingAudioMonitor.js";
-import constants from "../shared/constants.js"
+import constants from "../shared/constants.js";
 import { scaleRange } from "../shared/util.js";
-import { BaseDisplay } from "./BaseDisplay.js"
+import { BaseDisplay } from "./BaseDisplay.js";
 declare var $: JQueryStatic;
 
 export class ScrollingAudioMonitorDisplay extends BaseDisplay<ScrollingAudioMonitor> {

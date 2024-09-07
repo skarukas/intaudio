@@ -1,5 +1,5 @@
-import ia from "../../dist/bundle.js"
 import { expect } from "@esm-bundle/chai";
+import ia from "../../dist/bundle.js";
 import { intaudioInit } from "./testUtils.js";
 
 beforeEach(async () => {

@@ -1,7 +1,7 @@
 import { TypedStreamSpec } from "../../shared/StreamSpec.js"
-import { KeysLike, ObjectOf } from "../../shared/types.js"
-import { enumerate, isType, range, zip } from "../../shared/util.js"
-import { ArrayLike, AudioDimension, MultiChannelArray, SignalProcessingFnInput, toMultiChannelArray } from "./types.js"
+import { ObjectOf } from "../../shared/types.js"
+import { isType, range, zip } from "../../shared/util.js"
+import { ArrayLike, AudioDimension, SignalProcessingFnInput, toMultiChannelArray } from "./types.js"
 import { isArrayLike, isCorrectOutput, map, mapOverChannels } from "./utils.js"
 import { ArrayView } from "./views.js"
 

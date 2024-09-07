@@ -1,7 +1,7 @@
 import { KeysLike, ObjectOf } from "../../shared/types.js";
 import { IODatatype } from "./FrameToSignatureConverter.js";
 import { SignalProcessingContextFactory } from "./SignalProcessingContextFactory.js";
-import { AudioDimension, SignalProcessingFnInput, ArrayLike } from "./types.js";
+import { ArrayLike, AudioDimension, SignalProcessingFnInput } from "./types.js";
 import { WritableArrayLike } from "./views.js";
 export declare const IS_WORKLET: boolean;
 export type MappingFn<D extends AudioDimension> = (fn: Function, inputs: Float32Array[][], outputs: Float32Array[][], contextFactory: SignalProcessingContextFactory<D>) => number[];

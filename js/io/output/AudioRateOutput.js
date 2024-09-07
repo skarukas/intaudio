@@ -1,18 +1,17 @@
-import { connectWebAudioChannels, createMultiChannelView, getNumInputChannels, getNumOutputChannels } from "../../shared/multichannel.js";
+import { connectWebAudioChannels, createMultiChannelView } from "../../shared/multichannel.js";
 import { range } from "../../shared/util.js";
 import { AudioRateInput } from "../input/AudioRateInput.js";
 import { ComponentInput } from "../input/ComponentInput.js";
-import { HybridInput } from "../input/HybridInput.js";
 import { AbstractOutput } from "./AbstractOutput.js";
 // TODO: Add a GainNode here to allow muting and mastergain of the component.
 export class AudioRateOutput extends AbstractOutput {
-    constructor(name, audioNode, parent) {
+    constructor(name, port, parent) {
         super(name, parent);
         this.name = name;
-        this.audioNode = audioNode;
         this.parent = parent;
         this._channels = undefined;
         this.activeChannel = undefined;
+        this.port = port instanceof AudioNode ? new this._.NodeOutputPort(port) : port;
     }
     get channels() {
         var _a;
@@ -25,11 +24,12 @@ export class AudioRateOutput extends AbstractOutput {
         var _a;
         return (_a = this.channels[1]) !== null && _a !== void 0 ? _a : this.left;
     }
+    // TODO: remove this from AudioSignalStream.
     get numInputChannels() {
-        return this.activeChannel != undefined ? 1 : getNumInputChannels(this.audioNode);
+        return this.activeChannel != undefined ? 1 : this.port.numChannels;
     }
     get numOutputChannels() {
-        return this.activeChannel != undefined ? 1 : getNumOutputChannels(this.audioNode);
+        return this.activeChannel != undefined ? 1 : this.port.numChannels;
     }
     toString() {
         const superCall = super.toString();
@@ -47,10 +47,10 @@ export class AudioRateOutput extends AbstractOutput {
             const inputs = component == undefined ? [] : Object.keys(component.inputs);
             throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${inputs}]`);
         }
-        if (!(input instanceof AudioRateInput || input instanceof HybridInput)) {
+        if (!(input instanceof AudioRateInput)) {
             throw new Error(`Can only connect audio-rate outputs to inputs that support audio-rate signals. Given: ${input}. Use 'AudioRateSignalSampler' to force a conversion.`);
         }
-        this.connectNodes(this.audioNode, input.audioSink, this.activeChannel, input.activeChannel);
+        this.port.connect(input.port, this.activeChannel, input.activeChannel);
         if (input._uuid in this.connections) {
             throw new Error(`The given input ${input} (${input._uuid}) is already connected.`);
         }
@@ -65,22 +65,18 @@ export class AudioRateOutput extends AbstractOutput {
             }
         }
         else {
-            const { input } = this.getDestinationInfo(destination);
+            const input = this.getDestinationInfo(destination).input;
             // Disconnect audio node.
-            // TODO: this doesn't work for channel views because the target is 
-            // the channel merger / splitter created in the process.
-            try {
-                this.audioNode.disconnect(input.audioSink);
-            }
-            catch (_a) { }
+            this.port.disconnect(input.port, this.activeChannel, input.activeChannel);
             delete this.connections[input._uuid];
         }
     }
     sampleSignal(samplePeriodMs) {
         return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs));
     }
-    // TODO: Make a single global sampler so that all signals are logged together.
-    logSignal({ samplePeriodMs = 1000, format } = {}) {
+    logSignal({ 
+    // TODO: remove this param.
+    samplePeriodMs = 1000, format } = {}) {
         if (!format) {
             format = "";
             // Maybe add parent

@@ -1,11 +1,11 @@
 
 
-import { ControlOutput } from "../io/output/ControlOutput.js";
-import { SelectDisplay } from "../ui/SelectDisplay.js";
-import { mapLikeToObject } from "../shared/util.js";
-import { MidiLearn } from "../shared/MidiLearn.js";
 import { ControlInput } from "../io/input/ControlInput.js";
+import { ControlOutput } from "../io/output/ControlOutput.js";
+import { MidiLearn } from "../shared/MidiLearn.js";
 import { MidiAccessListener, MidiMessageListener } from "../shared/MidiListener.js";
+import { mapLikeToObject } from "../shared/util.js";
+import { SelectDisplay } from "../ui/SelectDisplay.js";
 import { VisualComponent } from "./base/VisualComponent.js";
 
 type MidiEvent = [number, number, number];

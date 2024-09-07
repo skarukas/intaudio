@@ -1,25 +1,31 @@
 import { Component } from "../../components/base/Component.js"
-import { AbstractInput } from "./AbstractInput.js"
+import { NodeInputPort } from "../../shared/AudioPort.js"
 import constants from "../../shared/constants.js"
+import { createMultiChannelView } from "../../shared/multichannel.js"
 import { MultiChannel, WebAudioConnectable } from "../../shared/types.js"
-import { createMultiChannelView, getNumInputChannels } from "../../shared/multichannel.js"
-import { MultiChannelArray } from "../../worklet/lib/types.js"
 import { isType } from "../../shared/util.js"
+import { MultiChannelArray } from "../../worklet/lib/types.js"
+import { AbstractInput } from "./AbstractInput.js"
 
 export class AudioRateInput extends AbstractInput<number> implements MultiChannel<AudioRateInput> {
   readonly channels: MultiChannelArray<this>
   activeChannel: number | undefined = undefined
+  port: NodeInputPort
+
   get numInputChannels(): number {
-    return this.activeChannel ? 1 : getNumInputChannels(this.audioSink)
+    return this.activeChannel ? 1 : this.port.numChannels
   }
 
   constructor(
     public name: string | number,
     public parent: Component | undefined,
-    public audioSink: WebAudioConnectable
+    port: NodeInputPort | WebAudioConnectable
   ) {
     super(name, parent, false)
-    this.channels = createMultiChannelView(this, audioSink instanceof AudioNode)
+    this.port = isType(port, [AudioNode, AudioParam])
+      ? new this._.NodeInputPort(port as WebAudioConnectable)
+      : port as NodeInputPort
+    this.channels = createMultiChannelView(this, this.port?.node instanceof AudioNode)
   }
   get left(): this {
     return this.channels[0]
@@ -28,15 +34,15 @@ export class AudioRateInput extends AbstractInput<number> implements MultiChanne
     return this.channels[1] ?? this.left
   }
   get value() {
-    return this.audioSink instanceof AudioParam ? this.audioSink.value : 0
+    return this.port.node instanceof AudioParam ? this.port.node.value : 0
   }
   setValue(value: number | typeof constants.TRIGGER) {
     this.validate(value)
     if (value == constants.TRIGGER) {
       value = this.value
     }
-    if (this.audioSink instanceof AudioParam && isType(value, Number)) {
-      this.audioSink.setValueAtTime(value, 0)
+    if (this.port.node instanceof AudioParam && isType(value, Number)) {
+      this.port.node.setValueAtTime(value, 0)
     }
   }
 }

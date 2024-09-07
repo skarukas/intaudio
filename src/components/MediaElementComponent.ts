@@ -19,11 +19,11 @@ export class MediaElementComponent extends BaseComponent {
   mediaElement: HTMLMediaElement
   audioNode: MediaElementAudioSourceNode
 
-  constructor(selectorOrElement: string | MaybeJQuery<HTMLMediaElement>, 
-    { 
+  constructor(selectorOrElement: string | MaybeJQuery<HTMLMediaElement>,
+    {
       preservePitchOnStretch = false
     }: { preservePitchOnStretch?: boolean } = {}
-) {
+  ) {
     super()
 
     this.mediaElement = $(<any>selectorOrElement).get(0)

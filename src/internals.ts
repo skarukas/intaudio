@@ -36,13 +36,12 @@ export * from './io/input/CompoundInput.js'
 export * from './io/input/ComponentInput.js'
 export * from './io/input/ControlInput.js';
 export * from './io/input/FFTInput.js';
-export * from './io/input/HybridInput.js'
 export * from './io/output/AbstractOutput.js'
 export * from './io/output/AudioRateOutput.js';
 export * from './io/output/CompoundOutput.js';
 export * from './io/output/ControlOutput.js';
 export * from './io/output/FFTOutput.js';
-export * from './io/output/HybridOutput.js'
+export * from './shared/AudioPort.js';
 export * from './shared/base/BaseConnectable.js';
 export * from './shared/base/ToStringAndUUID.js';
 export * from './shared/config.js';

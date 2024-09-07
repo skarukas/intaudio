@@ -2,7 +2,7 @@ import { KeysLike, ObjectOf, ObjectOrArrayOf } from "../../shared/types.js"
 import { enumerate, isType, zip } from "../../shared/util.js"
 import { IODatatype } from "./FrameToSignatureConverter.js"
 import { SignalProcessingContextFactory } from "./SignalProcessingContextFactory.js"
-import { MultiChannelArray, toMultiChannelArray, AudioDimension, SignalProcessingFnInput, ArrayLike } from "./types.js"
+import { ArrayLike, AudioDimension, MultiChannelArray, SignalProcessingFnInput, toMultiChannelArray } from "./types.js"
 import { WritableArrayLike } from "./views.js"
 
 export const IS_WORKLET = typeof AudioWorkletProcessor != 'undefined'

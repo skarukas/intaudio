@@ -1,5 +1,5 @@
-import ia from "../../dist/bundle.js"
-import { intaudioInit, ChunkTester } from "./testUtils.js";
+import ia from "../../dist/bundle.js";
+import { ChunkTester, intaudioInit } from "./testUtils.js";
 
 beforeEach(async () => {
   await intaudioInit()

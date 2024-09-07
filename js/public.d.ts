@@ -67,13 +67,14 @@ declare const _default: {
     ComponentInput: typeof internals.ComponentInput;
     ControlInput: typeof internals.ControlInput;
     FFTInput: typeof internals.FFTInput;
-    HybridInput: typeof internals.HybridInput;
     AbstractOutput: typeof internals.AbstractOutput;
     AudioRateOutput: typeof internals.AudioRateOutput;
     CompoundOutput: typeof internals.CompoundOutput;
     ControlOutput: typeof internals.ControlOutput;
     FFTOutput: typeof internals.FFTOutput;
-    HybridOutput: typeof internals.HybridOutput;
+    BaseAudioPort: typeof internals.BaseAudioPort;
+    NodeOutputPort: typeof internals.NodeOutputPort;
+    NodeInputPort: typeof internals.NodeInputPort;
     BaseConnectable: typeof internals.BaseConnectable;
     ToStringAndUUID: typeof internals.ToStringAndUUID;
     TypedConfigurable: typeof internals.TypedConfigurable;

@@ -1,7 +1,7 @@
-import ia from "../../dist/bundle.js"
-import { expect, use, Assertion } from "@esm-bundle/chai";
-import chaiAsPromised from 'chai-as-promised';
+import { Assertion, expect, use } from "@esm-bundle/chai";
 import { sendMouse } from '@web/test-runner-commands';
+import chaiAsPromised from 'chai-as-promised';
+import ia from "../../dist/bundle.js";
 
 afterEach(() => {
   ia.disconnectAll()

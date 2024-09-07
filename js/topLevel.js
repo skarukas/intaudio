@@ -18,10 +18,10 @@ var __rest = (this && this.__rest) || function (s, e) {
         }
     return t;
 };
-import { TimeMeasure } from "./shared/types.js";
-import { defineTimeRamp, isFunction, isType, loadFile, zip } from "./shared/util.js";
 import { StreamSpec } from "./shared/StreamSpec.js";
 import { joinContexts } from "./shared/multicontext.js";
+import { TimeMeasure } from "./shared/types.js";
+import { defineTimeRamp, isFunction, isType, loadFile, zip } from "./shared/util.js";
 // @ts-ignore Missing d.ts
 import stache from 'stache-config';
 import * as internalNamespace from './internals.js';
@@ -57,6 +57,7 @@ export class IATopLevel {
         this.listeners = [];
         this.initStarted = false;
         this.isInitialized = false;
+        // TODO: consider not making this an "input".
         this.out = new this.internals.AudioRateInput('out', undefined, config.audioContext.destination);
         this.util = internalNamespace.util;
     }

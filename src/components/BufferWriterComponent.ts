@@ -1,6 +1,6 @@
 import { AudioRateInput } from "../io/input/AudioRateInput.js";
 import { ControlInput } from "../io/input/ControlInput.js";
-import { bufferToFloat32Arrays, getBufferId, makeBufferShared } from "../shared/util.js";
+import { bufferToFloat32Arrays, getBufferId } from "../shared/util.js";
 import { BUFFER_WRITER_WORKLET_NAME } from "../worklet/BufferWriterWorklet.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 

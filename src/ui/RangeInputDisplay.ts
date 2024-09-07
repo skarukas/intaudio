@@ -1,5 +1,5 @@
-import { RangeInputComponent } from "../components/RangeInputComponent.js"
-import { BaseDisplay } from "./BaseDisplay.js"
+import { RangeInputComponent } from "../components/RangeInputComponent.js";
+import { BaseDisplay } from "./BaseDisplay.js";
 declare var $: JQueryStatic;
 
 export abstract class RangeInputDisplay extends BaseDisplay<RangeInputComponent> {

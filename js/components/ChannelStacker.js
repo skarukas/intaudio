@@ -1,5 +1,4 @@
 import { AudioRateOutput } from "../io/output/AudioRateOutput.js";
-import { HybridOutput } from "../io/output/HybridOutput.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 const PRIVATE_CONSTRUCTOR = Symbol("PRIVATE_CONSTRUCTOR");
 export class ChannelStacker extends BaseComponent {
@@ -34,7 +33,7 @@ export class ChannelStacker extends BaseComponent {
             if (output instanceof BaseComponent && output.defaultOutput) {
                 output = output.defaultOutput;
             }
-            if (!(output instanceof HybridOutput || output instanceof AudioRateOutput)) {
+            if (!(output instanceof AudioRateOutput)) {
                 throw new Error(`A ChannelStacker can only be created from audio-rate outputs. Given ${destinations[i]}, which is not an audio-rate outputs nor a component with a default audio-rate outputs.`);
             }
             inputs.push(output);

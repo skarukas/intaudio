@@ -1,15 +1,15 @@
 import constants from "../shared/constants.js";
 // @ts-ignore
 import describeFunction from 'function-descriptor';
-import { Disconnect } from "../shared/types.js";
-import { BaseComponent } from "./base/BaseComponent.js";
-import { createScriptProcessorNode, enumerate, range } from "../shared/util.js";
 import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
+import { StreamSpec } from "../shared/StreamSpec.js";
+import { Disconnect } from "../shared/types.js";
+import { createScriptProcessorNode, enumerate, range } from "../shared/util.js";
+import { serializeWorkletMessage } from "../worklet/lib/serialization.js";
 import { SignalProcessingContextFactory } from "../worklet/lib/SignalProcessingContextFactory.js";
 import { getProcessingFunction } from "../worklet/lib/utils.js";
-import { serializeWorkletMessage } from "../worklet/lib/serialization.js";
 import { FUNCTION_WORKLET_NAME } from "../worklet/OperationWorklet.js";
-import { StreamSpec } from "../shared/StreamSpec.js";
+import { BaseComponent } from "./base/BaseComponent.js";
 export class AudioExecutionContext extends ToStringAndUUID {
     constructor(fn, dimension) {
         super();

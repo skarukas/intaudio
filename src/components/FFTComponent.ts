@@ -1,6 +1,4 @@
 import { AudioRateInput } from "../io/input/AudioRateInput.js";
-import { AudioRateOutput } from "../io/output/AudioRateOutput.js";
-import { CompoundOutput } from "../io/output/CompoundOutput.js";
 import { FFTOutput } from "../io/output/FFTOutput.js";
 import { AudioSignalStream } from "../shared/AudioSignalStream.js";
 import { FFTStream } from "../shared/FFTStream.js";

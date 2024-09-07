@@ -1,7 +1,4 @@
 import { Component } from "../../components/base/Component.js";
-import { AudioSignalStream } from "../../shared/AudioSignalStream.js";
-import { FFTStream } from "../../shared/FFTStream.js";
-import { AbstractInput } from "./AbstractInput.js";
 import { AudioRateInput } from "./AudioRateInput.js";
 import { CompoundInput } from "./CompoundInput.js";
 

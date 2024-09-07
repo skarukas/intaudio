@@ -1,6 +1,6 @@
+import { ControlInput } from "../io/input/ControlInput.js";
 import { ControlOutput } from "../io/output/ControlOutput.js";
 import { MidiLearn } from "../shared/MidiLearn.js";
-import { ControlInput } from "../io/input/ControlInput.js";
 import { MidiAccessListener, MidiMessageListener } from "../shared/MidiListener.js";
 import { VisualComponent } from "./base/VisualComponent.js";
 type MidiEvent = [number, number, number];

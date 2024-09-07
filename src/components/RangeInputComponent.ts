@@ -1,4 +1,3 @@
-import { AbstractInput } from "../io/input/AbstractInput.js"
 import { ControlInput } from "../io/input/ControlInput.js"
 import { ControlOutput } from "../io/output/ControlOutput.js"
 import { MidiLearn } from "../shared/MidiLearn.js"

@@ -1,4 +1,4 @@
-import { Constructor } from "../shared/types.js"
+import { Constructor } from "../shared/types.js";
 
 export interface HasTypeValidator {
   /**

@@ -1,6 +1,6 @@
+import { Queue } from '@datastructures-js/queue';
 import { SafeAudioWorkletProcessor } from "./utils.js";
 import { ArrayView, WritableArrayLike } from "./views.js";
-import { Queue } from '@datastructures-js/queue';
 /**
  * A Queue that allows adding and popping many elements at a time, without copying the underlying data.
  */

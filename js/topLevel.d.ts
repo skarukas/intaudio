@@ -1,12 +1,12 @@
-import { Component } from "./components/base/Component.js";
-import { AnyFn, MaybePromise, ObjectOf, ObjectOrArrayOf, TimeMeasure } from "./shared/types.js";
-import { Connectable } from "./shared/base/Connectable.js";
 import { AudioRecordingComponent } from "./components/AudioRecordingComponent.js";
-import { BufferWriterComponent } from "./components/BufferWriterComponent.js";
-import { AudioConfig } from "./shared/config.js";
 import { BufferComponent } from "./components/BufferComponent.js";
-import { BaseConnectable } from "./shared/base/BaseConnectable.js";
+import { BufferWriterComponent } from "./components/BufferWriterComponent.js";
+import { Component } from "./components/base/Component.js";
 import { AudioRateInput } from "./io/input/AudioRateInput.js";
+import { BaseConnectable } from "./shared/base/BaseConnectable.js";
+import { Connectable } from "./shared/base/Connectable.js";
+import { AudioConfig } from "./shared/config.js";
+import { AnyFn, MaybePromise, ObjectOf, ObjectOrArrayOf, TimeMeasure } from "./shared/types.js";
 import * as internalNamespace from './internals.js';
 export declare class IATopLevel {
     config: AudioConfig;

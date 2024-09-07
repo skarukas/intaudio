@@ -1,9 +1,9 @@
 import { Connectable } from "../shared/base/Connectable.js";
 import { BaseComponent } from "./base/BaseComponent.js";
-import { AnyFn } from "../shared/types.js";
 import { AbstractInput } from "../io/input/AbstractInput.js";
 import { ControlInput } from "../io/input/ControlInput.js";
 import { ControlOutput } from "../io/output/ControlOutput.js";
+import { AnyFn } from "../shared/types.js";
 export declare class FunctionComponent<T0 = any, T1 = any, T2 = any, T3 = any, T4 = any, T5 = any, R = any> extends BaseComponent {
     fn: AnyFn<T0, T1, T2, T3, T4, T5, R>;
     readonly $0?: ControlInput<T0>;

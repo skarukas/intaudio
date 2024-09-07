@@ -1,4 +1,3 @@
-import { AudioRateInput } from "../io/input/AudioRateInput.js";
 import { FFTInput } from "../io/input/FFTInput.js";
 import { AudioRateOutput } from "../io/output/AudioRateOutput.js";
 import { IFFT_WORKLET_NAME } from "../worklet/FFTWorklet.js";

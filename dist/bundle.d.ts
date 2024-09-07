@@ -1,5 +1,5 @@
-import stache from 'stache-config';
 import CallableInstance from 'callable-instance';
+import stache from 'stache-config';
 
 type AudioDimension = "all" | "none" | "channels" | "time";
 type MultiChannelArray<T> = ArrayLike$1<T> & {
@@ -277,26 +277,37 @@ declare class ControlInput<T> extends AbstractInput<T> {
     setValue(value: T | Promise<T>): void;
 }
 
-declare class AudioRateInput extends AbstractInput<number> implements MultiChannel<AudioRateInput> {
-    name: string | number;
-    parent: Component | undefined;
-    audioSink: WebAudioConnectable;
-    readonly channels: MultiChannelArray<this>;
-    activeChannel: number | undefined;
-    get numInputChannels(): number;
-    constructor(name: string | number, parent: Component | undefined, audioSink: WebAudioConnectable);
-    get left(): this;
-    get right(): this;
-    get value(): number;
-    setValue(value: number | typeof _default$2.TRIGGER): void;
+declare class ConnectOperation {
+    source: AudioNode;
+    destination: WebAudioConnectable;
+    fromIndex?: number | undefined;
+    toIndex?: number | undefined;
+    constructor(source: AudioNode, destination: WebAudioConnectable, fromIndex?: number | undefined, toIndex?: number | undefined);
+    execute(): void;
+    undo(): void;
+    static simpleConnect(sourceNode: AudioNode, destinationNode: WebAudioConnectable, outputIndex?: number, inputIndex?: number): ConnectOperation;
+    static simpleDisconnect(sourceNode: AudioNode, destinationNode?: WebAudioConnectable, outputIndex?: number, inputIndex?: number): void;
 }
-
-declare class ComponentInput<T> extends AudioRateInput {
-    name: string | number;
-    protected _defaultInput: AbstractInput<T> | undefined;
-    get defaultInput(): AbstractInput<T> | undefined;
-    constructor(name: string | number, parent: BaseComponent, defaultInput?: AbstractInput<T>);
-    setValue(value: any): void;
+declare abstract class BaseAudioPort extends ToStringAndUUID {
+}
+declare class NodeOutputPort extends BaseAudioPort {
+    node: AudioNode;
+    outputIndex?: number | undefined;
+    protected executedConnections: Map<NodeInputPort, ObjectOf<ObjectOf<ConnectOperation>>>;
+    numChannels: number;
+    constructor(node: AudioNode, outputIndex?: number | undefined);
+    splitter: ChannelSplitterNode;
+    protected getConnection(destination: NodeInputPort, fromChannel: number, toChannel: number): ConnectOperation | undefined;
+    protected setConnection(destination: NodeInputPort, fromChannel: number, toChannel: number, connection: ConnectOperation): void;
+    connect(destination: NodeInputPort, fromChannel?: number, toChannel?: number): void;
+    disconnect(destination?: NodeInputPort, fromChannel?: number, toChannel?: number): void;
+}
+declare class NodeInputPort extends BaseAudioPort {
+    node: WebAudioConnectable;
+    inputIndex?: number | undefined;
+    numChannels: number;
+    constructor(node: WebAudioConnectable, inputIndex?: number | undefined);
+    merger: ChannelMergerNode;
 }
 
 interface FFTStream extends Connectable {
@@ -336,21 +347,13 @@ interface AudioSignalStream extends Connectable {
     fft(fftSize?: number): FFTStream;
 }
 
-declare class ControlOutput<T> extends AbstractOutput<T> {
-    numOutputChannels: number;
-    connect<T extends CanBeConnectedTo>(destination: T): Component | undefined;
-    disconnect(destination?: Component | AbstractInput): void;
-    setValue(value: T | Promise<T>, rawObject?: boolean): void;
-    onUpdate(callback: (val?: T) => void): void;
-}
-
 declare class AudioRateOutput extends AbstractOutput<number> implements MultiChannel<AudioRateOutput>, AudioSignalStream {
     name: string | number;
-    audioNode: AudioNode;
     parent?: Component | undefined;
     private _channels;
     activeChannel: undefined;
-    constructor(name: string | number, audioNode: AudioNode, parent?: Component | undefined);
+    port: NodeOutputPort;
+    constructor(name: string | number, port: NodeOutputPort | AudioNode, parent?: Component | undefined);
     get channels(): MultiChannelArray<AudioRateOutput>;
     get left(): AudioRateOutput;
     get right(): AudioRateOutput;
@@ -393,26 +396,12 @@ declare class AudioRateOutput extends AbstractOutput<number> implements MultiCha
     toChannels(numChannels: number, mode?: 'speakers' | 'discrete' | 'repeat'): Component;
 }
 
-declare class HybridInput<T> extends AbstractInput<T> implements MultiChannel<HybridInput<T>> {
+declare class ComponentInput<T> extends AudioRateInput {
     name: string | number;
-    parent: Component;
-    audioSink: WebAudioConnectable;
-    isRequired: boolean;
-    get numInputChannels(): number;
-    readonly channels: MultiChannelArray<this>;
-    activeChannel: number | undefined;
-    private _value;
-    constructor(name: string | number, parent: Component, audioSink: WebAudioConnectable, defaultValue?: T | undefined, isRequired?: boolean);
-    get left(): this;
-    get right(): this;
-    get value(): T | undefined;
-    setValue(value: T | Promise<T>): void;
-}
-
-declare class HybridOutput<T = any> extends AudioRateOutput {
-    connect(destination: CanBeConnectedTo): Component<AnyInput, AnyOutput> | undefined;
-    setValue(value: T | Promise<T>, rawObject?: boolean): void;
-    onUpdate(callback: (val?: any) => void): void;
+    protected _defaultInput: AbstractInput<T> | undefined;
+    get defaultInput(): AbstractInput<T> | undefined;
+    constructor(name: string | number, parent: BaseComponent, defaultInput?: AbstractInput<T>);
+    setValue(value: any): void;
 }
 
 type InputTypes<T> = {
@@ -457,6 +446,14 @@ declare class CompoundOutput<OutputsDict extends ObjectOf<AbstractOutput>> exten
     constructor(name: string | number, outputs: OutputsDict, parent?: Component | undefined, defaultOutput?: AbstractOutput);
     protected mapOverOutputs<T>(fn: (i: AbstractOutput, name: string | number) => T): KeysLike<OutputsDict, T>;
     get numOutputChannels(): number;
+}
+
+declare class ControlOutput<T> extends AbstractOutput<T> {
+    numOutputChannels: number;
+    connect<T extends CanBeConnectedTo>(destination: T): Component | undefined;
+    disconnect(destination?: Component | AbstractInput): void;
+    setValue(value: T | Promise<T>, rawObject?: boolean): void;
+    onUpdate(callback: (val?: T) => void): void;
 }
 
 /**
@@ -519,12 +516,10 @@ declare abstract class BaseComponent<InputTypes extends AnyInput = AnyInput, Out
     protected defineInputAlias<InputType extends AbstractInput<any>>(name: string | number, input: InputType): InputType;
     protected defineControlInput<T>(name: string | number, defaultValue?: T | undefined, isRequired?: boolean): ControlInput<T>;
     protected defineCompoundInput<T extends ObjectOf<AbstractInput>>(name: string | number, inputs: T, defaultInput?: AbstractInput): CompoundInput<T>;
-    protected defineAudioInput(name: string | number, destinationNode: WebAudioConnectable): AudioRateInput;
-    protected defineHybridInput<T>(name: string | number, destinationNode: WebAudioConnectable, defaultValue?: T | undefined, isRequired?: boolean): HybridInput<T>;
+    protected defineAudioInput(name: string | number, port: NodeInputPort | AudioNode | AudioParam): AudioRateInput;
     protected defineCompoundOutput<T extends ObjectOf<AbstractOutput>>(name: string | number, outputs: T, defaultOutput?: AbstractOutput): CompoundOutput<T>;
     protected defineControlOutput(name: string | number): ControlOutput<any>;
-    protected defineAudioOutput(name: string | number, audioNode: AudioNode): AudioRateOutput;
-    protected defineHybridOutput(name: string | number, audioNode: AudioNode): HybridOutput;
+    protected defineAudioOutput(name: string | number, port: NodeOutputPort | AudioNode): AudioRateOutput;
     protected setDefaultInput(input: AbstractInput): void;
     protected setDefaultOutput(output: AbstractOutput): void;
     getDefaultInput(): ComponentInput<any>;
@@ -638,20 +633,6 @@ declare class AudioComponent extends BaseComponent {
     readonly input: AudioRateInput;
     readonly output: AudioRateOutput | undefined;
     constructor(inputNode: WebAudioConnectable);
-}
-
-declare class AudioRecordingComponent extends BaseComponent {
-    [n: number]: AudioRateInput;
-    protected worklet: AudioWorkletNode;
-    isRecording: boolean;
-    protected onMessage: (buffers: AudioBuffer[]) => void;
-    protected onFailure: () => void;
-    constructor(numberOfInputs?: number);
-    capture(numSamples: number): Promise<AudioBuffer[]>;
-    start(): void;
-    stop(): Promise<AudioBuffer[]>;
-    protected waitForWorkletResponse(): Promise<AudioBuffer[]>;
-    protected handleMessage(floatData: Float32Array[][]): void;
 }
 
 type RawChannelFrame<D extends AudioDimension> = {
@@ -1547,6 +1528,8 @@ type internalNamespace_Bang = Bang;
 declare const internalNamespace_Bang: typeof Bang;
 type internalNamespace_BangDisplay = BangDisplay;
 declare const internalNamespace_BangDisplay: typeof BangDisplay;
+type internalNamespace_BaseAudioPort = BaseAudioPort;
+declare const internalNamespace_BaseAudioPort: typeof BaseAudioPort;
 type internalNamespace_BaseComponent<InputTypes extends AnyInput = AnyInput, OutputTypes extends AnyOutput = AnyOutput> = BaseComponent<InputTypes, OutputTypes>;
 declare const internalNamespace_BaseComponent: typeof BaseComponent;
 type internalNamespace_BaseConnectable = BaseConnectable;
@@ -1593,10 +1576,6 @@ declare const internalNamespace_FFTInput: typeof FFTInput;
 type internalNamespace_FFTOutput = FFTOutput;
 declare const internalNamespace_FFTOutput: typeof FFTOutput;
 declare const internalNamespace_FunctionComponent: typeof FunctionComponent;
-type internalNamespace_HybridInput<T> = HybridInput<T>;
-declare const internalNamespace_HybridInput: typeof HybridInput;
-type internalNamespace_HybridOutput<T = any> = HybridOutput<T>;
-declare const internalNamespace_HybridOutput: typeof HybridOutput;
 type internalNamespace_IFFTComponent = IFFTComponent;
 declare const internalNamespace_IFFTComponent: typeof IFFTComponent;
 type internalNamespace_IgnoreDuplicates<T = any> = IgnoreDuplicates<T>;
@@ -1627,6 +1606,10 @@ declare const internalNamespace_MidiMessageListener: typeof MidiMessageListener;
 type internalNamespace_MultiChannel<T extends (AbstractInput | AbstractOutput) = any> = MultiChannel<T>;
 type internalNamespace_MuteEvent = MuteEvent;
 declare const internalNamespace_MuteEvent: typeof MuteEvent;
+type internalNamespace_NodeInputPort = NodeInputPort;
+declare const internalNamespace_NodeInputPort: typeof NodeInputPort;
+type internalNamespace_NodeOutputPort = NodeOutputPort;
+declare const internalNamespace_NodeOutputPort: typeof NodeOutputPort;
 type internalNamespace_ObjectOf<T> = ObjectOf<T>;
 type internalNamespace_ObjectOrArrayOf<T> = ObjectOrArrayOf<T>;
 type internalNamespace_RangeInputComponent = RangeInputComponent;
@@ -1677,7 +1660,7 @@ declare const internalNamespace_getNumOutputChannels: typeof getNumOutputChannel
 declare const internalNamespace_lazyProperty: typeof lazyProperty;
 declare const internalNamespace_resolvePromiseArgs: typeof resolvePromiseArgs;
 declare namespace internalNamespace {
-  export { internalNamespace_ADSR as ADSR, internalNamespace_AbstractInput as AbstractInput, internalNamespace_AbstractOutput as AbstractOutput, type internalNamespace_AnyFn as AnyFn, type internalNamespace_AnyInput as AnyInput, type internalNamespace_AnyOutput as AnyOutput, internalNamespace_AudioComponent as AudioComponent, type internalNamespace_AudioConfig as AudioConfig, internalNamespace_AudioExecutionContext as AudioExecutionContext, internalNamespace_AudioRateInput as AudioRateInput, internalNamespace_AudioRateOutput as AudioRateOutput, internalNamespace_AudioRateSignalSampler as AudioRateSignalSampler, internalNamespace_AudioRecordingComponent as AudioRecordingComponent, internalNamespace_AudioTransformComponent as AudioTransformComponent, internalNamespace_Bang as Bang, internalNamespace_BangDisplay as BangDisplay, internalNamespace_BaseComponent as BaseComponent, internalNamespace_BaseConnectable as BaseConnectable, internalNamespace_BaseDisplay as BaseDisplay, internalNamespace_BaseEvent as BaseEvent, internalNamespace_BufferComponent as BufferComponent, internalNamespace_BufferWriterComponent as BufferWriterComponent, type internalNamespace_Bundle as Bundle, internalNamespace_BundleComponent as BundleComponent, internalNamespace_BypassEvent as BypassEvent, type internalNamespace_CanBeConnectedTo as CanBeConnectedTo, internalNamespace_ChannelSplitter as ChannelSplitter, internalNamespace_ChannelStacker as ChannelStacker, internalNamespace_ComponentInput as ComponentInput, internalNamespace_CompoundInput as CompoundInput, internalNamespace_CompoundOutput as CompoundOutput, type internalNamespace_Constructor as Constructor, internalNamespace_ControlInput as ControlInput, internalNamespace_ControlOutput as ControlOutput, internalNamespace_ControlToAudioConverter as ControlToAudioConverter, internalNamespace_DefaultDeviceBehavior as DefaultDeviceBehavior, internalNamespace_Disconnect as Disconnect, internalNamespace_FFTComponent as FFTComponent, internalNamespace_FFTInput as FFTInput, internalNamespace_FFTOutput as FFTOutput, internalNamespace_FunctionComponent as FunctionComponent, internalNamespace_HybridInput as HybridInput, internalNamespace_HybridOutput as HybridOutput, internalNamespace_IFFTComponent as IFFTComponent, internalNamespace_IgnoreDuplicates as IgnoreDuplicates, internalNamespace_KeyEvent as KeyEvent, internalNamespace_KeyEventType as KeyEventType, internalNamespace_Keyboard as Keyboard, internalNamespace_KeyboardDisplay as KeyboardDisplay, type internalNamespace_KeysLike as KeysLike, internalNamespace_KnobDisplay as KnobDisplay, type internalNamespace_MaybePromise as MaybePromise, type internalNamespace_MaybePromises as MaybePromises, internalNamespace_MediaElementComponent as MediaElementComponent, internalNamespace_MidiAccessListener as MidiAccessListener, internalNamespace_MidiInputDevice as MidiInputDevice, internalNamespace_MidiLearn as MidiLearn, internalNamespace_MidiMessageListener as MidiMessageListener, type internalNamespace_MultiChannel as MultiChannel, internalNamespace_MuteEvent as MuteEvent, type internalNamespace_ObjectOf as ObjectOf, type internalNamespace_ObjectOrArrayOf as ObjectOrArrayOf, internalNamespace_RangeInputComponent as RangeInputComponent, internalNamespace_RangeInputDisplay as RangeInputDisplay, internalNamespace_RangeType as RangeType, internalNamespace_ScriptProcessorExecutionContext as ScriptProcessorExecutionContext, internalNamespace_ScrollingAudioMonitor as ScrollingAudioMonitor, internalNamespace_ScrollingAudioMonitorDisplay as ScrollingAudioMonitorDisplay, internalNamespace_SignalLogger as SignalLogger, internalNamespace_SimplePolyphonicSynth as SimplePolyphonicSynth, internalNamespace_SliderDisplay as SliderDisplay, internalNamespace_SlowDown as SlowDown, type internalNamespace_SupportsSelect as SupportsSelect, internalNamespace_TimeMeasure as TimeMeasure, internalNamespace_TimeVaryingSignal as TimeVaryingSignal, internalNamespace_ToStringAndUUID as ToStringAndUUID, internalNamespace_TypedConfigurable as TypedConfigurable, internalNamespace_TypingKeyboardMIDI as TypingKeyboardMIDI, internalNamespace_VisualComponent as VisualComponent, internalNamespace_Wave as Wave, internalNamespace_WaveType as WaveType, type internalNamespace_WebAudioConnectable as WebAudioConnectable, internalNamespace_WorkletExecutionContext as WorkletExecutionContext, internalNamespace_connectWebAudioChannels as connectWebAudioChannels, _default$2 as constants, internalNamespace_createMultiChannelView as createMultiChannelView, internalNamespace_disconnect as disconnect, events_d as events, internalNamespace_getNumInputChannels as getNumInputChannels, internalNamespace_getNumOutputChannels as getNumOutputChannels, internalNamespace_lazyProperty as lazyProperty, internalNamespace_resolvePromiseArgs as resolvePromiseArgs, util_d as util };
+  export { internalNamespace_ADSR as ADSR, internalNamespace_AbstractInput as AbstractInput, internalNamespace_AbstractOutput as AbstractOutput, type internalNamespace_AnyFn as AnyFn, type internalNamespace_AnyInput as AnyInput, type internalNamespace_AnyOutput as AnyOutput, internalNamespace_AudioComponent as AudioComponent, type internalNamespace_AudioConfig as AudioConfig, internalNamespace_AudioExecutionContext as AudioExecutionContext, internalNamespace_AudioRateInput as AudioRateInput, internalNamespace_AudioRateOutput as AudioRateOutput, internalNamespace_AudioRateSignalSampler as AudioRateSignalSampler, internalNamespace_AudioRecordingComponent as AudioRecordingComponent, internalNamespace_AudioTransformComponent as AudioTransformComponent, internalNamespace_Bang as Bang, internalNamespace_BangDisplay as BangDisplay, internalNamespace_BaseAudioPort as BaseAudioPort, internalNamespace_BaseComponent as BaseComponent, internalNamespace_BaseConnectable as BaseConnectable, internalNamespace_BaseDisplay as BaseDisplay, internalNamespace_BaseEvent as BaseEvent, internalNamespace_BufferComponent as BufferComponent, internalNamespace_BufferWriterComponent as BufferWriterComponent, type internalNamespace_Bundle as Bundle, internalNamespace_BundleComponent as BundleComponent, internalNamespace_BypassEvent as BypassEvent, type internalNamespace_CanBeConnectedTo as CanBeConnectedTo, internalNamespace_ChannelSplitter as ChannelSplitter, internalNamespace_ChannelStacker as ChannelStacker, internalNamespace_ComponentInput as ComponentInput, internalNamespace_CompoundInput as CompoundInput, internalNamespace_CompoundOutput as CompoundOutput, type internalNamespace_Constructor as Constructor, internalNamespace_ControlInput as ControlInput, internalNamespace_ControlOutput as ControlOutput, internalNamespace_ControlToAudioConverter as ControlToAudioConverter, internalNamespace_DefaultDeviceBehavior as DefaultDeviceBehavior, internalNamespace_Disconnect as Disconnect, internalNamespace_FFTComponent as FFTComponent, internalNamespace_FFTInput as FFTInput, internalNamespace_FFTOutput as FFTOutput, internalNamespace_FunctionComponent as FunctionComponent, internalNamespace_IFFTComponent as IFFTComponent, internalNamespace_IgnoreDuplicates as IgnoreDuplicates, internalNamespace_KeyEvent as KeyEvent, internalNamespace_KeyEventType as KeyEventType, internalNamespace_Keyboard as Keyboard, internalNamespace_KeyboardDisplay as KeyboardDisplay, type internalNamespace_KeysLike as KeysLike, internalNamespace_KnobDisplay as KnobDisplay, type internalNamespace_MaybePromise as MaybePromise, type internalNamespace_MaybePromises as MaybePromises, internalNamespace_MediaElementComponent as MediaElementComponent, internalNamespace_MidiAccessListener as MidiAccessListener, internalNamespace_MidiInputDevice as MidiInputDevice, internalNamespace_MidiLearn as MidiLearn, internalNamespace_MidiMessageListener as MidiMessageListener, type internalNamespace_MultiChannel as MultiChannel, internalNamespace_MuteEvent as MuteEvent, internalNamespace_NodeInputPort as NodeInputPort, internalNamespace_NodeOutputPort as NodeOutputPort, type internalNamespace_ObjectOf as ObjectOf, type internalNamespace_ObjectOrArrayOf as ObjectOrArrayOf, internalNamespace_RangeInputComponent as RangeInputComponent, internalNamespace_RangeInputDisplay as RangeInputDisplay, internalNamespace_RangeType as RangeType, internalNamespace_ScriptProcessorExecutionContext as ScriptProcessorExecutionContext, internalNamespace_ScrollingAudioMonitor as ScrollingAudioMonitor, internalNamespace_ScrollingAudioMonitorDisplay as ScrollingAudioMonitorDisplay, internalNamespace_SignalLogger as SignalLogger, internalNamespace_SimplePolyphonicSynth as SimplePolyphonicSynth, internalNamespace_SliderDisplay as SliderDisplay, internalNamespace_SlowDown as SlowDown, type internalNamespace_SupportsSelect as SupportsSelect, internalNamespace_TimeMeasure as TimeMeasure, internalNamespace_TimeVaryingSignal as TimeVaryingSignal, internalNamespace_ToStringAndUUID as ToStringAndUUID, internalNamespace_TypedConfigurable as TypedConfigurable, internalNamespace_TypingKeyboardMIDI as TypingKeyboardMIDI, internalNamespace_VisualComponent as VisualComponent, internalNamespace_Wave as Wave, internalNamespace_WaveType as WaveType, type internalNamespace_WebAudioConnectable as WebAudioConnectable, internalNamespace_WorkletExecutionContext as WorkletExecutionContext, internalNamespace_connectWebAudioChannels as connectWebAudioChannels, _default$2 as constants, internalNamespace_createMultiChannelView as createMultiChannelView, internalNamespace_disconnect as disconnect, events_d as events, internalNamespace_getNumInputChannels as getNumInputChannels, internalNamespace_getNumOutputChannels as getNumOutputChannels, internalNamespace_lazyProperty as lazyProperty, internalNamespace_resolvePromiseArgs as resolvePromiseArgs, util_d as util };
 }
 
 declare const _default$1: {
@@ -1748,13 +1731,14 @@ declare const _default$1: {
     ComponentInput: typeof ComponentInput;
     ControlInput: typeof ControlInput;
     FFTInput: typeof FFTInput;
-    HybridInput: typeof HybridInput;
     AbstractOutput: typeof AbstractOutput;
     AudioRateOutput: typeof AudioRateOutput;
     CompoundOutput: typeof CompoundOutput;
     ControlOutput: typeof ControlOutput;
     FFTOutput: typeof FFTOutput;
-    HybridOutput: typeof HybridOutput;
+    BaseAudioPort: typeof BaseAudioPort;
+    NodeOutputPort: typeof NodeOutputPort;
+    NodeInputPort: typeof NodeInputPort;
     BaseConnectable: typeof BaseConnectable;
     ToStringAndUUID: typeof ToStringAndUUID;
     TypedConfigurable: typeof TypedConfigurable;
@@ -1858,6 +1842,34 @@ interface Component<InputTypes extends AnyInput = AnyInput, OutputTypes extends 
     wasConnectedTo(other: Connectable): void;
     sampleSignal(samplePeriodMs?: number): Component;
     propagateUpdatedInput<T>(input: AbstractInput<T>, newValue: T): void;
+}
+
+declare class AudioRateInput extends AbstractInput<number> implements MultiChannel<AudioRateInput> {
+    name: string | number;
+    parent: Component | undefined;
+    readonly channels: MultiChannelArray<this>;
+    activeChannel: number | undefined;
+    port: NodeInputPort;
+    get numInputChannels(): number;
+    constructor(name: string | number, parent: Component | undefined, port: NodeInputPort | WebAudioConnectable);
+    get left(): this;
+    get right(): this;
+    get value(): number;
+    setValue(value: number | typeof _default$2.TRIGGER): void;
+}
+
+declare class AudioRecordingComponent extends BaseComponent {
+    [n: number]: AudioRateInput;
+    protected worklet: AudioWorkletNode;
+    isRecording: boolean;
+    protected onMessage: (buffers: AudioBuffer[]) => void;
+    protected onFailure: () => void;
+    constructor(numberOfInputs?: number);
+    capture(numSamples: number): Promise<AudioBuffer[]>;
+    start(): void;
+    stop(): Promise<AudioBuffer[]>;
+    protected waitForWorkletResponse(): Promise<AudioBuffer[]>;
+    protected handleMessage(floatData: Float32Array[][]): void;
 }
 
 declare class IATopLevel {

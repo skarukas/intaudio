@@ -1,9 +1,10 @@
 // @ts-ignore
-import stache from 'stache-config';
 import CallableInstance from "callable-instance";
-import public_namespace from '../public.js'
-import { SignalLogger } from './logger.js';
+// @ts-ignore
+import stache from 'stache-config';
+import public_namespace from '../public.js';
 import { Connectable } from './base/Connectable.js';
+import { SignalLogger } from './logger.js';
 import { ObjectOf } from './types.js';
 
 export abstract class TypedConfigurable extends CallableInstance<any, any> implements stache.Configurable {

@@ -31,7 +31,7 @@ export class KeyEvent extends BaseEvent {
     public eventType: KeyEventType,
     public eventPitch: number = 64,
     public eventVelocity: number = 64,
-    key? : any) {
+    key?: any) {
     super()
     this.key = key ?? eventPitch
   }

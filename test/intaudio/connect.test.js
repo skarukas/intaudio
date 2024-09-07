@@ -1,6 +1,6 @@
-import ia from "../../dist/bundle.js"
 import { expect } from "@esm-bundle/chai";
-import { intaudioInit, ChunkTester } from "./testUtils.js";
+import ia from "../../dist/bundle.js";
+import { ChunkTester, intaudioInit } from "./testUtils.js";
 
 beforeEach(async () => {
   await intaudioInit()

@@ -1,11 +1,11 @@
-import { BaseComponent } from "./base/BaseComponent.js";
-import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
-import { Connectable } from "../shared/base/Connectable.js";
-import { SignalProcessingContextFactory } from "../worklet/lib/SignalProcessingContextFactory.js";
-import { MappingFn } from "../worklet/lib/utils.js";
-import { AudioDimension } from "../worklet/lib/types.js";
-import { StreamSpec } from "../shared/StreamSpec.js";
 import { AbstractOutput } from "../io/output/AbstractOutput.js";
+import { Connectable } from "../shared/base/Connectable.js";
+import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
+import { StreamSpec } from "../shared/StreamSpec.js";
+import { SignalProcessingContextFactory } from "../worklet/lib/SignalProcessingContextFactory.js";
+import { AudioDimension } from "../worklet/lib/types.js";
+import { MappingFn } from "../worklet/lib/utils.js";
+import { BaseComponent } from "./base/BaseComponent.js";
 export declare abstract class AudioExecutionContext<D extends AudioDimension> extends ToStringAndUUID {
     fn: Function;
     dimension: D;

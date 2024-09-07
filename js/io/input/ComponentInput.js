@@ -1,7 +1,6 @@
 // A special wrapper for a symbolic input that maps object signals to property assignments.
 // let i = new ComponentInput(parent)
 import { AudioRateInput } from "./AudioRateInput.js";
-import { HybridInput } from "./HybridInput.js";
 // TODO: replace this whole class with compound input. This may require 
 // refactoring of some code that relies on this class being a AudioRateInput 
 // and having an audioNode.
@@ -11,8 +10,8 @@ export class ComponentInput extends AudioRateInput {
         return this._defaultInput;
     }
     constructor(name, parent, defaultInput) {
-        const audioNode = (defaultInput instanceof AudioRateInput || defaultInput instanceof HybridInput) ? defaultInput.audioSink : undefined;
-        super(name, parent, audioNode); // TODO: fix this issue...
+        const port = defaultInput instanceof AudioRateInput ? defaultInput.port : undefined;
+        super(name, parent, port); // TODO: fix this issue...
         this.name = name;
         this._defaultInput = defaultInput;
         /* this._value = defaultInput?.value */

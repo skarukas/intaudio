@@ -1,5 +1,5 @@
-import { BaseComponent } from "./base/BaseComponent.js";
 import constants from "../shared/constants.js";
+import { BaseComponent } from "./base/BaseComponent.js";
 // @ts-ignore No d.ts file.
 import describeFunction from 'function-descriptor';
 import { enumerate, isPlainObject, range } from "../shared/util.js";

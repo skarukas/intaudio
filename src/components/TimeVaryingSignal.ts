@@ -1,4 +1,3 @@
-import { AudioRateOutput } from "../io/output/AudioRateOutput.js"
 import { StreamSpec } from "../shared/StreamSpec.js"
 import { TimeMeasure } from "../shared/types.js"
 import { defineTimeRamp } from "../shared/util.js"

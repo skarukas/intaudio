@@ -1,29 +1,26 @@
 import { AbstractInput } from "../../io/input/AbstractInput.js";
-import { ControlInput } from "../../io/input/ControlInput.js";
 import { ComponentInput } from "../../io/input/ComponentInput.js";
+import { ControlInput } from "../../io/input/ControlInput.js";
 import { AbstractOutput } from "../../io/output/AbstractOutput.js";
 import { BaseConnectable } from "../../shared/base/BaseConnectable.js";
 
+import { AudioRateInput } from "../../io/input/AudioRateInput.js";
+import { CompoundInput } from "../../io/input/CompoundInput.js";
+import { AudioRateOutput } from "../../io/output/AudioRateOutput.js";
+import { CompoundOutput } from "../../io/output/CompoundOutput.js";
+import { ControlOutput } from "../../io/output/ControlOutput.js";
+import { NodeInputPort, NodeOutputPort } from "../../shared/AudioPort.js";
+import { AudioSignalStream } from "../../shared/AudioSignalStream.js";
+import { FFTStream } from "../../shared/FFTStream.js";
+import { Connectable } from "../../shared/base/Connectable.js";
 import constants from "../../shared/constants.js";
-import { WebAudioConnectable, CanBeConnectedTo, ObjectOrArrayOf, ObjectOf, KeysLike, AnyInput, AnyOutput, Bundle } from "../../shared/types.js";
+import { BypassEvent, MuteEvent } from "../../shared/events.js";
+import { AnyInput, AnyOutput, CanBeConnectedTo, KeysLike, ObjectOf, ObjectOrArrayOf } from "../../shared/types.js";
+import { arrayToObject, enumerate, isFunction, zip } from "../../shared/util.js";
+import { AudioDimension, MultiChannelArray } from "../../worklet/lib/types.js";
+import { BundleComponent } from "../BundleComponent.js";
 import { FunctionComponent } from "../FunctionComponent.js";
 import { Component } from "./Component.js";
-import { Connectable } from "../../shared/base/Connectable.js";
-import { AudioSignalStream } from "../../shared/AudioSignalStream.js";
-import { ControlOutput } from "../../io/output/ControlOutput.js";
-import { AudioRateOutput } from "../../io/output/AudioRateOutput.js";
-import { HybridInput } from "../../io/input/HybridInput.js";
-import { HybridOutput } from "../../io/output/HybridOutput.js";
-import { AudioRateInput } from "../../io/input/AudioRateInput.js";
-import { AudioDimension, MultiChannelArray, toMultiChannelArray } from "../../worklet/lib/types.js";
-import { arrayToObject, enumerate, isFunction, range, zip } from "../../shared/util.js";
-import { BundleComponent } from "../BundleComponent.js";
-import { lazyProperty } from "../../shared/decorators.js";
-import { CompoundInput } from "../../io/input/CompoundInput.js";
-import { CompoundOutput } from "../../io/output/CompoundOutput.js";
-import { FFTComponent } from "../FFTComponent.js";
-import { FFTStream } from "../../shared/FFTStream.js";
-import { BypassEvent, MuteEvent } from "../../shared/events.js";
 
 const SPEC_MATCH_REST_SYMBOL = "*"
 const SPEC_SPLIT_SYMBOL = ","
@@ -159,18 +156,9 @@ export abstract class BaseComponent<
   }
   protected defineAudioInput(
     name: string | number,
-    destinationNode: WebAudioConnectable
+    port: NodeInputPort | AudioNode | AudioParam
   ): AudioRateInput {
-    let input = new this._.AudioRateInput(name, this, destinationNode)
-    return this.defineInputOrOutput(name, input, this.inputs)
-  }
-  protected defineHybridInput<T>(
-    name: string | number,
-    destinationNode: WebAudioConnectable,
-    defaultValue: T | undefined = constants.UNSET_VALUE,
-    isRequired: boolean = false
-  ): HybridInput<T> {
-    let input = new this._.HybridInput(name, this, destinationNode, defaultValue, isRequired)
+    const input = new this._.AudioRateInput(name, this, port)
     return this.defineInputOrOutput(name, input, this.inputs)
   }
   protected defineCompoundOutput<T extends ObjectOf<AbstractOutput>>(
@@ -185,12 +173,11 @@ export abstract class BaseComponent<
     let output = new this._.ControlOutput(name, this)
     return this.defineInputOrOutput(name, output, this.outputs)
   }
-  protected defineAudioOutput(name: string | number, audioNode: AudioNode): AudioRateOutput {
-    let output = new this._.AudioRateOutput(name, audioNode, this)
-    return this.defineInputOrOutput(name, output, this.outputs)
-  }
-  protected defineHybridOutput(name: string | number, audioNode: AudioNode): HybridOutput {
-    let output = new this._.HybridOutput(name, audioNode, this)
+  protected defineAudioOutput(
+    name: string | number,
+    port: NodeOutputPort | AudioNode
+  ): AudioRateOutput {
+    const output = new this._.AudioRateOutput(name, port, this)
     return this.defineInputOrOutput(name, output, this.outputs)
   }
   protected setDefaultInput(input: AbstractInput) {
@@ -320,7 +307,7 @@ export abstract class BaseComponent<
   }
   protected getChannelsBySpecs(channelSpecs: (string | (number | string)[])[]): AbstractOutput[][] {
     const output = this.defaultOutput
-    if (!(output instanceof AudioRateOutput || output instanceof HybridOutput)) {
+    if (!(output instanceof AudioRateOutput)) {
       throw new Error("No default audio-rate output found. Select a specific output to use this operation.")
     }
     // Convert to stringified numbers.

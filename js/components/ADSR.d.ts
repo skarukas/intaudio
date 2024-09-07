@@ -1,7 +1,7 @@
-import constants from "../shared/constants.js";
-import { BaseComponent } from "./base/BaseComponent.js";
 import { ControlInput } from "../io/input/ControlInput.js";
 import { AudioRateOutput } from "../io/output/AudioRateOutput.js";
+import constants from "../shared/constants.js";
+import { BaseComponent } from "./base/BaseComponent.js";
 type I = {
     readonly attackEvent: ControlInput<typeof constants.TRIGGER>;
     readonly releaseEvent: ControlInput<typeof constants.TRIGGER>;

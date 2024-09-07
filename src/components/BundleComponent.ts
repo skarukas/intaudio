@@ -1,11 +1,10 @@
 import { AbstractInput } from "../io/input/AbstractInput.js";
 import { ComponentInput } from "../io/input/ComponentInput.js";
 import { CompoundInput } from "../io/input/CompoundInput.js";
-import { ControlInput } from "../io/input/ControlInput.js";
 import { AbstractOutput } from "../io/output/AbstractOutput.js";
 import { CompoundOutput } from "../io/output/CompoundOutput.js";
 import { Connectable } from "../shared/base/Connectable.js";
-import { CanBeConnectedTo, KeysLike, ObjectOf, ObjectOrArrayOf } from "../shared/types.js";
+import { CanBeConnectedTo, KeysLike, ObjectOf } from "../shared/types.js";
 import { enumerate, isType } from "../shared/util.js";
 import { map } from "../worklet/lib/utils.js";
 import { AudioTransformComponent } from "./AudioTransformComponent.js";

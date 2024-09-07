@@ -1,15 +1,14 @@
 import { Component } from "../../components/base/Component.js"
+import { NodeOutputPort } from "../../shared/AudioPort.js"
 import { AudioSignalStream } from "../../shared/AudioSignalStream.js"
-import constants from "../../shared/constants.js"
 import { FFTStream } from "../../shared/FFTStream.js"
-import { connectWebAudioChannels, createMultiChannelView, getNumInputChannels, getNumOutputChannels } from "../../shared/multichannel.js"
+import { connectWebAudioChannels, createMultiChannelView } from "../../shared/multichannel.js"
 import { CanBeConnectedTo, MultiChannel, WebAudioConnectable } from "../../shared/types.js"
 import { range } from "../../shared/util.js"
 import { AudioDimension, MultiChannelArray } from "../../worklet/lib/types.js"
 import { AbstractInput } from "../input/AbstractInput.js"
 import { AudioRateInput } from "../input/AudioRateInput.js"
 import { ComponentInput } from "../input/ComponentInput.js"
-import { HybridInput } from "../input/HybridInput.js"
 import { AbstractOutput } from "./AbstractOutput.js"
 
 // TODO: Add a GainNode here to allow muting and mastergain of the component.
@@ -18,13 +17,15 @@ export class AudioRateOutput
   implements MultiChannel<AudioRateOutput>, AudioSignalStream {
   private _channels: MultiChannelArray<AudioRateOutput> | undefined = undefined
   activeChannel = undefined
+  port: NodeOutputPort
 
   constructor(
     public name: string | number,
-    public audioNode: AudioNode,
+    port: NodeOutputPort | AudioNode,
     public parent?: Component
   ) {
     super(name, parent)
+    this.port = port instanceof AudioNode ? new this._.NodeOutputPort(port) : port
   }
   get channels(): MultiChannelArray<AudioRateOutput> {
     return this._channels ?? (this._channels = createMultiChannelView(this, true))
@@ -35,11 +36,12 @@ export class AudioRateOutput
   get right(): AudioRateOutput {
     return this.channels[1] ?? this.left
   }
+  // TODO: remove this from AudioSignalStream.
   get numInputChannels(): number {
-    return this.activeChannel != undefined ? 1 : getNumInputChannels(this.audioNode)
+    return this.activeChannel != undefined ? 1 : this.port.numChannels
   }
   get numOutputChannels(): number {
-    return this.activeChannel != undefined ? 1 : getNumOutputChannels(this.audioNode)
+    return this.activeChannel != undefined ? 1 : this.port.numChannels
   }
   toString() {
     const superCall = super.toString()
@@ -64,15 +66,10 @@ export class AudioRateOutput
       const inputs = component == undefined ? [] : Object.keys(component.inputs)
       throw new Error(`No default input found for ${component}, so unable to connect to it from ${this}. Found named inputs: [${inputs}]`)
     }
-    if (!(input instanceof AudioRateInput || input instanceof HybridInput)) {
+    if (!(input instanceof AudioRateInput)) {
       throw new Error(`Can only connect audio-rate outputs to inputs that support audio-rate signals. Given: ${input}. Use 'AudioRateSignalSampler' to force a conversion.`)
     }
-    this.connectNodes(
-      this.audioNode,
-      input.audioSink,
-      this.activeChannel,
-      input.activeChannel
-    )
+    this.port.connect(input.port, this.activeChannel, input.activeChannel)
     if (input._uuid in this.connections) {
       throw new Error(`The given input ${input} (${input._uuid}) is already connected.`)
     }
@@ -86,19 +83,17 @@ export class AudioRateOutput
         this.disconnect(input)
       }
     } else {
-      const { input } = this.getDestinationInfo(destination)
+      const input = this.getDestinationInfo(destination).input as AudioRateInput
       // Disconnect audio node.
-      // TODO: this doesn't work for channel views because the target is 
-      // the channel merger / splitter created in the process.
-      try { this.audioNode.disconnect((input as any).audioSink) } catch { }
+      this.port.disconnect(input.port, this.activeChannel, input.activeChannel)
       delete this.connections[input._uuid]
     }
   }
   sampleSignal(samplePeriodMs?: number): Component {
     return this.connect(new this._.AudioRateSignalSampler(samplePeriodMs))
   }
-  // TODO: Make a single global sampler so that all signals are logged together.
   logSignal({
+    // TODO: remove this param.
     samplePeriodMs = 1000,
     format
   }: {

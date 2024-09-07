@@ -1,6 +1,6 @@
 import { TypedConfigurable } from "./config.js"
 import constants from "./constants.js"
-import { Constructor, ObjectOf, TimeMeasure, WebAudioConnectable } from "./types.js"
+import { Constructor, ObjectOf, TimeMeasure } from "./types.js"
 
 export function tryWithFailureMessage<T = any>(fn: () => T, message: string): T {
   try {

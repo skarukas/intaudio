@@ -1,7 +1,6 @@
 import { AbstractInput } from "../../io/input/AbstractInput.js";
 import { ComponentInput } from "../../io/input/ComponentInput.js";
 import { ControlInput } from "../../io/input/ControlInput.js";
-import { AbstractOutput } from "../../io/output/AbstractOutput.js";
 import { BaseConnectable } from "../../shared/base/BaseConnectable.js";
 import { Connectable } from "../../shared/base/Connectable.js";
 import { ToStringAndUUID } from "../../shared/base/ToStringAndUUID.js";

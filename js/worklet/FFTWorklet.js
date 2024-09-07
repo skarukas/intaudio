@@ -1,6 +1,6 @@
 import { BaseWorkletProcessor } from "./lib/BaseWorkletProcessor.js";
 import { FFTJS } from "./lib/fft.js";
-import { carToPolArray, map, getChannel, polToCarArray, splitComplexArray, toComplexArray } from "./lib/utils.js";
+import { carToPolArray, getChannel, map, polToCarArray, splitComplexArray, toComplexArray } from "./lib/utils.js";
 import { ArrayView } from "./lib/views.js";
 export const FFT_WORKLET_NAME = "fft-worklet";
 export const IFFT_WORKLET_NAME = "ifft-worklet";

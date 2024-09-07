@@ -1,4 +1,4 @@
-import { VisualComponent } from "../components/base/VisualComponent.js"
+import { VisualComponent } from "../components/base/VisualComponent.js";
 import { ControlInput } from "../io/input/ControlInput.js";
 declare var $: JQueryStatic;
 

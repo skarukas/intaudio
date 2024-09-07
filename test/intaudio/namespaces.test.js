@@ -1,5 +1,5 @@
-import ia from "../../dist/bundle.js"
 import { expect } from "@esm-bundle/chai";
+import ia from "../../dist/bundle.js";
 import { intaudioInit, SamplerTester } from "./testUtils.js";
 
 beforeEach(async () => {
@@ -43,7 +43,7 @@ describe("intaudio namespaces", () => {
         const osc1 = thread1.generate(() => 1)
         const osc2 = thread2.generate(() => 2)
         const joinedSignal = ia.join([osc1, osc2])
-        SamplerTester.expectEqual(joinedSignal, 3)
+        return SamplerTester.expectEqual(joinedSignal, 3)
     })
   })
 })

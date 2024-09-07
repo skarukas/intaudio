@@ -1,20 +1,20 @@
-import { Component } from "./components/base/Component.js";
-import { AnyFn, MaybePromise, ObjectOf, ObjectOrArrayOf, TimeMeasure } from "./shared/types.js";
-import { Connectable } from "./shared/base/Connectable.js";
-import { defineTimeRamp, isFunction, isType, loadFile, zip } from "./shared/util.js";
 import { AudioRecordingComponent } from "./components/AudioRecordingComponent.js";
-import { BufferWriterComponent } from "./components/BufferWriterComponent.js";
-import { StreamSpec } from "./shared/StreamSpec.js";
-import { joinContexts } from "./shared/multicontext.js";
-import { AudioConfig } from "./shared/config.js";
 import { BufferComponent } from "./components/BufferComponent.js";
-import { BaseConnectable } from "./shared/base/BaseConnectable.js";
+import { BufferWriterComponent } from "./components/BufferWriterComponent.js";
+import { Component } from "./components/base/Component.js";
 import { AudioRateInput } from "./io/input/AudioRateInput.js";
+import { StreamSpec } from "./shared/StreamSpec.js";
+import { BaseConnectable } from "./shared/base/BaseConnectable.js";
+import { Connectable } from "./shared/base/Connectable.js";
+import { AudioConfig } from "./shared/config.js";
+import { joinContexts } from "./shared/multicontext.js";
+import { AnyFn, MaybePromise, ObjectOf, ObjectOrArrayOf, TimeMeasure } from "./shared/types.js";
+import { defineTimeRamp, isFunction, isType, loadFile, zip } from "./shared/util.js";
 // @ts-ignore Missing d.ts
 import stache from 'stache-config';
-import * as internalNamespace from './internals.js'
-import publicNamespace from './public.js'
-import * as init from './shared/init.js'
+import * as internalNamespace from './internals.js';
+import publicNamespace from './public.js';
+import * as init from './shared/init.js';
 
 const baseWithConfig = stache.registerAndCreateFactoryFn(
   init.defaultConfig,
@@ -53,6 +53,7 @@ export class IATopLevel {
     public config: AudioConfig,
     public internals: typeof internalNamespace
   ) {
+    // TODO: consider not making this an "input".
     this.out = new this.internals.AudioRateInput('out', undefined, config.audioContext.destination)
     this.util = internalNamespace.util
   }

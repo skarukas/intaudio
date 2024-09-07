@@ -1,6 +1,6 @@
-import ia from "../../dist/bundle.js"
 import { expect } from "@esm-bundle/chai";
-import { ChunkTester, DEFAULT_SAMPLE_RATE, SamplerTester, intaudioInit } from "./testUtils.js";
+import ia from "../../dist/bundle.js";
+import { ChunkTester, DEFAULT_SAMPLE_RATE, intaudioInit } from "./testUtils.js";
 
 const tester = new ChunkTester()
 

@@ -1,9 +1,8 @@
-import constants from "../../shared/constants.js"
+import constants from "../../shared/constants.js";
 import { BypassEvent, MuteEvent } from "../../shared/events.js";
-import * as init from "../../shared/init.js"
 import { afterRender } from "../../shared/util.js";
-import { BaseDisplay } from "../../ui/BaseDisplay.js"
-import { BaseComponent } from "./BaseComponent.js"
+import { BaseDisplay } from "../../ui/BaseDisplay.js";
+import { BaseComponent } from "./BaseComponent.js";
 declare var $: JQueryStatic;
 
 interface NeedsDisplay<T> {

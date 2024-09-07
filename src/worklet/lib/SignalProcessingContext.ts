@@ -1,5 +1,3 @@
-import { StreamSpec } from "../../shared/StreamSpec.js"
-import { isType } from "../../shared/util.js"
 import { FrameToSignatureConverter } from "./FrameToSignatureConverter.js"
 import { MemoryBuffer } from "./MemoryBuffer.js"
 import { AudioDimension, SignalProcessingFnInput } from "./types.js"
