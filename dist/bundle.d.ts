@@ -887,8 +887,8 @@ type MappingFn<D extends AudioDimension> = (fn: Function, inputs: Float32Array[]
 declare abstract class AudioExecutionContext<D extends AudioDimension> extends ToStringAndUUID {
     fn: Function;
     dimension: D;
-    abstract inputs: AudioNode[];
-    abstract outputs: AudioNode[];
+    abstract inputs: NodeInputPort[];
+    abstract outputs: NodeOutputPort[];
     protected applyToChunk: MappingFn<D>;
     constructor(fn: Function, dimension: D);
     protected processAudioFrame(inputChunks: Float32Array[][], outputChunks: Float32Array[][], contextFactory: SignalProcessingContextFactory<D>): number[];
@@ -905,8 +905,8 @@ declare abstract class AudioExecutionContext<D extends AudioDimension> extends T
     }): AudioExecutionContext<D>;
 }
 declare class WorkletExecutionContext<D extends AudioDimension> extends AudioExecutionContext<D> {
-    inputs: AudioNode[];
-    outputs: AudioNode[];
+    inputs: NodeInputPort[];
+    outputs: NodeOutputPort[];
     constructor(fn: Function, { dimension, inputSpec, outputSpec }: {
         dimension: AudioDimension;
         inputSpec: StreamSpec;
@@ -916,14 +916,14 @@ declare class WorkletExecutionContext<D extends AudioDimension> extends AudioExe
         inputSpec: StreamSpec;
         outputSpec: StreamSpec;
     }): {
-        inputs: AudioNode[];
-        outputs: AudioNode[];
+        inputs: NodeInputPort[];
+        outputs: NodeOutputPort[];
     };
 }
 declare class ScriptProcessorExecutionContext<D extends AudioDimension> extends AudioExecutionContext<D> {
     fn: Function;
-    inputs: AudioNode[];
-    outputs: AudioNode[];
+    inputs: NodeInputPort[];
+    outputs: NodeOutputPort[];
     inputSpec: StreamSpec;
     outputSpec: StreamSpec;
     windowSize: number;
@@ -937,8 +937,8 @@ declare class ScriptProcessorExecutionContext<D extends AudioDimension> extends 
         inputSpec: StreamSpec;
         outputSpec: StreamSpec;
     }): {
-        inputs: AudioNode[];
-        outputs: AudioNode[];
+        inputs: NodeInputPort[];
+        outputs: NodeOutputPort[];
     };
     private defineAudioProcessHandler;
     /**

@@ -14,7 +14,7 @@ export class TimeVaryingSignal extends AudioTransformComponent {
       { inputSpec: new StreamSpec({ numChannelsPerStream: [1] }) }
     )
     const timeRamp = defineTimeRamp(this.audioContext, timeMeasure)
-    timeRamp.connect(this.executionContext.inputs[0])
+    timeRamp.connect(this.executionContext.inputs[0].node as any)
     this.preventIOOverwrites()
   }
 }

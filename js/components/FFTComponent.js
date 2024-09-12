@@ -10,24 +10,12 @@ export class FFTComponent extends BaseComponent {
             processorOptions: { useComplexValuedFft: false, fftSize }
         });
         // Inputs
-        // TODO: make audio inputs and outputs support connecting to different input
-        // numbers so these GainNodes aren't necessary.
-        const realGain = this.audioContext.createGain();
-        const imaginaryGain = this.audioContext.createGain();
-        this.realInput = this.defineAudioInput('realInput', realGain);
-        this.imaginaryInput = this.defineAudioInput('imaginaryInput', imaginaryGain);
+        this.realInput = this.defineAudioInput('realInput', new this._.NodeInputPort(this.worklet, 0));
+        this.imaginaryInput = this.defineAudioInput('imaginaryInput', new this._.NodeInputPort(this.worklet, 1));
         this.setDefaultInput(this.realInput);
-        const magnitudeGain = this.audioContext.createGain();
-        const phaseGain = this.audioContext.createGain();
-        const syncGain = this.audioContext.createGain();
         // Output
-        this.fftOut = new this._.FFTOutput('fftOut', new this._.AudioRateOutput('magnitude', magnitudeGain, this), new this._.AudioRateOutput('phase', phaseGain, this), new this._.AudioRateOutput('sync', syncGain, this), this, this.fftSize);
+        this.fftOut = new this._.FFTOutput('fftOut', new this._.AudioRateOutput('magnitude', new this._.NodeOutputPort(this.worklet, 1), this), new this._.AudioRateOutput('phase', new this._.NodeOutputPort(this.worklet, 2), this), new this._.AudioRateOutput('sync', new this._.NodeOutputPort(this.worklet, 0), this), this, this.fftSize);
         this.defineInputOrOutput('fftOut', this.fftOut, this.outputs);
-        realGain.connect(this.worklet, undefined, 0);
-        imaginaryGain.connect(this.worklet, undefined, 1);
-        this.worklet.connect(syncGain, 0);
-        this.worklet.connect(magnitudeGain, 1);
-        this.worklet.connect(phaseGain, 2);
     }
     ifft() {
         return this.fftOut.ifft();

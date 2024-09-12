@@ -16,9 +16,8 @@ export class AudioRecordingComponent extends BaseComponent {
             this.handleMessage(event.data);
         };
         for (const i of range(numberOfInputs)) {
-            const gain = this.audioContext.createGain();
-            gain.connect(this.worklet, undefined, i);
-            this[i] = this.defineAudioInput(i, gain);
+            const port = new this._.NodeInputPort(this.worklet, i);
+            this[i] = this.defineAudioInput(i, port);
         }
     }
     capture(numSamples) {

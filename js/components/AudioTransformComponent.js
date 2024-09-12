@@ -76,7 +76,10 @@ export class WorkletExecutionContext extends AudioExecutionContext {
         const worklet = new AudioWorkletNode(this.audioContext, FUNCTION_WORKLET_NAME, {
             numberOfInputs: inputSpec.length,
             outputChannelCount: outputSpec.numChannelsPerStream,
-            numberOfOutputs: outputSpec.length
+            numberOfOutputs: outputSpec.length,
+            processorOptions: {
+                inputChannelCount: inputSpec.numChannelsPerStream
+            }
         });
         // TODO: figure this out.
         // @ts-ignore No index signature.
@@ -103,27 +106,10 @@ export class WorkletExecutionContext extends AudioExecutionContext {
         this.outputs = outputs;
     }
     static defineAudioGraph(workletNode, { inputSpec, outputSpec, }) {
-        const inputNodes = [];
-        const outputNodes = [];
-        for (const [i, numChannels] of enumerate(inputSpec.numChannelsPerStream)) {
-            const input = new GainNode(this.audioContext, {
-                channelCount: numChannels,
-                // Force channelCount even if the input has more / fewer channels.
-                channelCountMode: "explicit"
-            });
-            input.connect(workletNode, 0, i);
-            inputNodes.push(input);
-        }
-        for (const [i, numChannels] of enumerate(outputSpec.numChannelsPerStream)) {
-            const output = new GainNode(this.audioContext, {
-                channelCount: numChannels,
-                // Force channelCount even if the input has more / fewer channels.
-                channelCountMode: "explicit"
-            });
-            workletNode.connect(output, i, 0);
-            outputNodes.push(output);
-        }
-        // TODO: implement outputs.
+        const inputNodes = range(inputSpec.length)
+            .map(i => new this._.NodeInputPort(workletNode, i));
+        const outputNodes = range(outputSpec.length)
+            .map(i => new this._.NodeOutputPort(workletNode, i));
         return { inputs: inputNodes, outputs: outputNodes };
     }
 }
@@ -169,7 +155,7 @@ export class ScriptProcessorExecutionContext extends AudioExecutionContext {
                 input.connect(merger, 0, destinationChannel);
             }
             startChannel += numChannels;
-            inputNodes.push(input);
+            inputNodes.push(new this._.NodeInputPort(input));
         }
         // TODO: refactor this logic into a general method for expanding / flattening channels.
         const outputNodes = [];
@@ -182,7 +168,7 @@ export class ScriptProcessorExecutionContext extends AudioExecutionContext {
                 outputSplitter.connect(outputMerger, startChannel + j, j);
             }
             startChannel += numChannels;
-            outputNodes.push(outputMerger);
+            outputNodes.push(new this._.NodeOutputPort(outputMerger));
         }
         return {
             inputs: inputNodes,

@@ -3,6 +3,7 @@ import constants from "../shared/constants.js";
 // @ts-ignore
 import describeFunction from 'function-descriptor';
 import { AbstractOutput } from "../io/output/AbstractOutput.js";
+import { NodeInputPort, NodeOutputPort } from "../shared/AudioPort.js";
 import { Connectable } from "../shared/base/Connectable.js";
 import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
 import { StreamSpec } from "../shared/StreamSpec.js";
@@ -16,8 +17,8 @@ import { FUNCTION_WORKLET_NAME } from "../worklet/OperationWorklet.js";
 import { BaseComponent } from "./base/BaseComponent.js";
 
 export abstract class AudioExecutionContext<D extends AudioDimension> extends ToStringAndUUID {
-  abstract inputs: AudioNode[]
-  abstract outputs: AudioNode[]
+  abstract inputs: NodeInputPort[]
+  abstract outputs: NodeOutputPort[]
   protected applyToChunk: MappingFn<D>
 
   constructor(public fn: Function, public dimension: D) {
@@ -94,8 +95,8 @@ export abstract class AudioExecutionContext<D extends AudioDimension> extends To
 }
 
 export class WorkletExecutionContext<D extends AudioDimension> extends AudioExecutionContext<D> {
-  inputs: AudioNode[];
-  outputs: AudioNode[];
+  inputs: NodeInputPort[]
+  outputs: NodeOutputPort[]
   constructor(fn: Function, {
     dimension,
     inputSpec,
@@ -118,11 +119,17 @@ export class WorkletExecutionContext<D extends AudioDimension> extends AudioExec
       })
     }
 
-    const worklet = new AudioWorkletNode(this.audioContext, FUNCTION_WORKLET_NAME, {
-      numberOfInputs: inputSpec.length,
-      outputChannelCount: outputSpec.numChannelsPerStream,
-      numberOfOutputs: outputSpec.length
-    })
+    const worklet = new AudioWorkletNode(
+      this.audioContext,
+      FUNCTION_WORKLET_NAME,
+      {
+        numberOfInputs: inputSpec.length,
+        outputChannelCount: outputSpec.numChannelsPerStream,
+        numberOfOutputs: outputSpec.length,
+        processorOptions: {
+          inputChannelCount: inputSpec.numChannelsPerStream
+        }
+      })
     // TODO: figure this out.
     // @ts-ignore No index signature.
     worklet['__numInputChannels'] = inputSpec.numChannelsPerStream[0]
@@ -155,35 +162,18 @@ export class WorkletExecutionContext<D extends AudioDimension> extends AudioExec
   }: {
     inputSpec: StreamSpec,
     outputSpec: StreamSpec,
-  }): { inputs: AudioNode[], outputs: AudioNode[] } {
-    const inputNodes = []
-    const outputNodes = []
-    for (const [i, numChannels] of enumerate(inputSpec.numChannelsPerStream)) {
-      const input = new GainNode(this.audioContext, {
-        channelCount: numChannels,
-        // Force channelCount even if the input has more / fewer channels.
-        channelCountMode: "explicit"
-      })
-      input.connect(workletNode, 0, i)
-      inputNodes.push(input)
-    }
-    for (const [i, numChannels] of enumerate(outputSpec.numChannelsPerStream)) {
-      const output = new GainNode(this.audioContext, {
-        channelCount: numChannels,
-        // Force channelCount even if the input has more / fewer channels.
-        channelCountMode: "explicit"
-      })
-      workletNode.connect(output, i, 0)
-      outputNodes.push(output)
-    }
-    // TODO: implement outputs.
+  }): { inputs: NodeInputPort[], outputs: NodeOutputPort[] } {
+    const inputNodes = range(inputSpec.length)
+      .map(i => new this._.NodeInputPort(workletNode, i))
+    const outputNodes = range(outputSpec.length)
+      .map(i => new this._.NodeOutputPort(workletNode, i))
     return { inputs: inputNodes, outputs: outputNodes }
   }
 }
 
 export class ScriptProcessorExecutionContext<D extends AudioDimension> extends AudioExecutionContext<D> {
-  inputs: AudioNode[];
-  outputs: AudioNode[];
+  inputs: NodeInputPort[]
+  outputs: NodeOutputPort[]
   inputSpec: StreamSpec
   outputSpec: StreamSpec
   windowSize: number
@@ -234,7 +224,7 @@ export class ScriptProcessorExecutionContext<D extends AudioDimension> extends A
   }: {
     inputSpec: StreamSpec,
     outputSpec: StreamSpec,
-  }): { inputs: AudioNode[], outputs: AudioNode[] } {
+  }): { inputs: NodeInputPort[], outputs: NodeOutputPort[] } {
     const inputNodes = []
     const merger = this.audioContext.createChannelMerger(inputSpec.totalNumChannels)
     // Merger -> Processor
@@ -255,7 +245,7 @@ export class ScriptProcessorExecutionContext<D extends AudioDimension> extends A
         input.connect(merger, 0, destinationChannel)
       }
       startChannel += numChannels
-      inputNodes.push(input)
+      inputNodes.push(new this._.NodeInputPort(input))
     }
     // TODO: refactor this logic into a general method for expanding / flattening channels.
     const outputNodes = []
@@ -268,7 +258,7 @@ export class ScriptProcessorExecutionContext<D extends AudioDimension> extends A
         outputSplitter.connect(outputMerger, startChannel + j, j)
       }
       startChannel += numChannels
-      outputNodes.push(outputMerger)
+      outputNodes.push(new this._.NodeOutputPort(outputMerger))
     }
 
     return {

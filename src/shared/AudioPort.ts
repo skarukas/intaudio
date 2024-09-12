@@ -101,7 +101,12 @@ export class NodeOutputPort extends BaseAudioPort {
   ) {
     const sourceNode = fromChannel == undefined ? this.node : this.splitter
     const destinationNode = toChannel == undefined ? destination.node : destination.merger
-    const connection = ConnectOperation.simpleConnect(sourceNode, destinationNode, fromChannel, toChannel)
+    const connection = ConnectOperation.simpleConnect(
+      sourceNode,
+      destinationNode,
+      fromChannel ?? this.outputIndex,
+      toChannel ?? destination.inputIndex
+    )
     this.setConnection(
       destination,
       fromChannel ?? -1,

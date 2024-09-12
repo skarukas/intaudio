@@ -2299,9 +2299,8 @@ class AudioRecordingComponent extends BaseComponent {
             this.handleMessage(event.data);
         };
         for (const i of range(numberOfInputs)) {
-            const gain = this.audioContext.createGain();
-            gain.connect(this.worklet, undefined, i);
-            this[i] = this.defineAudioInput(i, gain);
+            const port = new this._.NodeInputPort(this.worklet, i);
+            this[i] = this.defineAudioInput(i, port);
         }
     }
     capture(numSamples) {
@@ -10396,7 +10395,10 @@ class WorkletExecutionContext extends AudioExecutionContext {
         const worklet = new AudioWorkletNode(this.audioContext, FUNCTION_WORKLET_NAME, {
             numberOfInputs: inputSpec.length,
             outputChannelCount: outputSpec.numChannelsPerStream,
-            numberOfOutputs: outputSpec.length
+            numberOfOutputs: outputSpec.length,
+            processorOptions: {
+                inputChannelCount: inputSpec.numChannelsPerStream
+            }
         });
         // TODO: figure this out.
         // @ts-ignore No index signature.
@@ -10423,27 +10425,10 @@ class WorkletExecutionContext extends AudioExecutionContext {
         this.outputs = outputs;
     }
     static defineAudioGraph(workletNode, { inputSpec, outputSpec, }) {
-        const inputNodes = [];
-        const outputNodes = [];
-        for (const [i, numChannels] of enumerate(inputSpec.numChannelsPerStream)) {
-            const input = new GainNode(this.audioContext, {
-                channelCount: numChannels,
-                // Force channelCount even if the input has more / fewer channels.
-                channelCountMode: "explicit"
-            });
-            input.connect(workletNode, 0, i);
-            inputNodes.push(input);
-        }
-        for (const [i, numChannels] of enumerate(outputSpec.numChannelsPerStream)) {
-            const output = new GainNode(this.audioContext, {
-                channelCount: numChannels,
-                // Force channelCount even if the input has more / fewer channels.
-                channelCountMode: "explicit"
-            });
-            workletNode.connect(output, i, 0);
-            outputNodes.push(output);
-        }
-        // TODO: implement outputs.
+        const inputNodes = range(inputSpec.length)
+            .map(i => new this._.NodeInputPort(workletNode, i));
+        const outputNodes = range(outputSpec.length)
+            .map(i => new this._.NodeOutputPort(workletNode, i));
         return { inputs: inputNodes, outputs: outputNodes };
     }
 }
@@ -10489,7 +10474,7 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
                 input.connect(merger, 0, destinationChannel);
             }
             startChannel += numChannels;
-            inputNodes.push(input);
+            inputNodes.push(new this._.NodeInputPort(input));
         }
         // TODO: refactor this logic into a general method for expanding / flattening channels.
         const outputNodes = [];
@@ -10502,7 +10487,7 @@ class ScriptProcessorExecutionContext extends AudioExecutionContext {
                 outputSplitter.connect(outputMerger, startChannel + j, j);
             }
             startChannel += numChannels;
-            outputNodes.push(outputMerger);
+            outputNodes.push(new this._.NodeOutputPort(outputMerger));
         }
         return {
             inputs: inputNodes,
@@ -13445,13 +13430,9 @@ class BufferWriterComponent extends BaseComponent {
         this.worklet.port.onmessage = event => {
             this.handleMessage(event.data);
         };
-        const positionGain = this.audioContext.createGain();
-        const valueGain = this.audioContext.createGain();
-        positionGain.connect(this.worklet, undefined, 0);
-        valueGain.connect(this.worklet, undefined, 1);
         // Input
-        this.position = this.defineAudioInput('position', positionGain);
-        this.valueToWrite = this.defineAudioInput('valueToWrite', valueGain);
+        this.position = this.defineAudioInput('position', new this._.NodeInputPort(this.worklet, 0));
+        this.valueToWrite = this.defineAudioInput('valueToWrite', new this._.NodeInputPort(this.worklet, 1));
         this.buffer = this.defineControlInput('buffer', buffer, true).ofType(AudioBuffer);
         buffer && this.setBuffer(buffer);
     }
@@ -13734,24 +13715,12 @@ class FFTComponent extends BaseComponent {
             processorOptions: { useComplexValuedFft: false, fftSize }
         });
         // Inputs
-        // TODO: make audio inputs and outputs support connecting to different input
-        // numbers so these GainNodes aren't necessary.
-        const realGain = this.audioContext.createGain();
-        const imaginaryGain = this.audioContext.createGain();
-        this.realInput = this.defineAudioInput('realInput', realGain);
-        this.imaginaryInput = this.defineAudioInput('imaginaryInput', imaginaryGain);
+        this.realInput = this.defineAudioInput('realInput', new this._.NodeInputPort(this.worklet, 0));
+        this.imaginaryInput = this.defineAudioInput('imaginaryInput', new this._.NodeInputPort(this.worklet, 1));
         this.setDefaultInput(this.realInput);
-        const magnitudeGain = this.audioContext.createGain();
-        const phaseGain = this.audioContext.createGain();
-        const syncGain = this.audioContext.createGain();
         // Output
-        this.fftOut = new this._.FFTOutput('fftOut', new this._.AudioRateOutput('magnitude', magnitudeGain, this), new this._.AudioRateOutput('phase', phaseGain, this), new this._.AudioRateOutput('sync', syncGain, this), this, this.fftSize);
+        this.fftOut = new this._.FFTOutput('fftOut', new this._.AudioRateOutput('magnitude', new this._.NodeOutputPort(this.worklet, 1), this), new this._.AudioRateOutput('phase', new this._.NodeOutputPort(this.worklet, 2), this), new this._.AudioRateOutput('sync', new this._.NodeOutputPort(this.worklet, 0), this), this, this.fftSize);
         this.defineInputOrOutput('fftOut', this.fftOut, this.outputs);
-        realGain.connect(this.worklet, undefined, 0);
-        imaginaryGain.connect(this.worklet, undefined, 1);
-        this.worklet.connect(syncGain, 0);
-        this.worklet.connect(magnitudeGain, 1);
-        this.worklet.connect(phaseGain, 2);
     }
     ifft() {
         return this.fftOut.ifft();
@@ -13768,24 +13737,12 @@ class IFFTComponent extends BaseComponent {
             processorOptions: { useComplexValuedFft: false, fftSize }
         });
         // Inputs
-        // TODO: make audio inputs and outputs support connecting to different input
-        // numbers so these GainNodes aren't necessary.
-        const magnitudeGain = this.audioContext.createGain();
-        const phaseGain = this.audioContext.createGain();
-        const syncGain = this.audioContext.createGain();
-        this.fftIn = new this._.FFTInput('fftIn', this, new this._.AudioRateInput('magnitude', this, magnitudeGain), new this._.AudioRateInput('phase', this, phaseGain), new this._.AudioRateInput('sync', this, syncGain));
+        this.fftIn = new this._.FFTInput('fftIn', this, new this._.AudioRateInput('magnitude', this, new this._.NodeInputPort(this.worklet, 1)), new this._.AudioRateInput('phase', this, new this._.NodeInputPort(this.worklet, 2)), new this._.AudioRateInput('sync', this, new this._.NodeInputPort(this.worklet, 0)));
         this.defineInputOrOutput('fftIn', this.fftIn, this.inputs);
         // Outputs
-        const realGain = this.audioContext.createGain();
-        const imaginaryGain = this.audioContext.createGain();
-        this.realOutput = this.defineAudioOutput('realOutput', realGain);
-        this.imaginaryOutput = this.defineAudioOutput('imaginaryOutput', imaginaryGain);
+        this.realOutput = this.defineAudioOutput('realOutput', new this._.NodeOutputPort(this.worklet, 0));
+        this.imaginaryOutput = this.defineAudioOutput('imaginaryOutput', new this._.NodeOutputPort(this.worklet, 1));
         this.setDefaultOutput(this.realOutput);
-        syncGain.connect(this.worklet, undefined, 0);
-        magnitudeGain.connect(this.worklet, undefined, 1);
-        phaseGain.connect(this.worklet, undefined, 2);
-        this.worklet.connect(realGain, 0);
-        this.worklet.connect(imaginaryGain, 1);
     }
 }
 
@@ -14391,7 +14348,7 @@ class TimeVaryingSignal extends AudioTransformComponent {
     constructor(generatorFn, timeMeasure = TimeMeasure.SECONDS) {
         super(generatorFn, { inputSpec: new StreamSpec({ numChannelsPerStream: [1] }) });
         const timeRamp = defineTimeRamp(this.audioContext, timeMeasure);
-        timeRamp.connect(this.executionContext.inputs[0]);
+        timeRamp.connect(this.executionContext.inputs[0].node);
         this.preventIOOverwrites();
     }
 }
@@ -14836,7 +14793,7 @@ class NodeOutputPort extends BaseAudioPort {
     connect(destination, fromChannel, toChannel) {
         const sourceNode = fromChannel == undefined ? this.node : this.splitter;
         const destinationNode = toChannel == undefined ? destination.node : destination.merger;
-        const connection = ConnectOperation.simpleConnect(sourceNode, destinationNode, fromChannel, toChannel);
+        const connection = ConnectOperation.simpleConnect(sourceNode, destinationNode, fromChannel !== null && fromChannel !== void 0 ? fromChannel : this.outputIndex, toChannel !== null && toChannel !== void 0 ? toChannel : destination.inputIndex);
         this.setConnection(destination, fromChannel !== null && fromChannel !== void 0 ? fromChannel : -1, toChannel !== null && toChannel !== void 0 ? toChannel : -1, connection);
     }
     disconnect(destination, fromChannel, toChannel) {

@@ -1,4 +1,5 @@
 import { AbstractOutput } from "../io/output/AbstractOutput.js";
+import { NodeInputPort, NodeOutputPort } from "../shared/AudioPort.js";
 import { Connectable } from "../shared/base/Connectable.js";
 import { ToStringAndUUID } from "../shared/base/ToStringAndUUID.js";
 import { StreamSpec } from "../shared/StreamSpec.js";
@@ -9,8 +10,8 @@ import { BaseComponent } from "./base/BaseComponent.js";
 export declare abstract class AudioExecutionContext<D extends AudioDimension> extends ToStringAndUUID {
     fn: Function;
     dimension: D;
-    abstract inputs: AudioNode[];
-    abstract outputs: AudioNode[];
+    abstract inputs: NodeInputPort[];
+    abstract outputs: NodeOutputPort[];
     protected applyToChunk: MappingFn<D>;
     constructor(fn: Function, dimension: D);
     protected processAudioFrame(inputChunks: Float32Array[][], outputChunks: Float32Array[][], contextFactory: SignalProcessingContextFactory<D>): number[];
@@ -27,8 +28,8 @@ export declare abstract class AudioExecutionContext<D extends AudioDimension> ex
     }): AudioExecutionContext<D>;
 }
 export declare class WorkletExecutionContext<D extends AudioDimension> extends AudioExecutionContext<D> {
-    inputs: AudioNode[];
-    outputs: AudioNode[];
+    inputs: NodeInputPort[];
+    outputs: NodeOutputPort[];
     constructor(fn: Function, { dimension, inputSpec, outputSpec }: {
         dimension: AudioDimension;
         inputSpec: StreamSpec;
@@ -38,14 +39,14 @@ export declare class WorkletExecutionContext<D extends AudioDimension> extends A
         inputSpec: StreamSpec;
         outputSpec: StreamSpec;
     }): {
-        inputs: AudioNode[];
-        outputs: AudioNode[];
+        inputs: NodeInputPort[];
+        outputs: NodeOutputPort[];
     };
 }
 export declare class ScriptProcessorExecutionContext<D extends AudioDimension> extends AudioExecutionContext<D> {
     fn: Function;
-    inputs: AudioNode[];
-    outputs: AudioNode[];
+    inputs: NodeInputPort[];
+    outputs: NodeOutputPort[];
     inputSpec: StreamSpec;
     outputSpec: StreamSpec;
     windowSize: number;
@@ -59,8 +60,8 @@ export declare class ScriptProcessorExecutionContext<D extends AudioDimension> e
         inputSpec: StreamSpec;
         outputSpec: StreamSpec;
     }): {
-        inputs: AudioNode[];
-        outputs: AudioNode[];
+        inputs: NodeInputPort[];
+        outputs: NodeOutputPort[];
     };
     private defineAudioProcessHandler;
     /**

@@ -21,13 +21,9 @@ export class BufferWriterComponent extends BaseComponent {
         this.worklet.port.onmessage = event => {
             this.handleMessage(event.data);
         };
-        const positionGain = this.audioContext.createGain();
-        const valueGain = this.audioContext.createGain();
-        positionGain.connect(this.worklet, undefined, 0);
-        valueGain.connect(this.worklet, undefined, 1);
         // Input
-        this.position = this.defineAudioInput('position', positionGain);
-        this.valueToWrite = this.defineAudioInput('valueToWrite', valueGain);
+        this.position = this.defineAudioInput('position', new this._.NodeInputPort(this.worklet, 0));
+        this.valueToWrite = this.defineAudioInput('valueToWrite', new this._.NodeInputPort(this.worklet, 1));
         this.buffer = this.defineControlInput('buffer', buffer, true).ofType(AudioBuffer);
         buffer && this.setBuffer(buffer);
     }
