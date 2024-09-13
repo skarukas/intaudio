@@ -1,6 +1,6 @@
 import { expect } from "@esm-bundle/chai";
 import ia from "../../dist/bundle.js";
-import { intaudioInit, skip, wait } from "./testUtils.js";
+import { intaudioInit, wait } from "./testUtils.js";
 
 beforeEach(async () => {
   await intaudioInit()
@@ -10,7 +10,7 @@ beforeEach(async () => {
 // TODO: fix these tests, which are failing for some reason, maybe because the 
 // worklet has no output?
 describe("bufferWriter", () => {
-  skip.it("supports arbitrary audio-rate positions and values", async () => {
+  it("supports arbitrary audio-rate positions and values", async () => {
     const buffer = new AudioBuffer({
       numberOfChannels: 2,
       length: 128,
@@ -41,7 +41,7 @@ describe("bufferWriter", () => {
     }
   })
 
-  skip.it("can write in parallel with another bufferWriter", async () => {
+  it("can write in parallel with another bufferWriter", async () => {
     const buffer = new AudioBuffer({
       numberOfChannels: 2,
       length: 128,

@@ -21,7 +21,7 @@ export class BufferWriterWorklet extends BaseBufferWorkletProcessor {
     [position, value]: [position: Float32Array[], value: Float32Array[]], __output: Float32Array[][],
     __parameters: any
   ) {
-    if (!position.length) {
+    if (!position.length || !value.length) {
       return true
     }
     for (let c = 0; c < this.numChannels; c++) {

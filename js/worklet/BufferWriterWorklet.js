@@ -15,7 +15,7 @@ export class BufferWriterWorklet extends BaseBufferWorkletProcessor {
         }
     }
     process([position, value], __output, __parameters) {
-        if (!position.length) {
+        if (!position.length || !value.length) {
             return true;
         }
         for (let c = 0; c < this.numChannels; c++) {
