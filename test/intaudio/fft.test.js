@@ -4,6 +4,7 @@ import { ChunkTester, intaudioInit, wait } from "./testUtils.js";
 
 beforeEach(async () => {
   await intaudioInit()
+  ia.config.useWorkletByDefault = true
 })
 
 
