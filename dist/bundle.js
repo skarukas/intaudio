@@ -304,7 +304,7 @@ function createTypeValidator(type) {
         }
     };
 }
-function defineTimeRamp(audioContext, timeMeasure, node = undefined, mapFn = v => v, durationSec = 1e8) {
+function defineTimeRamp(audioContext, timeMeasure, node = undefined, mapFn = v => v, durationSec = 1e6) {
     // Continuous ramp representing the AudioContext time.
     let multiplier;
     if (timeMeasure == TimeMeasure.CYCLES) {
@@ -15513,12 +15513,12 @@ class NamespaceTemplate {
     // This is a function only because addScopeHandler and fullNamespace each
     // Rely on each other.
     const getConfiguredNamespace = () => fullNamespace,
-    cache = {},
+
     // Proxy handler that rescopes every public class.
     addScopeHandler = {
       get(target, prop, _receiver) {  // eslint-disable-line no-unused-vars
         const MaybeClass = target[prop];
-        return cache[prop] ?? (cache[prop] = template._createConfiguredSubclass(MaybeClass, config, configId, getConfiguredNamespace()))
+        return template._createConfiguredSubclass(MaybeClass, config, configId, getConfiguredNamespace())
       }
     },
     publicNamespace = new Proxy(this.public, addScopeHandler),
@@ -15738,6 +15738,9 @@ class IATopLevel {
     // TODO: Potentially turn this into a component (?).
     ramp(units) {
         return new this.internals.AudioRateOutput('time', defineTimeRamp(this.config.audioContext, units));
+    }
+    wave(type, frequency = 0) {
+        return new this.internals.Wave(type, frequency);
     }
     read(fname) {
         return loadFile(this.config.audioContext, fname);

@@ -161,6 +161,9 @@ export class IATopLevel {
     ramp(units) {
         return new this.internals.AudioRateOutput('time', defineTimeRamp(this.config.audioContext, units));
     }
+    wave(type, frequency = 0) {
+        return new this.internals.Wave(type, frequency);
+    }
     read(fname) {
         return loadFile(this.config.audioContext, fname);
     }

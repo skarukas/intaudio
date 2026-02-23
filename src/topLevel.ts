@@ -175,6 +175,10 @@ export class IATopLevel {
     return new this.internals.AudioRateOutput('time', defineTimeRamp(this.config.audioContext, units))
   }
 
+  wave(type: internalNamespace.WaveType, frequency: number = 0): internalNamespace.Wave {
+    return new this.internals.Wave(type, frequency)
+  }
+
   read(fname: string): Promise<AudioBuffer> {
     return loadFile(this.config.audioContext, fname)
   }

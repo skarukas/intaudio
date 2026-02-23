@@ -1898,6 +1898,7 @@ declare class IATopLevel {
     combine(inputs: Connectable[] | ObjectOf<Connectable>, fn: Function, options?: {}): Component;
     bundle(inputs: ObjectOrArrayOf<Component>): BundleComponent<ObjectOf<Component<AnyInput, AnyOutput>>>;
     ramp(units: TimeMeasure): Connectable;
+    wave(type: WaveType, frequency?: number): Wave;
     read(fname: string): Promise<AudioBuffer>;
     func<T0, T1, T2, T3, T4, T5, R>(fn: AnyFn<T0, T1, T2, T3, T4, T5, R>): FunctionComponent<T0, T1, T2, T3, T4, T5, R>;
     bufferReader(fname: string): BufferComponent;

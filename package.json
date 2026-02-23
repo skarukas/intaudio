@@ -5,7 +5,7 @@
   "main": "demo.js",
   "type": "module",
   "scripts": {
-    "exectests": "wtr --config test/web-test-runner.config.mjs",
+    "exectests": "wtr --config test/web-test-runner.config.mjs --playwright --browsers firefox --watch",
     "test": "npm run build && npm run exectests",
     "lint": "npx eslint --fix src/",
     "compile": "tsc",
@@ -35,6 +35,7 @@
     "@types/jquery": "^3.5.30",
     "@web/test-runner": "^0.18.3",
     "@web/test-runner-commands": "^0.9.0",
+    "@web/test-runner-playwright": "^0.11.1",
     "jasmine": "^5.2.0",
     "jquery": "^3.7.1",
     "jsdoc-escape-at": "^1.0.1",

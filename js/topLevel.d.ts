@@ -34,6 +34,7 @@ export declare class IATopLevel {
     combine(inputs: Connectable[] | ObjectOf<Connectable>, fn: Function, options?: {}): Component;
     bundle(inputs: ObjectOrArrayOf<Component>): internalNamespace.BundleComponent<ObjectOf<Component<internalNamespace.AnyInput, internalNamespace.AnyOutput>>>;
     ramp(units: TimeMeasure): Connectable;
+    wave(type: internalNamespace.WaveType, frequency?: number): internalNamespace.Wave;
     read(fname: string): Promise<AudioBuffer>;
     func<T0, T1, T2, T3, T4, T5, R>(fn: AnyFn<T0, T1, T2, T3, T4, T5, R>): internalNamespace.FunctionComponent<T0, T1, T2, T3, T4, T5, R>;
     bufferReader(fname: string): BufferComponent;

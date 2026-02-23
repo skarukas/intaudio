@@ -1,5 +1,6 @@
 export type AudioDimension = "all" | "none" | "channels" | "time"
-export type MultiChannelArray<T> = ArrayLike<T> & { get left(): T, get right(): T }
+export type HasNamedChannels<T> = { get left(): T, get right(): T };
+export type MultiChannelArray<T> = ArrayLike<T> & HasNamedChannels<T>
 export type ArrayLike<T> = { length: number, [idx: number]: T }
 export type SignalProcessingFnInput<D> = (
   D extends "all" ? MultiChannelArray<ArrayLike<number>>
@@ -11,6 +12,7 @@ export type SignalProcessingFnInput<D> = (
   )
 )
 
+// Allows an array to be indexed by "left" and "right" along with its integer indices.
 export function toMultiChannelArray<T>(array: ArrayLike<T>): MultiChannelArray<T> {
   const proxy = new Proxy(array, {
     get(target, p, receiver) {

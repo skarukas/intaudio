@@ -160,7 +160,7 @@ export function defineTimeRamp(
   timeMeasure: TimeMeasure,
   node: ConstantSourceNode | undefined = undefined,
   mapFn: (v: number) => number = v => v,
-  durationSec: number = 1e8,
+  durationSec: number = 1e6,
 ) {
   // Continuous ramp representing the AudioContext time.
   let multiplier: number

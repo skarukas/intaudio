@@ -125,7 +125,7 @@ export function createTypeValidator(type) {
         }
     };
 }
-export function defineTimeRamp(audioContext, timeMeasure, node = undefined, mapFn = v => v, durationSec = 1e8) {
+export function defineTimeRamp(audioContext, timeMeasure, node = undefined, mapFn = v => v, durationSec = 1e6) {
     // Continuous ramp representing the AudioContext time.
     let multiplier;
     if (timeMeasure == TimeMeasure.CYCLES) {
